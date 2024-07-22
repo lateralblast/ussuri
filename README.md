@@ -5,6 +5,10 @@ ussuri
 
 Unix Shell Setup Utility Run Inline
 
+Also a bread of cat...
+
+https://www.catster.com/cat-breeds/ussuri-cat/
+
 Version
 -------
 
