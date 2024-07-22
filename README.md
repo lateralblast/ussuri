@@ -1,4 +1,4 @@
-![alt tag](https://raw.githubusercontent.com/lateralblast/ussuri/master/ussuri.gif)
+![alt tag](ussuri.gif)
 
 ussuri
 ======
