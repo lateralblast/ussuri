@@ -10,3 +10,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Broke out zinit, rbenv and pyenv
 # 0.0.6: Mon 22 Jul 2024 17:03:01 AEST
 # Added execute_command routine
+# 0.0.7: Mon 22 Jul 2024 17:44:37 AEST
+# initial commit
+# 0.0.8: Mon 22 Jul 2024 17:46:29 AEST
+# Updated help and documentation

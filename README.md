@@ -22,6 +22,28 @@ It is coppied to .zshrc and runs inline, i.e. when you login or
 execute a new shell it will check the current environment and
 install components/configurations if they are not present.
 
+Usage
+-----
+
+```
+./ussuri.sh --help
+
+  Usage: ussuri.sh [OPTIONS...]
+
+    -c|--confirm      Confirm commands
+    -d|--debug        Print debug information while executing
+    -D|--default(s)   Set defaults
+    -h|--help         Print usage information
+    -p|--pyenv        Do pyenv check
+    -P|--package(s)   Do packages check
+    -r|--rbenv        Do rbenv check
+    -t|--dryrun       Dry run
+    -U|--update       Check git for updates
+    -v|--verbose      Verbose output
+    -V|--version      Print version
+    -z|--zinit        Do zinit check
+```
+
 License
 -------
 

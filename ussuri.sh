@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.0.7
+# Version: 0.0.8
 #
 
 
@@ -64,6 +64,7 @@ print_help () {
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
     -r|--rbenv        Do rbenv check
+    -t|--dryrun       Dry run
     -U|--update       Check git for updates
     -v|--verbose      Verbose output 
     -V|--version      Print version
@@ -317,16 +318,16 @@ if [ ! "$*" = "" ]; then
         shift
         exit
         ;;
-      -r|--rbenv)
-        DO_RBENV_CHECK="true"
+      -P|--package|--packages)
+        DO_PACKAGE_CHECK="true"
         shift
         ;;
       -p|--pyenv)
         DO_PYENV_CHECK="true"
         shift
         ;;
-      -P|--package|--packages)
-        DO_PACKAGE_CHECK="true"
+      -r|--rbenv)
+        DO_RBENV_CHECK="true"
         shift
         ;;
       -t|--test|--dryrun)
