@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.0.8
+# Version: 0.1.0
 #
 
 
@@ -20,10 +20,13 @@ handle_output () {
   STYLE="$2"
   case "$STYLE" in
     warn|warning)
-      echo "Warning:   $OUTPUT"
+      echo "Warning:        $OUTPUT"
       ;;
     execute|executing)
-      echo "Executing: $OUTPUT"
+      echo "Executing:      $OUTPUT"
+      ;;
+    command)
+      echo "Command:        $OUTPUT"
       ;;
     *)
       echo "$OUTPUT"
@@ -40,7 +43,9 @@ execute_command () {
   fi
   if [ "$DRYRUN" = "false" ]; then
     if [ "$CONFIRM" = "true" ]; then
-      read -p "$( echo -e ${COMMAND} ) " RESPONSE
+      RESPONSE=""
+      handle_output "$COMMAND" "command" 
+      vared -p "Execute [y/n]:  " RESPONSE
       if [ "$RESPONSE" = "y" ]; then
         eval "$COMMAND"
       fi
@@ -58,6 +63,7 @@ print_help () {
   Usage: ${0##*/} [OPTIONS...]
 
     -c|--confirm      Confirm commands
+    -C|--check.       Check for updates
     -d|--debug        Print debug information while executing
     -D|--default(s)   Set defaults
     -h|--help         Print usage information
@@ -91,6 +97,7 @@ check_all_defaults () {
   PYENV_HOME="$HOME/.pyenv"
   RUBY_VER="3.3.4"
   PYTHON_VER="3.12.4"
+  DO_VERSION_CHECK="false"
   DO_DEFAULTS_CHECK="false"
   DO_PACKAGE_CHECK="false"
   DO_UPDATE_CHECK="false"
@@ -218,7 +225,7 @@ check_osx_config () {
   if [ ! -d "$SCREENSHOT_LOCATION" ]; then
     execute_command "mkdir -p $SCREENSHOT_LOCATION"
   fi
-  ose_defaults_check "com.apple.screencapture" "location" "string" "$SCREENSHOT_LOCATION" 
+  osx_defaults_check "com.apple.screencapture" "location" "string" "$SCREENSHOT_LOCATION" 
   if [ "$SHOW_HIDDEN_FILES" = "true" ]; then
     osx_defaults_check "com.apple.Finder" "AppleShowAllFiles" "" "$SHOW_HIDDEN_FILES" 
     execute_command "chflags nohidden $HOME/Library"
@@ -274,6 +281,12 @@ check_osx_packages () {
   fi
 }
 
+# Check for update
+
+check_for_update () {
+  :
+}
+
 # Check defaults
 
 check_defaults () {
@@ -301,6 +314,10 @@ if [ ! "$*" = "" ]; then
     case $1 in
       -c|--confirm)
         CONFIRM="true"
+        shift
+        ;;
+      -C|--check)
+        DO_VERSION_CHECK="true"
         shift
         ;;
       -d|--debug)
@@ -364,14 +381,17 @@ fi
 
 # Do check defaults
 
-if [ "$DO_DEFAULTS_CHECK" = "true" ]; 
+if [ "$DO_DEFAULTS_CHECK" = "true" ]; then
   check_defaults
 fi
 
 # Do check for updates
 
-if [ "$DO_UPDATE_CHECK" = "true" ]; 
+if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
   check_for_update
+  if [ "$DO_UPDATE_CHECK" = "true" ]; then
+    update_script
+  fi
 fi
 
 # Do checks
