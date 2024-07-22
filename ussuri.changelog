@@ -14,3 +14,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # initial commit
 # 0.0.8: Mon 22 Jul 2024 17:46:29 AEST
 # Updated help and documentation
+# 0.0.9: Mon 22 Jul 2024 21:42:14 AEST
+# Fixed read function for zsh
+# 0.1.0: Mon 22 Jul 2024 22:05:42 AEST
+# Added check for updates switch
