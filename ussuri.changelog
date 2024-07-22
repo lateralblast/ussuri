@@ -1,0 +1,12 @@
+# 0.0.1: Fri 19 Jul 2024 14:50:56 AEST
+# Initial version
+# 0.0.2: Sat 20 Jul 2024 17:09:42 AEST
+# Added verbose switch
+# 0.0.3: Sat 20 Jul 2024 18:28:24 AEST
+# Added help
+# 0.0.4 Sat 20 Jul 2024 20:42:23 AEST
+# Added defaults check
+$ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
+# Broke out zinit, rbenv and pyenv
+# 0.0.6: Mon 22 Jul 2024 17:03:01 AEST
+# Added execute_command routine
