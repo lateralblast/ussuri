@@ -36,6 +36,7 @@ Usage
     -D|--default(s)   Set defaults
     -e|--changelog.   Print changelog
     -h|--help         Print usage information
+    -N|--noenv        Do not initiate environment variables
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
     -r|--rbenv        Do rbenv check
