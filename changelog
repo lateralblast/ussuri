@@ -32,3 +32,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Bug fixes for package check
 # 0.1.7: Tue 23 Jul 2024 17:00:09 AEST
 # Removed mkdirs before git clones
+# 0.1.8: Tue 23 Jul 2024 17:45:59 AEST
+# Bug fixes
+# 0.1.9: Tue 23 Jul 2024 20:22:13 AEST
+# Removed bash emulation statement
