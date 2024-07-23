@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.1.4
+# Version: 0.1.5
 #
 
 SCRIPT_FILE="$0"
@@ -68,6 +68,7 @@ print_help () {
     -D|--default(s)   Set defaults
     -e|--changelog.   Print changelog
     -h|--help         Print usage information
+    -N|--noenv        Do not initiate environment variables
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
     -r|--rbenv        Do rbenv check
@@ -97,9 +98,9 @@ print_changelog () {
   echo ""
 }
 
-# Check All Defaults
+# Set All Defaults
 
-check_all_defaults () {
+set_all_defaults () {
   OS_NAME=$(uname -o)
   VERBOSE="false"
   DRYRUN='false'
@@ -122,6 +123,7 @@ check_all_defaults () {
   DO_PYENV_CHECK="false"
   DO_RBENV_CHECK="false"
   DO_ZINIT_CHECK="false"
+  DO_ENV_SETUP="true"
 }
 
 # Check Base Config
@@ -168,13 +170,15 @@ check_rbenv_config () {
       execute_command "mkdir -p $RBENV_HOME"
       execute_command "git clone https://github.com/rbenv/rbenv.git $RBENV_HOME"
     fi
-    execute_command "export RBENV_HOME=\"$RBENV_HOME\""
-    execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
-    execute_command "eval  rbenv init - zsh )"
-    RBENV_CHECK=$( rbenv versions --bare )
-    if [ -z "$RBENV_CHECK" ]; then
-      execute_command "rbenv install $RUBY_VER"
-      execute_command "rbenv global $RUBY_VER"
+    if [ "$DO_ENV_SETUP" = "true" ]; then
+      execute_command "export RBENV_HOME=\"$RBENV_HOME\""
+      execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
+      execute_command "eval  rbenv init - zsh )"
+      RBENV_CHECK=$( rbenv versions --bare )
+      if [ -z "$RBENV_CHECK" ]; then
+        execute_command "rbenv install $RUBY_VER"
+        execute_command "rbenv global $RUBY_VER"
+      fi
     fi
   fi
 }
@@ -187,13 +191,15 @@ check_pyenv_config () {
       execute_command "mkdir -p $PYENV_HOME"
       execute_command "git clone https://github.com/rbenv/rbenv.git $PYENV_HOME"
     fi
-    execute_command  "export PYENV_HOME=\"$PYENV_HOME\""
-    execute_command  "export PATH=\"$PYENV_ROOT/bin:$PATH\""
-    execute_command  "pyenv init - "
-    PYENV_CHECK=$( pyenv versions --bare )
-    if [ -z "$PYENV_CHECK" ]; then
-      execute_command "rbenv install $PYTHON_VER"
-      execute_command "rbenv global $PYTHON_VER"
+    if [ "$DO_ENV_SETUP" = "true" ]; then
+      execute_command  "export PYENV_HOME=\"$PYENV_HOME\""
+      execute_command  "export PATH=\"$PYENV_ROOT/bin:$PATH\""
+      execute_command  "pyenv init - "
+      PYENV_CHECK=$( pyenv versions --bare )
+      if [ -z "$PYENV_CHECK" ]; then
+        execute_command "rbenv install $PYTHON_VER"
+        execute_command "rbenv global $PYTHON_VER"
+      fi
     fi
   fi
 }
@@ -221,9 +227,9 @@ osx_defaults_check () {
   fi
 }
 
-# Set OSX X Environment
+# Set OSX defaults
 
-check_osx_config () {
+set_osx_defaults () {
   INSTALL_BREW="true"
   SHOW_HIDDEN_FILES="true"
   RESTART_FINDER="false"
@@ -240,6 +246,11 @@ check_osx_config () {
                 p7zip pwgen pyton qemu rpm2cpio ruby ruby-build rust shellcheck \
                 socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
                 xorriso x264 x265 xquartz xz zsh"
+}
+
+# Check OS defaults
+
+check_osx_defaults () {
   if [ ! -d "$SCREENSHOT_LOCATION" ]; then
     execute_command "mkdir -p $SCREENSHOT_LOCATION"
   fi
@@ -262,8 +273,8 @@ check_osx_package () {
   PACKAGE="$1"
   if [ "$INSTALL_BREW" = "true" ]; then
     BREW_LIST="$WORK_DIR/brew_list"
-    BREW_TEST=$( find "$BREW_LIST" -mtime -5 )  
-    if [ -z "$BREW_LIST" ]; then
+    BREW_TEST=$( find "$BREW_LIST" -mtime -5 2> /dev/null )  
+    if [ -z "$BREW_TEST" ]; then
       execute_command "brew list > $BREW_LIST"
     fi 
     INSTALL_LIST=$( cat "$BREW_LIST" )
@@ -350,6 +361,15 @@ check_for_update () {
   fi
 }
 
+# Set defaults
+
+set_defaults () {
+  set_all_defaults
+  if [ "$OS_NAME" ]; then
+    set_osx_defaults
+  fi
+}
+
 # Check defaults
 
 check_defaults () {
@@ -367,7 +387,9 @@ check_package_config () {
   fi
 }
 
-check_all_defaults
+# Set defauts
+
+set_defaults
 
 # If given no command arguments run as a normal login script
 # Otherwise handle commandline argument
@@ -402,6 +424,10 @@ if [ ! "$*" = "" ]; then
         print_help
         shift
         exit
+        ;;
+      -N|--noenv)
+        DO_ENV_SETUP="false"
+        shift
         ;;
       -P|--package|--packages)
         DO_PACKAGE_CHECK="true"
@@ -467,14 +493,9 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
   exit
 fi
 
-# Do checks
-
-check_base_config
-
 # Do OSX specific checks
 
 if [ "$OS_NAME" = "Darwin" ]; then
-  check_osx_config
   check_osx_packages
 fi
 
