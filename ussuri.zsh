@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.1.9
+# Version: 0.2.0
 #
 
 SCRIPT_FILE="$0"
@@ -105,7 +105,7 @@ set_all_defaults () {
   DRYRUN='false'
   CONFIRM="false"
   SCRIPT_NAME="ussuri"
-  WORK_DIR="$HOME/$SCRIPT_NAME"
+  WORK_DIR="$HOME/.$SCRIPT_NAME"
   INSTALL_ZINIT="true"
   INSTALL_RBENV="true"
   INSTALL_PYENV="true"
@@ -122,13 +122,8 @@ set_all_defaults () {
   DO_RBENV_CHECK="false"
   DO_ZINIT_CHECK="false"
   DO_ENV_SETUP="true"
-}
-
-# Check Base Config
-
-check_base_config () {
   if [ ! -d "$WORK_DIR" ]; then
-    mkdir -p "$WORK_DIR"
+    execute_command "mkdir -p $WORK_DIR"
   fi
 }
 
@@ -232,17 +227,17 @@ set_osx_defaults () {
   RESTART_FINDER="false"
   RESTART_UISERVER="false"
   SCREENSHOT_LOCATION="$HOME/Pictures/Screenshots"
-  PACKAGE_LIST="ansible ansible-lint autoconf automake bat bash blackhole-2ch \
-                bpytop btop bzip2 ca-certificates cmake cpio cpufetch curl \
-                docker dos2unix exiftool ffmpeg flac fortune fzf gcc gettext \
-                ghostscript giflib git git-lfs gmp gnu-getopt gnu-sed gnutls go \
-                grep htop jpeg-turbo jpeg-xl jq imagemagick lame lego lftp \
-                libarchive libheif libogg libpng libvirt libvirt-glib \
-                libvirt-python libvorbis libxml2 libyaml lsd lua lz4 lzo mpg123 \
-                multipass netpbm openssh openssl@3 opentofu osinfo-db osx-cpu-temp \
-                p7zip pwgen python@3.12 qemu rpm2cpio ruby ruby-build rust shellcheck \
-                socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
-                xorriso x264 x265 xquartz xz zsh"
+  PACKAGE_LIST=( ansible ansible-lint autoconf automake bat bash \
+                 blackhole-2ch bpytop btop bzip2 ca-certificates cmake cpio \
+                 cpufetch curl docker dos2unix exiftool ffmpeg flac fortune \
+                 fzf gcc gettext ghostscript giflib git git-lfs gmp gnu-getopt \
+                 gnu-sed gnutls go grep htop jpeg-turbo jpeg-xl jq imagemagick \
+                 lame lego lftp libarchive libheif libogg libpng libvirt libvirt-glib \
+                 libvirt-python libvorbis libxml2 libyaml lsd lua lz4 lzo mpg123 \
+                 multipass netpbm openssh openssl@3 opentofu osinfo-db osx-cpu-temp \
+                 p7zip pwgen python@3.12 qemu rpm2cpio ruby ruby-build rust shellcheck \
+                 socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
+                 xorriso x264 x265 xquartz xz zsh )
 }
 
 # Check OS defaults
