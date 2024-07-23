@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.1.1
+Current Version: 0.1.4
 
 Introduction
 ------------
@@ -31,8 +31,10 @@ Usage
   Usage: ussuri.sh [OPTIONS...]
 
     -c|--confirm      Confirm commands
+    -C|--check.       Check for updates
     -d|--debug        Print debug information while executing
     -D|--default(s)   Set defaults
+    -e|--changelog.   Print changelog
     -h|--help         Print usage information
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
