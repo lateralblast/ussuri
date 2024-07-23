@@ -1,17 +1,14 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.1.1
+# Version: 0.1.4
 #
 
-
-# Get the path the script starts from
-
-START_PATH=$( pwd )
+SCRIPT_FILE="$0"
 
 # Get the version of the script from the script itself
 
-SCRIPT_VERSION=$( cd "$START_PATH" || exit ; grep '^# Version' < "$0"| awk '{print $3}' )
+SCRIPT_VERSION=$( grep '^# Version' < "$0"| awk '{print $3}' )
 
 # Handle output
 
@@ -69,6 +66,7 @@ print_help () {
     -C|--check.       Check for updates
     -d|--debug        Print debug information while executing
     -D|--default(s)   Set defaults
+    -e|--changelog.   Print changelog
     -h|--help         Print usage information
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
@@ -80,6 +78,23 @@ print_help () {
     -z|--zinit        Do zinit check
 
 HELP
+}
+
+# Print changelog
+
+print_changelog () {
+  SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
+  CHANGE_FILE="$SCRIPT_DIR/changelog"
+  echo ""
+  echo "Changelog:"
+  echo ""
+  if [ -f "$CHANGE_FILE" ]; then
+    cat "$CHANGE_FILE" | grep "^#" | sed "s/^# //g"
+  else
+    CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/changelog" 
+    curl -vs "$CHANGE_URL" 2>&1 | grep "^#" |sed "s/^# //g" 
+  fi
+  echo ""
 }
 
 # Check All Defaults
@@ -320,20 +335,19 @@ compare_version () {
 check_for_update () {
   README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md" 
   REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
+  LOCAL_VERSION=$( echo "$SCRIPT_VERSION" | sed "s/\.//g" )
   echo "Local version:  $SCRIPT_VERSION"
   echo "Remote version: $REMOTE_VERSION"
-  compare_version "$SCRIPT_VERSION" "$REMOTE_VERSION"
-  case $? in
-    0)
-      handle_output "Local version is the same as remote version" "info"
-      ;;
-    1)
+  REMOTE_VERSION=$( echo "$REMOTE_VERSION" | sed "s/\.//g" )
+  if [ "$LOCAL_VERSION" -lt "$REMOTE_VERSION" ]; then
+    handle_output "Local version is older than remote version" "info"
+  else
+    if [ "$LOCAL_VERSION" -gt "$REMOTE_VERSION" ]; then
       handle_output "Local version is newer than remote version" "info"
-      ;;
-    2)
-      handle_output "Local version is older than remote version" "info"
-      ;;
-  esac
+    else
+      handle_output "Local version is the same as remote version" "info"
+    fi
+  fi
 }
 
 # Check defaults
@@ -379,6 +393,11 @@ if [ ! "$*" = "" ]; then
         shift
         exit
         ;;
+      -e|--changes|--changelog)
+        print_changelog
+        shift
+        exit
+        ;;
       -h|--help|--usage)
         print_help
         shift
@@ -417,6 +436,10 @@ if [ ! "$*" = "" ]; then
       -z|--zinit)
         DO_ZINIT_CHECK="true"
         shift
+        ;;
+      *)
+        print_help
+        exit
         ;;
     esac
   done
