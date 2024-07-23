@@ -28,3 +28,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed version check
 # 0.1.5: Tue 23 Jul 2024 16:21:09 AEST
 # Added code to ignore enivronment variable setup (useful for testing)
+# 0.1.6: Tue 23 Jul 2024 16:33:40 AEST
+# Bug fixes for package check
