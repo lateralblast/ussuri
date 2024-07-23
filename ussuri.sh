@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.1.5
+# Version: 0.1.6
 #
 
 SCRIPT_FILE="$0"
@@ -235,15 +235,15 @@ set_osx_defaults () {
   RESTART_FINDER="false"
   RESTART_UISERVER="false"
   SCREENSHOT_LOCATION="$HOME/Pictures/Screenshots"
-  PACKAGE_LIST="ansible ansible-list autoconf automake bat bash blackhole-2ch \
+  PACKAGE_LIST="ansible ansible-lint autoconf automake bat bash blackhole-2ch \
                 bpytop btop bzip2 ca-certificates cmake cpio cpufetch curl \
                 docker dos2unix exiftool ffmpeg flac fortune fzf gcc gettext \
-                ghostscript giflib git git-lfs gmp gnu-getop gnu-sed gnutle go \
+                ghostscript giflib git git-lfs gmp gnu-getopt gnu-sed gnutls go \
                 grep htop jpeg-turbo jpeg-xl jq imagemagick lame lego lftp \
                 libarchive libheif libogg libpng libvirt libvirt-glib \
-                libvirt-pyton libvorbis libxml libyaml lsd lua lx4 lzo mpg123 \
-                multipass netpbm openssh openssl opentofu osinfo-db osx-cpu-temp \
-                p7zip pwgen pyton qemu rpm2cpio ruby ruby-build rust shellcheck \
+                libvirt-python libvorbis libxml2 libyaml lsd lua lz4 lzo mpg123 \
+                multipass netpbm openssh openssl@3 opentofu osinfo-db osx-cpu-temp \
+                p7zip pwgen python@3.12 qemu rpm2cpio ruby ruby-build rust shellcheck \
                 socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
                 xorriso x264 x265 xquartz xz zsh"
 }
@@ -277,10 +277,10 @@ check_osx_package () {
     if [ -z "$BREW_TEST" ]; then
       execute_command "brew list > $BREW_LIST"
     fi 
-    INSTALL_LIST=$( cat "$BREW_LIST" )
-    PACKAGE_TEST=$( grep "$PACKAGE" "$INSTALL_LIST" )
+    PACKAGE_TEST=$( grep "^$PACKAGE$" "$BREW_LIST" )
     if [ -z "$PACKAGE_TEST" ]; then
       execute_command "brew install $PACKAGE"
+      execute_command "brew list > $BREW_LIST"
     fi
   fi  
 }
@@ -299,10 +299,14 @@ check_osx_packages () {
       if [ -z "$BREW_BIN" ]; then
         execute_command "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
       else
-        execute_command "$BREW_BIN shellenv"
+        if [ "$DO_ENV_SETUP" = "true" ]; then
+          execute_command "$BREW_BIN shellenv"
+        fi
       fi
     else
-       execute_command "$BREW_TEST shellenv"
+        if [ "$DO_ENV_SETUP" = "true" ]; then
+         execute_command "$BREW_TEST shellenv"
+       fi
     fi
     for PACKAGE in $PACKAGE_LIST; do
       check_osx_package "$PACKAGE"

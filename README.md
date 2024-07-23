@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.1.4
+Current Version: 0.1.6
 
 Introduction
 ------------
