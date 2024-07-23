@@ -40,3 +40,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed package check
 # 0.2.1: Tue 23 Jul 2024 21:02:35 AEST
 # Added install function
+#0.2.2: Tue 23 Jul 2024 22:01:25 AEST
+# Added fonts function
