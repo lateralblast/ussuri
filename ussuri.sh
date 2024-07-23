@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.1.0
+# Version: 0.1.1
 #
 
 
@@ -27,6 +27,9 @@ handle_output () {
       ;;
     command)
       echo "Command:        $OUTPUT"
+      ;;
+    info|information)
+      echo "Information:    $OUTPUT"
       ;;
     *)
       echo "$OUTPUT"
@@ -281,10 +284,56 @@ check_osx_packages () {
   fi
 }
 
+# Compare version
+
+compare_version () {
+    if [[ $1 == $2 ]]; then
+      return 0
+    fi
+    local IFS=.
+    local i VER1=($1) VER2=($2)
+    for ((i=${#VER1[@]}; i<${#VER2[@]}; i++))
+    do
+        VER1[i]=0
+    done
+    for ((i=0; i<${#VER1[@]}; i++))
+    do
+        if [[ -z ${VER2[i]} ]]
+        then
+            # fill empty fields in ver2 with zeros
+            VER2[i]=0
+        fi
+        if ((10#${vVER[i]} > 10#${VER2[i]}))
+        then
+            return 1
+        fi
+        if ((10#${VER1[i]} < 10#${VER2[i]}))
+        then
+            return 2
+        fi
+    done
+    return 0
+}
+
 # Check for update
 
 check_for_update () {
-  :
+  README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md" 
+  REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
+  echo "Local version:  $SCRIPT_VERSION"
+  echo "Remote version: $REMOTE_VERSION"
+  compare_version "$SCRIPT_VERSION" "$REMOTE_VERSION"
+  case $? in
+    0)
+      handle_output "Local version is the same as remote version" "info"
+      ;;
+    1)
+      handle_output "Local version is newer than remote version" "info"
+      ;;
+    2)
+      handle_output "Local version is older than remote version" "info"
+      ;;
+  esac
 }
 
 # Check defaults
@@ -392,6 +441,7 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
   if [ "$DO_UPDATE_CHECK" = "true" ]; then
     update_script
   fi
+  exit
 fi
 
 # Do checks
