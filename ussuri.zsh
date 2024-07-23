@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.2.0
+# Version: 0.2.1
 #
 
 SCRIPT_FILE="$0"
@@ -67,6 +67,7 @@ print_help () {
     -D|--default(s)   Set defaults
     -e|--changelog.   Print changelog
     -h|--help         Print usage information
+    -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
     -N|--noenv        Do not initiate environment variables
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
@@ -78,6 +79,13 @@ print_help () {
     -z|--zinit        Do zinit check
 
 HELP
+}
+
+# Install script as .zshrc
+
+do_install () {
+  execute_command "cp $HOME/.zshrc $WORK_DIR/.zshrc.$DATE_SUFFIX"
+  execute_command "cp $SCRIPT_FILE ~/.zshrc"
 }
 
 # Print changelog
@@ -114,6 +122,7 @@ set_all_defaults () {
   PYENV_HOME="$HOME/.pyenv"
   RUBY_VER="3.3.4"
   PYTHON_VER="3.12.4"
+  DO_INSTALL="false"
   DO_VERSION_CHECK="false"
   DO_DEFAULTS_CHECK="false"
   DO_PACKAGE_CHECK="false"
@@ -122,6 +131,7 @@ set_all_defaults () {
   DO_RBENV_CHECK="false"
   DO_ZINIT_CHECK="false"
   DO_ENV_SETUP="true"
+  DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   if [ ! -d "$WORK_DIR" ]; then
     execute_command "mkdir -p $WORK_DIR"
   fi
@@ -390,6 +400,10 @@ if [ ! "$*" = "" ]; then
         shift
         exit
         ;;
+      -I|--install)
+        DO_INSTALL="true"
+        shift
+        ;;
       -N|--noenv)
         DO_ENV_SETUP="false"
         shift
@@ -440,6 +454,14 @@ else
   DO_ZINIT_CHECK="true"
   DO_PYENV_CHECK="true"
   DO_RBENV_CHECK="true"
+fi
+
+# Do install
+
+if [ "$DO_INSTALL" = "true" ]; then
+  DO_ENV_SETUP="false"
+  do_install
+  exit
 fi
 
 # Do check defaults

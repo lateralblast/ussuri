@@ -38,3 +38,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Removed bash emulation statement
 # 0.2.0: Tue 23 Jul 2024 20:41:57 AEST
 # Fixed package check
+# 0.2.1: Tue 23 Jul 2024 21:02:35 AEST
+# Added install function

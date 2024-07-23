@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.2.0
+Current Version: 0.2.1
 
 Introduction
 ------------
@@ -36,6 +36,7 @@ Usage
     -D|--default(s)   Set defaults
     -e|--changelog.   Print changelog
     -h|--help         Print usage information
+    -I|--install      Install ussuri as ~/.zshrc
     -N|--noenv        Do not initiate environment variables
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
