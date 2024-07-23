@@ -66,6 +66,7 @@ print_help () {
     -d|--debug        Print debug information while executing
     -D|--default(s)   Set defaults
     -e|--changelog.   Print changelog
+    -f|--font(s).     Install font(s)
     -h|--help         Print usage information
     -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
     -N|--noenv        Do not initiate environment variables
@@ -130,6 +131,7 @@ set_all_defaults () {
   DO_PYENV_CHECK="false"
   DO_RBENV_CHECK="false"
   DO_ZINIT_CHECK="false"
+  DO_FONTS_CHECK="false"
   DO_ENV_SETUP="true"
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   if [ ! -d "$WORK_DIR" ]; then
@@ -206,6 +208,14 @@ check_pyenv_config () {
   fi
 }
 
+# Check fonts config
+
+check_fonts_config () {
+  if [ "$OS_NAME" = "Darwin" ]; then
+    check_osx_package "font-fira-code-nerd-font" "cask"
+  fi
+}
+
 # Check OSX Defaults
 
 osx_defaults_check () {
@@ -273,6 +283,7 @@ check_osx_defaults () {
 
 check_osx_package () {
   PACKAGE="$1"
+  TYPE="$2"
   if [ "$INSTALL_BREW" = "true" ]; then
     BREW_LIST="$WORK_DIR/brew_list"
     BREW_TEST=$( find "$BREW_LIST" -mtime -5 2> /dev/null )  
@@ -281,7 +292,11 @@ check_osx_package () {
     fi 
     PACKAGE_TEST=$( grep "^$PACKAGE$" "$BREW_LIST" )
     if [ -z "$PACKAGE_TEST" ]; then
-      execute_command "brew install $PACKAGE"
+      if [ "$TYPE" = "cask" ]; then
+        execute_command "brew install --cask $PACKAGE"
+      else
+        execute_command "brew install $PACKAGE"
+      fi
       execute_command "brew list > $BREW_LIST"
     fi
   fi  
@@ -311,7 +326,7 @@ check_osx_packages () {
        fi
     fi
     for PACKAGE in $PACKAGE_LIST; do
-      check_osx_package "$PACKAGE"
+      check_osx_package "$PACKAGE" ""
     done
   fi
 }
@@ -395,6 +410,10 @@ if [ ! "$*" = "" ]; then
         shift
         exit
         ;;
+      -f|--font|--fonts)
+        DO_FONTS_CHECK="true"
+        shift
+        ;;
       -h|--help|--usage)
         print_help
         shift
@@ -454,6 +473,7 @@ else
   DO_ZINIT_CHECK="true"
   DO_PYENV_CHECK="true"
   DO_RBENV_CHECK="true"
+  DO_FONTS_CHECK="true"
 fi
 
 # Do install
@@ -478,6 +498,12 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
     update_script
   fi
   exit
+fi
+
+# Do font(s) check
+
+if [ "$DO_FONTS_CHECK" = "true" ]; then
+  check_fonts_config
 fi
 
 # Do OSX specific checks
