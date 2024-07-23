@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 emulate -LR bash
 #
-# Version: 0.1.6
+# Version: 0.1.7
 #
 
 SCRIPT_FILE="$0"
@@ -139,7 +139,6 @@ check_base_config () {
 check_zinit_config () {
   if [ "$INSTALL_ZINIT" = "true" ]; then
     if [ ! -d "$ZINIT_HOME" ]; then
-      execute_command "mkdir -p $ZINIT_HOME"
       execute_command "git clone https://github.com/zdharma-continuum/zinit.git $ZINIT_HOME"
     fi
     execute_command "source $ZINIT_HOME/zinit.zsh"
@@ -167,7 +166,6 @@ check_zinit_config () {
 check_rbenv_config () {
   if [ "$INSTALL_RBENV" = "true" ]; then
     if [ ! -d "$RBENV_HOME" ]; then
-      execute_command "mkdir -p $RBENV_HOME"
       execute_command "git clone https://github.com/rbenv/rbenv.git $RBENV_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
@@ -188,7 +186,6 @@ check_rbenv_config () {
 check_pyenv_config () {
   if [ "$INSTALL_PYENV" = "true" ]; then
     if [ ! -d "$PYENV_HOME" ]; then
-      execute_command "mkdir -p $PYENV_HOME"
       execute_command "git clone https://github.com/rbenv/rbenv.git $PYENV_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
