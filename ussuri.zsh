@@ -1,7 +1,6 @@
 #!/usr/bin/env zsh
-emulate -LR bash
 #
-# Version: 0.1.7
+# Version: 0.1.9
 #
 
 SCRIPT_FILE="$0"
@@ -90,7 +89,7 @@ print_changelog () {
   echo "Changelog:"
   echo ""
   if [ -f "$CHANGE_FILE" ]; then
-    cat "$CHANGE_FILE" | grep "^#" | sed "s/^# //g"
+    grep "^#" "$CHANGE_FILE" | sed "s/^# //g"
   else
     CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/changelog" 
     curl -vs "$CHANGE_URL" 2>&1 | grep "^#" |sed "s/^# //g" 
@@ -104,7 +103,6 @@ set_all_defaults () {
   OS_NAME=$(uname -o)
   VERBOSE="false"
   DRYRUN='false'
-  DEBUG="false"
   CONFIRM="false"
   SCRIPT_NAME="ussuri"
   WORK_DIR="$HOME/$SCRIPT_NAME"
@@ -141,7 +139,9 @@ check_zinit_config () {
     if [ ! -d "$ZINIT_HOME" ]; then
       execute_command "git clone https://github.com/zdharma-continuum/zinit.git $ZINIT_HOME"
     fi
-    execute_command "source $ZINIT_HOME/zinit.zsh"
+    if [ "$DO_ENV_SETUP" = "true" ]; then
+      execute_command ". $ZINIT_HOME/zinit.zsh"
+    fi
     # Add in zsh plugins
     execute_command "zinit light zsh-users/zsh-syntax-highlighting"
     execute_command "zinit light zsh-users/zsh-completions"
@@ -171,7 +171,7 @@ check_rbenv_config () {
     if [ "$DO_ENV_SETUP" = "true" ]; then
       execute_command "export RBENV_HOME=\"$RBENV_HOME\""
       execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
-      execute_command "eval  rbenv init - zsh )"
+      execute_command "rbenv init - zsh )"
       RBENV_CHECK=$( rbenv versions --bare )
       if [ -z "$RBENV_CHECK" ]; then
         execute_command "rbenv install $RUBY_VER"
@@ -311,46 +311,17 @@ check_osx_packages () {
   fi
 }
 
-# Compare version
-
-compare_version () {
-    if [[ $1 == $2 ]]; then
-      return 0
-    fi
-    local IFS=.
-    local i VER1=($1) VER2=($2)
-    for ((i=${#VER1[@]}; i<${#VER2[@]}; i++))
-    do
-        VER1[i]=0
-    done
-    for ((i=0; i<${#VER1[@]}; i++))
-    do
-        if [[ -z ${VER2[i]} ]]
-        then
-            # fill empty fields in ver2 with zeros
-            VER2[i]=0
-        fi
-        if ((10#${vVER[i]} > 10#${VER2[i]}))
-        then
-            return 1
-        fi
-        if ((10#${VER1[i]} < 10#${VER2[i]}))
-        then
-            return 2
-        fi
-    done
-    return 0
-}
-
 # Check for update
 
 check_for_update () {
   README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md" 
   REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
-  LOCAL_VERSION=$( echo "$SCRIPT_VERSION" | sed "s/\.//g" )
+  LOCAL_VERSION="${SCRIPT_VERSION/\./}"
+  LOCAL_VERSION="${LOCAL_VERSION/\./}"
   echo "Local version:  $SCRIPT_VERSION"
   echo "Remote version: $REMOTE_VERSION"
-  REMOTE_VERSION=$( echo "$REMOTE_VERSION" | sed "s/\.//g" )
+  REMOTE_VERSION="${REMOTE_VERSION/\./}"
+  REMOTE_VERSION="${REMOTE_VERSION/\./}"
   if [ "$LOCAL_VERSION" -lt "$REMOTE_VERSION" ]; then
     handle_output "Local version is older than remote version" "info"
   else
@@ -374,7 +345,6 @@ set_defaults () {
 # Check defaults
 
 check_defaults () {
-  check_all_defaults
   if [ "$OS_NAME" = "Darwin" ]; then
     check_osx_defaults
   fi
@@ -407,7 +377,6 @@ if [ ! "$*" = "" ]; then
         shift
         ;;
       -d|--debug)
-        DEBUG="true"
         shift
         set -x
         ;;
@@ -510,7 +479,6 @@ fi
 
 if [ "$DO_ZINIT_CHECK" = "true" ]; then
   check_zinit_config
-  exit
 fi
 
 # Do pyenv checks
