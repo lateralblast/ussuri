@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.2.1
+# Version: 0.2.3
 #
 
 SCRIPT_FILE="$0"
@@ -70,6 +70,7 @@ print_help () {
     -h|--help         Print usage information
     -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
     -N|--noenv        Do not initiate environment variables
+    -o|--ohmyposh     Install oh my posh
     -p|--pyenv        Do pyenv check
     -P|--package(s)   Do packages check
     -r|--rbenv        Do rbenv check
@@ -247,6 +248,7 @@ set_osx_defaults () {
   RESTART_FINDER="false"
   RESTART_UISERVER="false"
   SCREENSHOT_LOCATION="$HOME/Pictures/Screenshots"
+  BREW_LIST="$WORK_DIR/brew.list"
   PACKAGE_LIST=( ansible ansible-lint autoconf automake bat bash \
                  blackhole-2ch bpytop btop bzip2 ca-certificates cmake cpio \
                  cpufetch curl docker dos2unix exiftool ffmpeg flac fortune \
@@ -258,6 +260,27 @@ set_osx_defaults () {
                  p7zip pwgen python@3.12 qemu rpm2cpio ruby ruby-build rust shellcheck \
                  socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
                  xorriso x264 x265 xquartz xz zsh )
+}
+
+# Update package list
+
+update_package_list () {
+  if [ "$OS_NAME" = "Darwin" ]; then
+    if [ ! -f "$BREW_LIST" ]; then
+      execute_command "brew list | sort > $BREW_LIST"
+    fi
+    REQ_LIST="$WORK_DIR/$SCRIPT_NAME.list" 
+    REQ_TEST=$( find "$REQ_LIST" -mtime -5 2> /dev/null )
+    if [ -z "$REQ_TEST" ]; then
+      if [ -f "$REQ_TEST" ]; then
+        rm "$REQ_LIST"
+      fi
+      touch "$REQ_LIST"
+      for PACKAGE in $PACKAGE_LIST; do
+        echo "$PACKAGE" >> "$REQ_LIST"
+      done
+    fi
+  fi
 }
 
 # Check OS defaults
@@ -285,11 +308,6 @@ check_osx_package () {
   PACKAGE="$1"
   TYPE="$2"
   if [ "$INSTALL_BREW" = "true" ]; then
-    BREW_LIST="$WORK_DIR/brew_list"
-    BREW_TEST=$( find "$BREW_LIST" -mtime -5 2> /dev/null )  
-    if [ -z "$BREW_TEST" ]; then
-      execute_command "brew list > $BREW_LIST"
-    fi 
     PACKAGE_TEST=$( grep "^$PACKAGE$" "$BREW_LIST" )
     if [ -z "$PACKAGE_TEST" ]; then
       if [ "$TYPE" = "cask" ]; then
@@ -297,7 +315,7 @@ check_osx_package () {
       else
         execute_command "brew install $PACKAGE"
       fi
-      execute_command "brew list > $BREW_LIST"
+      update_package_list
     fi
   fi  
 }
@@ -500,16 +518,17 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
   exit
 fi
 
+# Do OSX specific checks
+
+if [ "$OS_NAME" = "Darwin" ]; then
+  update_package_list
+  check_osx_packages
+fi
+
 # Do font(s) check
 
 if [ "$DO_FONTS_CHECK" = "true" ]; then
   check_fonts_config
-fi
-
-# Do OSX specific checks
-
-if [ "$OS_NAME" = "Darwin" ]; then
-  check_osx_packages
 fi
 
 # Do package check
