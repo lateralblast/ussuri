@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.2.3
+Current Version: 0.2.7
 
 Introduction
 ------------
@@ -26,26 +26,42 @@ Usage
 -----
 
 ```
-./ussuri.sh --help
+  Usage: ./ussuri.zsh [OPTIONS...]
 
-  Usage: ussuri.sh [OPTIONS...]
+  When run manually with switches:
 
-    -c|--confirm      Confirm commands
-    -C|--check.       Check for updates
-    -d|--debug        Print debug information while executing
-    -D|--default(s)   Set defaults
+    -c|--confirm      Confirm commands (default: false)
+    -C|--check.       Check for updates (default: false)
+    -d|--debug        Print debug information while executing (default )
+    -D|--default(s)   Set defaults (default: false)
     -e|--changelog.   Print changelog
+    -f|--font(s).     Install font(s) (default: false)
     -h|--help         Print usage information
-    -I|--install      Install ussuri as ~/.zshrc
-    -N|--noenv        Do not initiate environment variables
-    -p|--pyenv        Do pyenv check
-    -P|--package(s)   Do packages check
-    -r|--rbenv        Do rbenv check
-    -t|--dryrun       Dry run
-    -U|--update       Check git for updates
-    -v|--verbose      Verbose output
+    -I|--install      Install ussuri as /Users/spindler/.zshrc
+    -n|--notheme      No zsh theme (default: robbyrussell)
+    -N|--noenv        Do not initiate environment variables (default: true)
+    -o|--ohmyposh     Install oh my posh (default: false)
+    -p|--pyenv        Do pyenv check (default: false)
+    -P|--package(s)   Do packages check (default: false)
+    -r|--rbenv        Do rbenv check (default: false)
+    -t|--dryrun       Dry run (default: false)
+    -T|--p10k         Do Powerlevel10k config (default: false)
+    -U|--update       Check git for updates (default: false)
+    -v|--verbose      Verbose output (default: false)
     -V|--version      Print version
-    -z|--zinit        Do zinit check
+    -z|--zinit        Do zinit check (default: false)
+    -Z|--zshheme      Zsh theme (default: false)
+
+  Defaults when run inline (i.e. as login script):
+
+    Do defaults check:    true
+    Do package check:     true
+    Do zinit check:       true
+    Do pyenv check:       true
+    Do rbenv check:       true
+    Do fonts check:       true
+    Do oh-my-poss check:  true
+    Do oh-my-zsh check:   false
 ```
 
 License

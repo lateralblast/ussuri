@@ -44,3 +44,11 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added fonts function
 # 0.2.3: Wed 24 Jul 2024 14:24:24 AEST
 # Improved package check code
+# 0.2.4: Thu 25 Jul 2024 16:51:50 AEST
+# Added zsh theme
+# 0.2.5: Thu 25 Jul 2024 17:15:39 AEST
+# Added initial oh-my-posh/zsh support
+# 0.2.6: Thu 25 Jul 2024 17:20:00 AEST
+# Updated zinit support
+# 0.2.7: Thu 25 Jul 2024 17:22:59 AEST
+# Updated help
