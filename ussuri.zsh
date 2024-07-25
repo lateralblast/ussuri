@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.2.3
+# Version: 0.2.7
 #
 
 SCRIPT_FILE="$0"
@@ -37,11 +37,11 @@ handle_output () {
 
 execute_command () {
   COMMAND="$1"
-  if [ "$VERBOSE" = "true" ] || [ "$DRYRUN" = "true" ]; then
+  if [ "$DO_VERBOSE" = "true" ] || [ "$DO_DRYRUN" = "true" ]; then
     handle_output "$COMMAND" "execute"
   fi
-  if [ "$DRYRUN" = "false" ]; then
-    if [ "$CONFIRM" = "true" ]; then
+  if [ "$DO_DRYRUN" = "false" ]; then
+    if [ "$DO_CONFIRM" = "true" ]; then
       RESPONSE=""
       handle_output "$COMMAND" "command" 
       vared -p "Execute [y/n]:  " RESPONSE
@@ -59,28 +59,47 @@ execute_command () {
 print_help () {
   cat <<-HELP
 
-  Usage: ${0##*/} [OPTIONS...]
+  Usage: $SCRIPT_FILE [OPTIONS...]
 
-    -c|--confirm      Confirm commands
-    -C|--check.       Check for updates
-    -d|--debug        Print debug information while executing
-    -D|--default(s)   Set defaults
+  When run manually with switches:
+
+    -c|--confirm      Confirm commands (default: $DO_CONFIRM)
+    -C|--check.       Check for updates (default: $DO_UPDATE_CHECK)
+    -d|--debug        Print debug information while executing (default $DO_DEBUG)
+    -D|--default(s)   Set defaults (default: $DO_DEFAULTS_CHECK)
     -e|--changelog.   Print changelog
-    -f|--font(s).     Install font(s)
+    -f|--font(s).     Install font(s) (default: $DO_FONTS_CHECK)
     -h|--help         Print usage information
     -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
-    -N|--noenv        Do not initiate environment variables
-    -o|--ohmyposh     Install oh my posh
-    -p|--pyenv        Do pyenv check
-    -P|--package(s)   Do packages check
-    -r|--rbenv        Do rbenv check
-    -t|--dryrun       Dry run
-    -U|--update       Check git for updates
-    -v|--verbose      Verbose output 
+    -n|--notheme      No zsh theme (default: $ZSH_THEME)
+    -N|--noenv        Do not initiate environment variables (default: $DO_ENV_SETUP)
+    -o|--ohmyposh     Install oh my posh (default: $DO_POSH_CHECK)
+    -p|--pyenv        Do pyenv check (default: $DO_PYENV_CHECK)
+    -P|--package(s)   Do packages check (default: $DO_PACKAGE_CHECK)
+    -r|--rbenv        Do rbenv check (default: $DO_RBENV_CHECK)
+    -t|--dryrun       Dry run (default: $DO_DRYRUN)
+    -T|--p10k         Do Powerlevel10k config (default: $DO_P10K_CHECK)
+    -U|--update       Check git for updates (default: $DO_UPDATE_CHECK)
+    -v|--verbose      Verbose output (default: $DO_VERBOSE)
     -V|--version      Print version
-    -z|--zinit        Do zinit check
-
+    -z|--zinit        Do zinit check (default: $DO_ZINIT_CHECK)
+    -Z|--zshheme      Zsh theme (default: $DO_ZSH_THEME)
 HELP
+set_inline_defaults
+cat <<-INLINE
+
+  Defaults when run inline (i.e. as login script):
+
+    Do defaults check:    $DO_DEFAULTS_CHECK
+    Do package check:     $DO_PACKAGE_CHECK
+    Do zinit check:       $DO_ZINIT_CHECK
+    Do pyenv check:       $DO_PYENV_CHECK
+    Do rbenv check:       $DO_RBENV_CHECK
+    Do fonts check:       $DO_FONTS_CHECK
+    Do oh-my-poss check:  $DO_POSH_CHECK
+    Do oh-my-zsh check:   $DO_ZOSH_CHECK
+
+INLINE
 }
 
 # Install script as .zshrc
@@ -111,17 +130,24 @@ print_changelog () {
 
 set_all_defaults () {
   OS_NAME=$(uname -o)
-  VERBOSE="false"
-  DRYRUN='false'
-  CONFIRM="false"
+  DO_VERBOSE="false"
+  DO_DRYRUN='false'
+  DO_CONFIRM="false"
   SCRIPT_NAME="ussuri"
   WORK_DIR="$HOME/.$SCRIPT_NAME"
   INSTALL_ZINIT="true"
   INSTALL_RBENV="true"
   INSTALL_PYENV="true"
+  INSTALL_POSH="true"
+  INSTALL_OZSH="false"
   ZINIT_HOME="$HOME/.zinit"
   RBENV_HOME="$HOME/.rbenv"
   PYENV_HOME="$HOME/.pyenv"
+  POSH_HOME="$HOME/.oh-my-posh"
+  ZOSH_HOME="$HOME/.oh-my-zsh"
+  P10K_INIT="$HOME/.p10k.zsh"
+  P10k_HOME="$HOME/.powerlevel10k" 
+  P10K_THEME="$P10k_HOME/powerlevel10k.zsh-theme"
   RUBY_VER="3.3.4"
   PYTHON_VER="3.12.4"
   DO_INSTALL="false"
@@ -129,15 +155,36 @@ set_all_defaults () {
   DO_DEFAULTS_CHECK="false"
   DO_PACKAGE_CHECK="false"
   DO_UPDATE_CHECK="false"
+  DO_UPDATE_FUNCT="false"
   DO_PYENV_CHECK="false"
   DO_RBENV_CHECK="false"
   DO_ZINIT_CHECK="false"
   DO_FONTS_CHECK="false"
+  DO_POSH_CHECK="false"
+  DO_P10K_CHECK="false"
+  DO_ZOSH_CHECK="false"
   DO_ENV_SETUP="true"
+  DO_ZSH_THEME="false"
+  ZSH_THEME="robbyrussell"
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   if [ ! -d "$WORK_DIR" ]; then
     execute_command "mkdir -p $WORK_DIR"
   fi
+}
+
+# Reset all defaults (when script is run inline i.e. as a login script with no options)
+
+set_inline_defaults () {
+  DO_DEFAULTS_CHECK="true"
+  DO_PACKAGE_CHECK="true"
+  DO_ZINIT_CHECK="true"
+  DO_PYENV_CHECK="true"
+  DO_RBENV_CHECK="true"
+  DO_FONTS_CHECK="true"
+  DO_POSH_CHECK="true"
+  DO_ZOSH_CHECK="false"
+  DO_P10K_CHECK="true"
+  DO_ZSH_THEME="true"
 }
 
 # Check zinit config
@@ -177,8 +224,8 @@ check_rbenv_config () {
       execute_command "git clone https://github.com/rbenv/rbenv.git $RBENV_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
-      execute_command "export RBENV_HOME=\"$RBENV_HOME\""
-      execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
+      execute_command "export RBENV_ROOT=\"$RBENV_HOME\""
+      execute_command "export PATH=\"$PYENV_HOME/bin:$PATH\""
       execute_command "rbenv init - zsh )"
       RBENV_CHECK=$( rbenv versions --bare )
       if [ -z "$RBENV_CHECK" ]; then
@@ -197,8 +244,8 @@ check_pyenv_config () {
       execute_command "git clone https://github.com/rbenv/rbenv.git $PYENV_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
-      execute_command  "export PYENV_HOME=\"$PYENV_HOME\""
-      execute_command  "export PATH=\"$PYENV_ROOT/bin:$PATH\""
+      execute_command  "export PYENV_ROOT=\"$PYENV_HOME\""
+      execute_command  "export PATH=\"$PYENV_HOME/bin:$PATH\""
       execute_command  "pyenv init - "
       PYENV_CHECK=$( pyenv versions --bare )
       if [ -z "$PYENV_CHECK" ]; then
@@ -214,6 +261,61 @@ check_pyenv_config () {
 check_fonts_config () {
   if [ "$OS_NAME" = "Darwin" ]; then
     check_osx_package "font-fira-code-nerd-font" "cask"
+  fi
+}
+
+# Check oh-my-posh config
+
+check_posh_config () {
+  if [ "$INSTALL_POSH" = "true" ]; then
+    if [ ! -d "$POSH_HOME" ]; then
+      execute_command "curl -s https://ohmyposh.dev/install.sh | bash -s -- -d $POSH_HOME"
+    fi
+    if [ "$DO_ENV_SETUP" = "true" ]; then
+      execute_command "export POSH_ROOT=\"$POSH_HOME\""
+      execute_command "export PATH=\"$POSH_HOME/bin:$PATH\""
+      execute_command "oh-my-posh init zsh )"
+    fi
+  fi
+}
+
+# Check oh-my-zsh config
+
+check_zosh_config () {
+  if [ "$INSTALL_ZOSH" = "true" ]; then
+    if [ ! -d "$ZOSH_HOME" ]; then
+      execute_command "git clone https://github.com/ohmyzsh/ohmyzsh.git $ZOSH_HOME"
+    fi
+    if [ "$DO_ENV_SETUP" = "true" ]; then
+#      execute_command "export ZOSH_ROOT=\"$ZOSH_HOME\""
+#      execute_command "export PATH=\"$ZOSH_HOME/bin:$PATH\""
+#      execute_command "oh-my-posh init zsh )"
+      execute_command "source $ZOSH_HOME/oh-my-zsh.sh"
+    fi
+  fi
+}
+
+# Check Powerlevel10k config
+
+check_p10k_config () {
+  if [ "$INSTALL_P10K" = "true" ]; then
+    if [ "$INSTALL_ZINIT" = "false" ]; then
+      if [ ! -d "$P10k_HOME" ]; then
+        execute_command "git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $P10k_HOME"
+      fi
+      if [ "$DO_ENV_SETUP" = "true" ]; then
+        execute_command "typeset -g POWERLEVEL9K_INSTANT_PROMPT=off"
+        if [ -f "$P10K_INIT" ]; then
+          execute_command "p10k configure"
+        fi
+        execute_command "source $P10K_INIT"
+        if [ -f "$P10K_THEME" ]; then
+          execute_command "source $P10K_THEME"
+        fi
+      else
+        execute_command "zinit ice depth=1; zinit light romkatv/powerlevel10k"
+      fi
+    fi
   fi
 }
 
@@ -407,7 +509,7 @@ if [ ! "$*" = "" ]; then
   while test $# -gt 0; do
     case $1 in
       -c|--confirm)
-        CONFIRM="true"
+        DO_CONFIRM="true"
         shift
         ;;
       -C|--check)
@@ -415,8 +517,8 @@ if [ ! "$*" = "" ]; then
         shift
         ;;
       -d|--debug)
+        DO_DEBUG="true"
         shift
-        set -x
         ;;
       -D|--default|--defaults)
         DO_DEFAULTS_CHECK="true"
@@ -441,8 +543,17 @@ if [ ! "$*" = "" ]; then
         DO_INSTALL="true"
         shift
         ;;
+      -n|--nothene)
+        DO_ZSH_THEME="false"
+        shift
+        ;;
       -N|--noenv)
         DO_ENV_SETUP="false"
+        shift
+        ;;
+      -o|--ohmyposh)
+        DO_FONTS_CHECK="true"
+        DO_POSH_CHECK="true"
         shift
         ;;
       -P|--package|--packages)
@@ -458,16 +569,20 @@ if [ ! "$*" = "" ]; then
         shift
         ;;
       -t|--test|--dryrun)
-        DRYRUN="true"
+        DO_DRYRUN="true"
         shift
         handle_output "Running without executing commands"
         ;;
+      -T|--p10k)
+        DO_P10K_CHECK="true"
+        shift
+        ;;
       -U|--update)
-        DO_UPDATE_CHECK="true"
+        DO_UPDATE_FUNCT="true"
         shift
         ;;
       -v|--verbose)
-        VERBOSE="true"
+        DO_VERBOSE="true"
         shift
         ;;
       -V|--version)
@@ -479,6 +594,10 @@ if [ ! "$*" = "" ]; then
         DO_ZINIT_CHECK="true"
         shift
         ;;
+      -Z|--zshtheme)
+        ZSH_THEME="$2"
+        shift 2
+        ;;
       *)
         print_help
         exit
@@ -486,12 +605,13 @@ if [ ! "$*" = "" ]; then
     esac
   done
 else
-  DO_DEFAULTS_CHECK="true"
-  DO_PACKAGE_CHECK="true"
-  DO_ZINIT_CHECK="true"
-  DO_PYENV_CHECK="true"
-  DO_RBENV_CHECK="true"
-  DO_FONTS_CHECK="true"
+  set_inline_defaults
+fi
+
+# Set debug
+
+if [ "$DO_DEBUG" = "true" ]; then
+  set -x
 fi
 
 # Do install
@@ -531,6 +651,10 @@ if [ "$DO_FONTS_CHECK" = "true" ]; then
   check_fonts_config
 fi
 
+if [ "$DO_POSH_CHECK" = "true" ]; then
+  check_posh_config
+fi
+
 # Do package check
 
 if [ "$DO_PACKAGE_CHECK" ]; then
@@ -553,4 +677,16 @@ fi
 
 if [ "$DO_RBENV_CHECK" = "true" ]; then
   check_rbenv_config
+fi
+
+# Do Powerlevel10k config
+
+if [ "$DO_P10K_CHECK" = "true" ]; then
+  check_p10k_config
+fi
+
+# Handle zsh theme
+
+if [ "$DO_ZSH_THEME" = "false" ]; then
+  ZSH_THEME=""
 fi
