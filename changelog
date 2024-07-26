@@ -52,3 +52,21 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Updated zinit support
 # 0.2.7: Thu 25 Jul 2024 17:22:59 AEST
 # Updated help
+# 0.2.8: Fri 26 Jul 2024 11:04:07 AEST
+# Fixes for oh-my-posh/zsh
+# 0.2.9: Fri 26 Jul 2024 13:46:17 AEST
+# Documentation updates and bug fixes
+# 0.3.0: Fri 26 Jul 2024 15:16:05 AEST
+# Fixed rbenv
+# 0.3.1: Fri 26 Jul 2024 15:24:02 AEST
+# Fixed pyenv
+# 0.3.2: Fri 26 Jul 2024 16:36:27 AEST
+# Added build switch
+# 0.3.3: Fri 26 Jul 2024 20:33:38 AEST
+# Fixed brew config
+# 0.3.4: Fri 26 Jul 2024 20:57:10 AEST
+# Improved rbenv and pyenv version detection
+# 0.3.5: Fri 26 Jul 2024 21:29:19 AEST
+# Added verbose message function and messages
+# 0.3.6: Fri 26 Jul 2024 22:38:51 AEST
+# Updated documentation and verbose messages

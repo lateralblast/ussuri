@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.2.7
+Current Version: 0.3.6
 
 Introduction
 ------------
@@ -26,42 +26,48 @@ Usage
 -----
 
 ```
-  Usage: ./ussuri.zsh [OPTIONS...]
-
   When run manually with switches:
 
-    -c|--confirm      Confirm commands (default: false)
-    -C|--check.       Check for updates (default: false)
-    -d|--debug        Print debug information while executing (default )
-    -D|--default(s)   Set defaults (default: false)
-    -e|--changelog.   Print changelog
-    -f|--font(s).     Install font(s) (default: false)
-    -h|--help         Print usage information
-    -I|--install      Install ussuri as /Users/spindler/.zshrc
-    -n|--notheme      No zsh theme (default: robbyrussell)
-    -N|--noenv        Do not initiate environment variables (default: true)
-    -o|--ohmyposh     Install oh my posh (default: false)
-    -p|--pyenv        Do pyenv check (default: false)
-    -P|--package(s)   Do packages check (default: false)
-    -r|--rbenv        Do rbenv check (default: false)
-    -t|--dryrun       Dry run (default: false)
-    -T|--p10k         Do Powerlevel10k config (default: false)
-    -U|--update       Check git for updates (default: false)
-    -v|--verbose      Verbose output (default: false)
+    -h|--help         Print usage
     -V|--version      Print version
-    -z|--zinit        Do zinit check (default: false)
-    -Z|--zshheme      Zsh theme (default: false)
+    -e|--changelog    Print changelog
+    -I|--install      Install ussuri as /Users/spindler/.zshrc
+    -b|--build        Build sources       (default: false)
+    -c|--confirm      Confirm commands    (default: false)
+    -C|--check.       Check for updates   (default: false)
+    -d|--debug        Enable debug        (default: false)
+    -D|--default(s)   Set defaults        (default: false)
+    -f|--font(s).     Install font(s)     (default: false)
+    -n|--notheme      No zsh theme        (default: true)
+    -N|--noenv        Ignore environment  (default: true)
+    -o|--ohmyposh     Install oh my posh  (default: false)
+    -O|--ohmyzsh      Install oh my zsh   (default: false)
+    -p|--pyenv        Do pyenv check      (default: false)
+    -P|--package(s)   Do packages check   (default: false)
+    -r|--rbenv        Do rbenv check      (default: false)
+    -t|--dryrun       Dry run mode        (default: false)
+    -T|--p10k         Do p10k config      (default: false)
+    -U|--update       Check for updates   (default: false)
+    -v|--verbose      Verbose output      (default: false)
+    -z|--zinit        Do zinit check      (default: false)
+    -Z|--zshheme      Set zsh theme       (default: robbyrussell)
 
   Defaults when run inline (i.e. as login script):
 
+    Do build mode         false
+    Do confirm mode       false
+    Do update check       false
+    Do debug mode         false
     Do defaults check:    true
+    Do fonts check:       true
     Do package check:     true
     Do zinit check:       true
     Do pyenv check:       true
     Do rbenv check:       true
-    Do fonts check:       true
-    Do oh-my-poss check:  true
+    Do p10k  check        true
+    Do oh-my-posh check:  true
     Do oh-my-zsh check:   false
+    Do verbose mode       false
 ```
 
 License

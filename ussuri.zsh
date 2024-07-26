@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.2.7
+# Version: 0.3.6
 #
 
 SCRIPT_FILE="$0"
@@ -33,6 +33,15 @@ handle_output () {
   esac
 }
 
+# Verbose message
+
+verbose_message () {
+  MESSAGE="$1"
+  if [ "$DO_VERBOSE" = "true" ]; then
+    handle_output "$MESSAGE" "info"
+  fi
+}
+
 # Execute command
 
 execute_command () {
@@ -63,41 +72,49 @@ print_help () {
 
   When run manually with switches:
 
-    -c|--confirm      Confirm commands (default: $DO_CONFIRM)
-    -C|--check.       Check for updates (default: $DO_UPDATE_CHECK)
-    -d|--debug        Print debug information while executing (default $DO_DEBUG)
-    -D|--default(s)   Set defaults (default: $DO_DEFAULTS_CHECK)
-    -e|--changelog.   Print changelog
-    -f|--font(s).     Install font(s) (default: $DO_FONTS_CHECK)
-    -h|--help         Print usage information
-    -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
-    -n|--notheme      No zsh theme (default: $ZSH_THEME)
-    -N|--noenv        Do not initiate environment variables (default: $DO_ENV_SETUP)
-    -o|--ohmyposh     Install oh my posh (default: $DO_POSH_CHECK)
-    -p|--pyenv        Do pyenv check (default: $DO_PYENV_CHECK)
-    -P|--package(s)   Do packages check (default: $DO_PACKAGE_CHECK)
-    -r|--rbenv        Do rbenv check (default: $DO_RBENV_CHECK)
-    -t|--dryrun       Dry run (default: $DO_DRYRUN)
-    -T|--p10k         Do Powerlevel10k config (default: $DO_P10K_CHECK)
-    -U|--update       Check git for updates (default: $DO_UPDATE_CHECK)
-    -v|--verbose      Verbose output (default: $DO_VERBOSE)
+    -h|--help         Print usage
     -V|--version      Print version
-    -z|--zinit        Do zinit check (default: $DO_ZINIT_CHECK)
-    -Z|--zshheme      Zsh theme (default: $DO_ZSH_THEME)
+    -e|--changelog    Print changelog
+    -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
+    -b|--build        Build sources       (default: $DO_BUILD)
+    -c|--confirm      Confirm commands    (default: $DO_CONFIRM)
+    -C|--check.       Check for updates   (default: $DO_UPDATE_CHECK)
+    -d|--debug        Enable debug        (default: $DO_DEBUG)
+    -D|--default(s)   Set defaults        (default: $DO_DEFAULTS_CHECK)
+    -f|--font(s).     Install font(s)     (default: $DO_FONTS_CHECK)
+    -n|--notheme      No zsh theme        (default: $DO_ZSH_THEME)
+    -N|--noenv        Ignore environment  (default: $DO_ENV_SETUP)
+    -o|--ohmyposh     Install oh my posh  (default: $DO_POSH_CHECK)
+    -O|--ohmyzsh      Install oh my zsh   (default: $DO_ZOSH_CHECK)
+    -p|--pyenv        Do pyenv check      (default: $DO_PYENV_CHECK)
+    -P|--package(s)   Do packages check   (default: $DO_PACKAGE_CHECK)
+    -r|--rbenv        Do rbenv check      (default: $DO_RBENV_CHECK)
+    -t|--dryrun       Dry run mode        (default: $DO_DRYRUN)
+    -T|--p10k         Do p10k config      (default: $DO_P10K_CHECK)
+    -U|--update       Check for updates   (default: $DO_UPDATE_CHECK)
+    -v|--verbose      Verbose output      (default: $DO_VERBOSE)
+    -z|--zinit        Do zinit check      (default: $DO_ZINIT_CHECK)
+    -Z|--zshheme      Set zsh theme       (default: $ZSH_THEME)
 HELP
 set_inline_defaults
 cat <<-INLINE
 
   Defaults when run inline (i.e. as login script):
 
+    Do build mode         $DO_BUILD
+    Do confirm mode       $DO_CONFIRM
+    Do update check       $DO_UPDATE_CHECK
+    Do debug mode         $DO_DEBUG
     Do defaults check:    $DO_DEFAULTS_CHECK
+    Do fonts check:       $DO_FONTS_CHECK
     Do package check:     $DO_PACKAGE_CHECK
     Do zinit check:       $DO_ZINIT_CHECK
     Do pyenv check:       $DO_PYENV_CHECK
     Do rbenv check:       $DO_RBENV_CHECK
-    Do fonts check:       $DO_FONTS_CHECK
-    Do oh-my-poss check:  $DO_POSH_CHECK
+    Do p10k  check        $DO_P10K_CHECK
+    Do oh-my-posh check:  $DO_POSH_CHECK
     Do oh-my-zsh check:   $DO_ZOSH_CHECK
+    Do verbose mode       $DO_VERBOSE
 
 INLINE
 }
@@ -105,8 +122,10 @@ INLINE
 # Install script as .zshrc
 
 do_install () {
+  verbose_message "Backing up $HOME/.zshrc to $WORK_DIR/.zshrc.$DATE_SUFFIX"
   execute_command "cp $HOME/.zshrc $WORK_DIR/.zshrc.$DATE_SUFFIX"
-  execute_command "cp $SCRIPT_FILE ~/.zshrc"
+  verbose_message "Replacing $HOME/.zshrc"
+  execute_command "cp $SCRIPT_FILE $HOME/.zshrc"
 }
 
 # Print changelog
@@ -129,10 +148,15 @@ print_changelog () {
 # Set All Defaults
 
 set_all_defaults () {
+  verbose_message "Setting defaults"
+  execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
+  execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
   OS_NAME=$(uname -o)
   DO_VERBOSE="false"
   DO_DRYRUN='false'
   DO_CONFIRM="false"
+  DO_DEBUG="false"
+  DO_BUILD="false"
   SCRIPT_NAME="ussuri"
   WORK_DIR="$HOME/.$SCRIPT_NAME"
   INSTALL_ZINIT="true"
@@ -140,6 +164,7 @@ set_all_defaults () {
   INSTALL_PYENV="true"
   INSTALL_POSH="true"
   INSTALL_OZSH="false"
+  INSTALL_FONTS="true"
   ZINIT_HOME="$HOME/.zinit"
   RBENV_HOME="$HOME/.rbenv"
   PYENV_HOME="$HOME/.pyenv"
@@ -164,7 +189,7 @@ set_all_defaults () {
   DO_P10K_CHECK="false"
   DO_ZOSH_CHECK="false"
   DO_ENV_SETUP="true"
-  DO_ZSH_THEME="false"
+  DO_ZSH_THEME="true"
   ZSH_THEME="robbyrussell"
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   if [ ! -d "$WORK_DIR" ]; then
@@ -185,12 +210,18 @@ set_inline_defaults () {
   DO_ZOSH_CHECK="false"
   DO_P10K_CHECK="true"
   DO_ZSH_THEME="true"
+  DO_VERBOSE="false"
+  DO_DRYRUN='false'
+  DO_CONFIRM="false"
+  DO_DEBUG="false"
+  DO_BUILD="false"
 }
 
 # Check zinit config
 
 check_zinit_config () {
   if [ "$INSTALL_ZINIT" = "true" ]; then
+    verbose_message "Configuring zinit"
     if [ ! -d "$ZINIT_HOME" ]; then
       execute_command "git clone https://github.com/zdharma-continuum/zinit.git $ZINIT_HOME"
     fi
@@ -220,16 +251,30 @@ check_zinit_config () {
 
 check_rbenv_config () {
   if [ "$INSTALL_RBENV" = "true" ]; then
+    verbose_message "Configuring rbenv"
     if [ ! -d "$RBENV_HOME" ]; then
+      verbose_message "Installing rbenv"
       execute_command "git clone https://github.com/rbenv/rbenv.git $RBENV_HOME"
+      verbose_message "Installing rbenv ruby-build plugin"
+      execute_command "git clone https://github.com/rbenv/ruby-build.git $RBENV_HOME/plugins/ruby-build"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
+      verbose_message "Configuring rbenv environment"
       execute_command "export RBENV_ROOT=\"$RBENV_HOME\""
-      execute_command "export PATH=\"$PYENV_HOME/bin:$PATH\""
-      execute_command "rbenv init - zsh )"
-      RBENV_CHECK=$( rbenv versions --bare )
-      if [ -z "$RBENV_CHECK" ]; then
-        execute_command "rbenv install $RUBY_VER"
+      execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
+      execute_command "rbenv init - zsh"
+      if [ "DO_BUILD" = "true" ]; then
+        RBENV_CHECK=$( rbenv versions --bare | grep -v "$RUBY_VER" )
+        if [ -z "$RBENV_CHECK" ]; then
+          verbose_message "Installing ruby version $RUBY_VER"
+          execute_command "rbenv install $RUBY_VER"
+          verbose_message "Setting ruby global version to $RUBY_VER"
+          execute_command "rbenv global $RUBY_VER"
+        fi
+      fi
+      RBENV_GLOBAL=$( rbenv global )
+      if [ ! "$RBENV_GLOBAL" = "$RUBY_VER" ]; then
+        verbose_message "Setting ruby global version to $RUBY_VER"
         execute_command "rbenv global $RUBY_VER"
       fi
     fi
@@ -240,16 +285,28 @@ check_rbenv_config () {
 
 check_pyenv_config () {
   if [ "$INSTALL_PYENV" = "true" ]; then
+    verbose_message "Configuring pyenv"
     if [ ! -d "$PYENV_HOME" ]; then
+      verbose_message "Installing pyenv"
       execute_command "git clone https://github.com/rbenv/rbenv.git $PYENV_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
-      execute_command  "export PYENV_ROOT=\"$PYENV_HOME\""
-      execute_command  "export PATH=\"$PYENV_HOME/bin:$PATH\""
-      execute_command  "pyenv init - "
-      PYENV_CHECK=$( pyenv versions --bare )
-      if [ -z "$PYENV_CHECK" ]; then
-        execute_command "rbenv install $PYTHON_VER"
+      verbose_message "Configuring pyenv environment"
+      execute_command "export PYENV_ROOT=\"$PYENV_HOME\""
+      execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
+      execute_command "pyenv init -"
+      if [ "DO_BUILD" = "true" ]; then
+        PYENV_CHECK=$( pyenv versions --bare | grep "$PYTHON_VER" )
+        if [ -z "$PYENV_CHECK" ]; then
+          verbose_message "Installing python version $PYTHON_VER"
+          execute_command "pyenv install $PYTHON_VER"
+          verbose_message "Setting python global version to $RUBY_VER"
+          execute_command "pyenv global $PYTHON_VER"
+        fi
+      fi
+      PYENV_GLOBAL=$( pyenv global )
+      if [ ! "$PYENV_GLOBAL" = "$PYTHON_VER" ]; then
+        verbose_message "Setting python global version to $RUBY_VER"
         execute_command "rbenv global $PYTHON_VER"
       fi
     fi
@@ -259,8 +316,11 @@ check_pyenv_config () {
 # Check fonts config
 
 check_fonts_config () {
-  if [ "$OS_NAME" = "Darwin" ]; then
-    check_osx_package "font-fira-code-nerd-font" "cask"
+  if [ "$INSTALL_FONTS" = "true" ]; then
+    verbose_message "Configuring fonts"
+    if [ "$OS_NAME" = "Darwin" ]; then
+      check_osx_package "font-fira-code-nerd-font" "cask"
+    fi
   fi
 }
 
@@ -268,13 +328,16 @@ check_fonts_config () {
 
 check_posh_config () {
   if [ "$INSTALL_POSH" = "true" ]; then
+    verbose_message "Configuring oh-my-posh"
     if [ ! -d "$POSH_HOME" ]; then
+      verbose_message "Installing oh-my-posh"
+      execute_command "mkdir -p $POSH_HOME"
       execute_command "curl -s https://ohmyposh.dev/install.sh | bash -s -- -d $POSH_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
-      execute_command "export POSH_ROOT=\"$POSH_HOME\""
-      execute_command "export PATH=\"$POSH_HOME/bin:$PATH\""
-      execute_command "oh-my-posh init zsh )"
+      verbose_message "Configuring oh-my-posh environment"
+      execute_command "export PATH=\"$POSH_HOME:$PATH\""
+      execute_command "oh-my-posh init zsh"
     fi
   fi
 }
@@ -283,13 +346,13 @@ check_posh_config () {
 
 check_zosh_config () {
   if [ "$INSTALL_ZOSH" = "true" ]; then
+    verbose_message "Configuring oh-my-posh"
     if [ ! -d "$ZOSH_HOME" ]; then
+      verbose_message "Installing oh-my-zsh"
       execute_command "git clone https://github.com/ohmyzsh/ohmyzsh.git $ZOSH_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
-#      execute_command "export ZOSH_ROOT=\"$ZOSH_HOME\""
-#      execute_command "export PATH=\"$ZOSH_HOME/bin:$PATH\""
-#      execute_command "oh-my-posh init zsh )"
+      verbose_message "Configuring oh-my-zsh environment"
       execute_command "source $ZOSH_HOME/oh-my-zsh.sh"
     fi
   fi
@@ -299,21 +362,26 @@ check_zosh_config () {
 
 check_p10k_config () {
   if [ "$INSTALL_P10K" = "true" ]; then
+    verbose_message "Configuring p10k"
     if [ "$INSTALL_ZINIT" = "false" ]; then
       if [ ! -d "$P10k_HOME" ]; then
+        verbose_message "Installing p10k"
         execute_command "git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $P10k_HOME"
       fi
       if [ "$DO_ENV_SETUP" = "true" ]; then
+        verbose_message "Configuring p10k environment"
         execute_command "typeset -g POWERLEVEL9K_INSTANT_PROMPT=off"
-        if [ -f "$P10K_INIT" ]; then
-          execute_command "p10k configure"
+        if [ "$INSTALL_ZINIT" = "false" ]; then
+          if [ -f "$P10K_INIT" ]; then
+            execute_command "p10k configure"
+          fi
+          execute_command "source $P10K_INIT"
+          if [ -f "$P10K_THEME" ]; then
+            execute_command "source $P10K_THEME"
+          fi
+        else
+          execute_command "zinit ice depth=1; zinit light romkatv/powerlevel10k"
         fi
-        execute_command "source $P10K_INIT"
-        if [ -f "$P10K_THEME" ]; then
-          execute_command "source $P10K_THEME"
-        fi
-      else
-        execute_command "zinit ice depth=1; zinit light romkatv/powerlevel10k"
       fi
     fi
   fi
@@ -328,6 +396,7 @@ osx_defaults_check () {
   VALUE="$4"
   ACTUAL=$( defaults read "$APP" "$PARAM" )
   if [ "$ACTUAL" != "$VALUE" ]; then
+    verbose_message "Setting parameter \"$PARAM\" to \"$VALUE\""
     if [ ! "$TYPE" = "" ]; then
       execute_command "defaults write $APP $PARAM -$TYPE $VALUE"
     else
@@ -361,7 +430,7 @@ set_osx_defaults () {
                  multipass netpbm openssh openssl@3 opentofu osinfo-db osx-cpu-temp \
                  p7zip pwgen python@3.12 qemu rpm2cpio ruby ruby-build rust shellcheck \
                  socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
-                 xorriso x264 x265 xquartz xz zsh )
+                 xorriso x264 x265 xquartz xz yamllint zsh )
 }
 
 # Update package list
@@ -388,18 +457,21 @@ update_package_list () {
 # Check OS defaults
 
 check_osx_defaults () {
+  verbose_message "Configuring OS X defaults"
   if [ ! -d "$SCREENSHOT_LOCATION" ]; then
     execute_command "mkdir -p $SCREENSHOT_LOCATION"
   fi
   osx_defaults_check "com.apple.screencapture" "location" "string" "$SCREENSHOT_LOCATION" 
   if [ "$SHOW_HIDDEN_FILES" = "true" ]; then
     osx_defaults_check "com.apple.Finder" "AppleShowAllFiles" "" "$SHOW_HIDDEN_FILES" 
-    execute_command "chflags nohidden $HOME/Library"
+    execute_command    "chflags nohidden $HOME/Library"
   fi
   if [ "$RESTART_FINDER" = "true" ]; then
-   execute_command "killall Finder"
+    verbose_message "Restarting Finder"
+    execute_command "killall Finder"
   fi
   if [ "$RESTART_UISERVER" = "true" ]; then
+    verbose_message "Restarting SystemUIServer"
     execute_command "killall SystemUIServer"
   fi
 }
@@ -409,9 +481,11 @@ check_osx_defaults () {
 check_osx_package () {
   PACKAGE="$1"
   TYPE="$2"
+  verbose_message "Configuring OS X package \"$PACKAGE\""
   if [ "$INSTALL_BREW" = "true" ]; then
     PACKAGE_TEST=$( grep "^$PACKAGE$" "$BREW_LIST" )
     if [ -z "$PACKAGE_TEST" ]; then
+      verbose_message "Installing package \"$PACKAGE\""
       if [ "$TYPE" = "cask" ]; then
         execute_command "brew install --cask $PACKAGE"
       else
@@ -426,24 +500,39 @@ check_osx_package () {
 
 check_osx_packages () {
   if [ "$INSTALL_BREW" = "true" ]; then
+    verbose_message "Configuring brew"
     BREW_TEST=$(command -v brew)
     if [ -z "$BREW_TEST" ]; then
       for BREW_FILE in /opt/homebrew/bin/brew /usr/local/homebrew/bin/brew; do
         if [ -f "$BREW_FILE" ]; then
           BREW_BIN="$BREW_FILE"
+          BREW_DIR=$( dirname $BREW_BIN )
+          BREW_BASE=$( dirname $BREW_DIR )
         fi
       done
       if [ -z "$BREW_BIN" ]; then
         execute_command "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        for BREW_FILE in /opt/homebrew/bin/brew /usr/local/homebrew/bin/brew; do
+          if [ -f "$BREW_FILE" ]; then
+            BREW_BIN="$BREW_FILE"
+            BREW_DIR=$( dirname $BREW_BIN )
+            BREW_BASE=$( dirname $BREW_DIR )
+          fi
+        done
+        execute_command "export PATH=\"$BREW_BASE/bin:$BREW_BASE/sbin:$PATH\""
       else
+        execute_command "export PATH=\"$BREW_BASE/bin:$BREW_BASE/sbin:$PATH\""
+        execute_command "export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:/"
         if [ "$DO_ENV_SETUP" = "true" ]; then
+          verbose_message "Configuring brew environment"
           execute_command "$BREW_BIN shellenv"
         fi
       fi
     else
-        if [ "$DO_ENV_SETUP" = "true" ]; then
-         execute_command "$BREW_TEST shellenv"
-       fi
+      if [ "$DO_ENV_SETUP" = "true" ]; then
+        verbose_message "Configuring brew environment"
+        execute_command "$BREW_TEST shellenv"
+      fi
     fi
     for PACKAGE in $PACKAGE_LIST; do
       check_osx_package "$PACKAGE" ""
@@ -454,6 +543,7 @@ check_osx_packages () {
 # Check for update
 
 check_for_update () {
+  verbose_message "Checking for updates"
   README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md" 
   REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
   LOCAL_VERSION="${SCRIPT_VERSION/\./}"
@@ -508,6 +598,10 @@ set_defaults
 if [ ! "$*" = "" ]; then
   while test $# -gt 0; do
     case $1 in
+      -b|--build|--compile)
+        DO_BUILD="true"
+        shift
+        ;;
       -c|--confirm)
         DO_CONFIRM="true"
         shift
@@ -551,9 +645,14 @@ if [ ! "$*" = "" ]; then
         DO_ENV_SETUP="false"
         shift
         ;;
-      -o|--ohmyposh)
+      -o|--ohmyposh|--posh)
         DO_FONTS_CHECK="true"
         DO_POSH_CHECK="true"
+        shift
+        ;;
+      -o|--ohmyzsh|--zosh)
+        DO_FONTS_CHECK="true"
+        DO_ZOSH_CHECK="true"
         shift
         ;;
       -P|--package|--packages)
