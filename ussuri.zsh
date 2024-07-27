@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.3.7
+# Version: 0.3.8
 #
 
 SCRIPT_FILE="$0"
@@ -448,16 +448,10 @@ update_package_list () {
     if [ ! -f "$BREW_LIST" ]; then
       execute_command "brew list | sort > $BREW_LIST"
     fi
-    REQ_LIST="$WORK_DIR/$SCRIPT_NAME.list" 
-    REQ_TEST=$( find "$REQ_LIST" -mtime -5 2> /dev/null )
-    if [ -z "$REQ_TEST" ]; then
-      if [ -f "$REQ_TEST" ]; then
-        rm "$REQ_LIST"
-      fi
-      touch "$REQ_LIST"
-      for PACKAGE in $PACKAGE_LIST; do
-        echo "$PACKAGE" >> "$REQ_LIST"
-      done
+    BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
+    SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+    if [ -z "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
+      execute_command "brew list | sort > $BREW_LIST"
     fi
   fi
 }
@@ -542,9 +536,14 @@ check_osx_packages () {
         execute_command "$BREW_TEST shellenv"
       fi
     fi
-    for PACKAGE in $PACKAGE_LIST; do
-      check_osx_package "$PACKAGE" ""
-    done
+    BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
+    SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+    if [ -z "$BREW_TEST" ] || [ -z "$SCRIPT_TEST" ]; then
+      update_package_list
+      for PACKAGE in $PACKAGE_LIST; do
+        check_osx_package "$PACKAGE" ""
+      done
+    fi
   fi
 }
 
@@ -748,7 +747,6 @@ fi
 # Do OSX specific checks
 
 if [ "$OS_NAME" = "Darwin" ]; then
-  update_package_list
   check_osx_packages
 fi
 
