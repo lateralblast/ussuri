@@ -70,3 +70,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added verbose message function and messages
 # 0.3.6: Fri 26 Jul 2024 22:38:51 AEST
 # Updated documentation and verbose messages
+# 0.3.7: Sat 27 Jul 2024 11:15:21 AEST
+# Improved verbose output

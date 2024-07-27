@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.3.6
+# Version: 0.3.7
 #
 
 SCRIPT_FILE="$0"
@@ -55,10 +55,18 @@ execute_command () {
       handle_output "$COMMAND" "command" 
       vared -p "Execute [y/n]:  " RESPONSE
       if [ "$RESPONSE" = "y" ]; then
-        eval "$COMMAND"
+        if [ "$DO_VERBOSE" = "true" ]; then
+          eval "$COMMAND"
+        else
+          eval "$COMMAND > /dev/null 2>&1"
+        fi
       fi
     else
-      eval "$COMMAND"
+      if [ "$DO_VERBOSE" = "true" ]; then
+        eval "$COMMAND"
+      else
+        eval "$COMMAND > /dev/null 2>&1"
+      fi
     fi
   fi
 }
