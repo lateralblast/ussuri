@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.2
+# Version: 0.4.3
 #
 
 SCRIPT_FILE="$0"
@@ -176,9 +176,7 @@ set_env () {
   PARAM="$1"
   VALUE="$2"
   verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
-  eval "$PARAM=\"$VALUE\""
-  echo "$DO_DRYRUN"
-  exit
+  eval "export $PARAM=\"$VALUE\""
 }
 
 # Set All Defaults
