@@ -1,13 +1,9 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.1
+# Version: 0.4.2
 #
 
 SCRIPT_FILE="$0"
-
-# Get the version of the script from the script itself
-
-SCRIPT_VERSION=$( grep '^# Version' < "$0"| awk '{print $3}' )
 
 # Handle output
 
@@ -60,7 +56,7 @@ execute_command () {
   if [ "$DO_DRYRUN" = "false" ]; then
     if [ "$DO_CONFIRM" = "true" ]; then
       RESPONSE=""
-      handle_output "$COMMAND" "command" 
+      handle_output "$COMMAND" "command"
       vared -p "Execute [y/n]:  " RESPONSE
       if [ "$RESPONSE" = "y" ]; then
         if [ "$DO_VERBOSE" = "true" ]; then
@@ -168,8 +164,8 @@ print_changelog () {
   if [ -f "$CHANGE_FILE" ]; then
     grep "^#" "$CHANGE_FILE" | sed "s/^# //g"
   else
-    CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/changelog" 
-    curl -vs "$CHANGE_URL" 2>&1 | grep "^#" |sed "s/^# //g" 
+    CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/changelog"
+    curl -vs "$CHANGE_URL" 2>&1 | grep "^#" |sed "s/^# //g"
   fi
   echo ""
 }
@@ -177,10 +173,10 @@ print_changelog () {
 # Set environment
 
 set_env () {
-  PARAM="$1" 
+  PARAM="$1"
   VALUE="$2"
   verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
-  eval "export $PARAM=\"$VALUE\""
+  eval "$PARAM=\"$VALUE\""
   echo "$DO_DRYRUN"
   exit
 }
@@ -188,11 +184,13 @@ set_env () {
 # Set All Defaults
 
 set_all_defaults () {
+  SCRIPT_VERSION=$( grep '^# Version' < "$SCRIPT_FILE" |  awk '{print $3}' )
   OS_NAME=$(uname -o)
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   verbose_message "Setting defaults"
   execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
   execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
+  set_env "DO_HELP"           "false"
   set_env "DO_DRYRUN"         "false"
   set_env "DO_CONFIRM"        "false"
   set_env "DO_DEBUG"          "false"
@@ -214,7 +212,7 @@ set_all_defaults () {
   set_env "POSH_HOME"         "$HOME/.oh-my-posh"
   set_env "ZOSH_HOME"         "$HOME/.oh-my-zsh"
   set_env "P10K_INIT"         "$HOME/.p10k.zsh"
-  set_env "P10K_HOME"         "$HOME/.powerlevel10k" 
+  set_env "P10K_HOME"         "$HOME/.powerlevel10k"
   set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
   set_env "RUBY_VER"          "3.3.4"
   set_env "PYTHON_VER"        "3.12.4"
@@ -494,9 +492,9 @@ check_osx_defaults () {
   if [ ! -d "$SCREENSHOT_LOCATION" ]; then
     execute_command "mkdir -p $SCREENSHOT_LOCATION"
   fi
-  osx_defaults_check "com.apple.screencapture" "location" "string" "$SCREENSHOT_LOCATION" 
+  osx_defaults_check "com.apple.screencapture" "location" "string" "$SCREENSHOT_LOCATION"
   if [ "$SHOW_HIDDEN_FILES" = "true" ]; then
-    osx_defaults_check "com.apple.Finder" "AppleShowAllFiles" "" "$SHOW_HIDDEN_FILES" 
+    osx_defaults_check "com.apple.Finder" "AppleShowAllFiles" "" "$SHOW_HIDDEN_FILES"
     execute_command    "chflags nohidden $HOME/Library"
   fi
   if [ "$RESTART_FINDER" = "true" ]; then
@@ -526,7 +524,7 @@ check_osx_package () {
       fi
       update_package_list
     fi
-  fi  
+  fi
 }
 
 # Check OSX Applications
@@ -582,7 +580,7 @@ check_osx_packages () {
 
 check_for_update () {
   verbose_message "Checking for updates"
-  README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md" 
+  README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md"
   REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
   LOCAL_VERSION="${SCRIPT_VERSION/\./}"
   LOCAL_VERSION="${LOCAL_VERSION/\./}"
@@ -673,9 +671,8 @@ if [ ! "$*" = "" ]; then
         shift
         ;;
       -h|--help|--usage)
-        print_help
+        DO_HELP="true"
         shift
-        exit
         ;;
       -I|--install)
         DO_INSTALL="true"
@@ -733,9 +730,8 @@ if [ ! "$*" = "" ]; then
         shift
         ;;
       -V|--version)
-        echo "$SCRIPT_VERSION"
+        DO_VERSION="true"
         shift
-        exit
         ;;
       -z|--zinit)
         DO_ZINIT_CHECK="true"
@@ -762,6 +758,16 @@ if [ "$DO_DEBUG" = "true" ]; then
 fi
 
 # Do install
+
+if [ "$DO_HELP" = "true" ]; then
+  print_help
+  exit
+fi
+
+if [ "$DO_VERSION" = "true" ]; then
+  echo "$SCRIPT_VERSION"
+  exit
+fi
 
 if [ "$DO_INSTALL" = "true" ]; then
   DO_ENV_SETUP="false"
