@@ -92,3 +92,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed environment setup
 # 0.4.7: Tue 30 Jul 2024 21:47:51 AEST
 # Fixed package list processing
+# 0.4.8: Tue 30 Jul 2024 22:04:07 AEST
+# Fixed read from file

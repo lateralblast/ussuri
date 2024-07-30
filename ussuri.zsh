@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.7
+# Version: 0.4.8
 #
 
 SCRIPT_FILE="$0"
@@ -83,7 +83,7 @@ execute_command () {
 
 execute_from_file () {
   FILE="$1"
-  for LINE in "${(@f)"$(<FILE)"}"; do
+  for LINE in "${(@f)"$(<$FILE)"}"; do
     if [[ ! "$LINE" =~ "^#" ]]; then
       execute_command "$LINE"
     fi
