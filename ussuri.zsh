@@ -102,7 +102,7 @@ print_help () {
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
-    -I|--install      Install $SCRIPT_NAME as $HOME/.zshrc
+    -I|--install      Installs $SCRIPT_NAME as: $HOME/.zshrc
     -b|--build        Build sources       (default: $DO_BUILD)
     -c|--confirm      Confirm commands    (default: $DO_CONFIRM)
     -C|--check.       Check for updates   (default: $DO_UPDATE_CHECK)

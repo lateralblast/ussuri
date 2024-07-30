@@ -31,7 +31,7 @@ Usage
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
-    -I|--install      Install ussuri as /Users/spindler/.zshrc
+    -I|--install      Installs ussuri as: /Users/username/.zshrc
     -b|--build        Build sources       (default: false)
     -c|--confirm      Confirm commands    (default: false)
     -C|--check.       Check for updates   (default: false)
