@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.3.8
+# Version: 0.4.1
 #
 
 SCRIPT_FILE="$0"
@@ -27,6 +27,9 @@ handle_output () {
     info|information)
       echo "Information:    $OUTPUT"
       ;;
+    set|setting)
+      echo "Setting:        $OUTPUT"
+      ;;
     *)
       echo "$OUTPUT"
       ;;
@@ -37,8 +40,13 @@ handle_output () {
 
 verbose_message () {
   MESSAGE="$1"
+  TYPE="$2"
   if [ "$DO_VERBOSE" = "true" ]; then
-    handle_output "$MESSAGE" "info"
+    if [ "$TYPE" = "" ]; then
+      handle_output "$MESSAGE" "info"
+    else
+      handle_output "$MESSAGE" "$TYPE"
+    fi
   fi
 }
 
@@ -71,6 +79,17 @@ execute_command () {
   fi
 }
 
+# Read file into array and process
+
+execute_from_file () {
+  FILE="$1"
+  for LINE in "${(@f)"$(<FILE)"}"; do
+    if [[ ! "$LINE" =~ "^#" ]]; then
+      execute_command "$LINE"
+    fi
+  done
+}
+
 # Priny help information
 
 print_help () {
@@ -89,7 +108,8 @@ print_help () {
     -C|--check.       Check for updates   (default: $DO_UPDATE_CHECK)
     -d|--debug        Enable debug        (default: $DO_DEBUG)
     -D|--default(s)   Set defaults        (default: $DO_DEFAULTS_CHECK)
-    -f|--font(s).     Install font(s)     (default: $DO_FONTS_CHECK)
+    -f|--font(s)      Install font(s)     (default: $DO_FONTS_CHECK)
+    -m|--manager      Plugin manager      (default: $PLUGIN_MANAGER)
     -n|--notheme      No zsh theme        (default: $DO_ZSH_THEME)
     -N|--noenv        Ignore environment  (default: $DO_ENV_SETUP)
     -o|--ohmyposh     Install oh my posh  (default: $DO_POSH_CHECK)
@@ -102,7 +122,7 @@ print_help () {
     -U|--update       Check for updates   (default: $DO_UPDATE_CHECK)
     -v|--verbose      Verbose output      (default: $DO_VERBOSE)
     -z|--zinit        Do zinit check      (default: $DO_ZINIT_CHECK)
-    -Z|--zshheme      Set zsh theme       (default: $ZSH_THEME)
+    -Z|--zshtheme     Set zsh theme       (default: $ZSH_THEME)
 HELP
 set_inline_defaults
 cat <<-INLINE
@@ -123,6 +143,7 @@ cat <<-INLINE
     Do oh-my-posh check:  $DO_POSH_CHECK
     Do oh-my-zsh check:   $DO_ZOSH_CHECK
     Do verbose mode       $DO_VERBOSE
+    Plugin Manager:       $PLUGIN_MANAGER
 
 INLINE
 }
@@ -153,76 +174,92 @@ print_changelog () {
   echo ""
 }
 
+# Set environment
+
+set_env () {
+  PARAM="$1" 
+  VALUE="$2"
+  verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
+  eval "export $PARAM=\"$VALUE\""
+  echo "$DO_DRYRUN"
+  exit
+}
+
 # Set All Defaults
 
 set_all_defaults () {
+  OS_NAME=$(uname -o)
+  DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   verbose_message "Setting defaults"
   execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
   execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
-  OS_NAME=$(uname -o)
-  DO_VERBOSE="false"
-  DO_DRYRUN='false'
-  DO_CONFIRM="false"
-  DO_DEBUG="false"
-  DO_BUILD="false"
-  SCRIPT_NAME="ussuri"
-  WORK_DIR="$HOME/.$SCRIPT_NAME"
-  INSTALL_ZINIT="true"
-  INSTALL_RBENV="true"
-  INSTALL_PYENV="true"
-  INSTALL_POSH="true"
-  INSTALL_OZSH="false"
-  INSTALL_FONTS="true"
-  ZINIT_HOME="$HOME/.zinit"
-  RBENV_HOME="$HOME/.rbenv"
-  PYENV_HOME="$HOME/.pyenv"
-  POSH_HOME="$HOME/.oh-my-posh"
-  ZOSH_HOME="$HOME/.oh-my-zsh"
-  P10K_INIT="$HOME/.p10k.zsh"
-  P10k_HOME="$HOME/.powerlevel10k" 
-  P10K_THEME="$P10k_HOME/powerlevel10k.zsh-theme"
-  RUBY_VER="3.3.4"
-  PYTHON_VER="3.12.4"
-  DO_INSTALL="false"
-  DO_VERSION_CHECK="false"
-  DO_DEFAULTS_CHECK="false"
-  DO_PACKAGE_CHECK="false"
-  DO_UPDATE_CHECK="false"
-  DO_UPDATE_FUNCT="false"
-  DO_PYENV_CHECK="false"
-  DO_RBENV_CHECK="false"
-  DO_ZINIT_CHECK="false"
-  DO_FONTS_CHECK="false"
-  DO_POSH_CHECK="false"
-  DO_P10K_CHECK="false"
-  DO_ZOSH_CHECK="false"
-  DO_ENV_SETUP="true"
-  DO_ZSH_THEME="true"
-  ZSH_THEME="robbyrussell"
-  DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
+  set_env "DO_DRYRUN"         "false"
+  set_env "DO_CONFIRM"        "false"
+  set_env "DO_DEBUG"          "false"
+  set_env "DO_BUILD"          "false"
+  set_env "DO_PLUGINS"        "true"
+  set_env "SCRIPT_NAME"       "ussuri"
+  set_env "WORK_DIR"          "$HOME/.$SCRIPT_NAME"
+  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit"
+  set_env "INSTALL_ZINIT"     "true"
+  set_env "INSTALL_RBENV"     "true"
+  set_env "INSTALL_PYENV"     "true"
+  set_env "INSTALL_POSH"      "true"
+  set_env "INSTALL_OZSH"      "false"
+  set_env "INSTALL_FONTS"     "true"
+  set_env "INSTALL_P10K"      "true"
+  set_env "ZINIT_HOME"        "$HOME/.zinit"
+  set_env "RBENV_HOME"        "$HOME/.rbenv"
+  set_env "PYENV_HOME"        "$HOME/.pyenv"
+  set_env "POSH_HOME"         "$HOME/.oh-my-posh"
+  set_env "ZOSH_HOME"         "$HOME/.oh-my-zsh"
+  set_env "P10K_INIT"         "$HOME/.p10k.zsh"
+  set_env "P10K_HOME"         "$HOME/.powerlevel10k" 
+  set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
+  set_env "RUBY_VER"          "3.3.4"
+  set_env "PYTHON_VER"        "3.12.4"
+  set_env "DO_INSTALL"        "false"
+  set_env "DO_VERSION_CHECK"  "false"
+  set_env "DO_DEFAULTS_CHECK" "false"
+  set_env "DO_PACKAGE_CHECK"  "false"
+  set_env "DO_UPDATE_CHECK"   "false"
+  set_env "DO_UPDATE_FUNCT"   "false"
+  set_env "DO_PYENV_CHECK"    "false"
+  set_env "DO_RBENV_CHECK"    "false"
+  set_env "DO_ZINIT_CHECK"    "false"
+  set_env "DO_FONTS_CHECK"    "false"
+  set_env "DO_POSH_CHECK"     "false"
+  set_env "DO_P10K_CHECK"     "false"
+  set_env "DO_ZOSH_CHECK"     "false"
+  set_env "DO_ENV_SETUP"      "true"
+  set_env "DO_ZSH_THEME"      "true"
+  set_env "ZSH_THEME"         "robbyrussell"
+  set_env "PLUGIN_MANAGER"    "zinit"
   if [ ! -d "$WORK_DIR" ]; then
     execute_command "mkdir -p $WORK_DIR"
+    execute_command "mkdir -p $WORK_DIR/files"
   fi
 }
 
 # Reset all defaults (when script is run inline i.e. as a login script with no options)
 
 set_inline_defaults () {
-  DO_DEFAULTS_CHECK="true"
-  DO_PACKAGE_CHECK="true"
-  DO_ZINIT_CHECK="true"
-  DO_PYENV_CHECK="true"
-  DO_RBENV_CHECK="true"
-  DO_FONTS_CHECK="true"
-  DO_POSH_CHECK="true"
-  DO_ZOSH_CHECK="false"
-  DO_P10K_CHECK="true"
-  DO_ZSH_THEME="true"
-  DO_VERBOSE="false"
-  DO_DRYRUN='false'
-  DO_CONFIRM="false"
-  DO_DEBUG="false"
-  DO_BUILD="false"
+  set_env "DO_DEFAULTS_CHECK" "true"
+  set_env "DO_PACKAGE_CHECK"  "true"
+  set_env "DO_ZINIT_CHECK"    "true"
+  set_env "DO_PYENV_CHECK"    "true"
+  set_env "DO_RBENV_CHECK"    "true"
+  set_env "DO_FONTS_CHECK"    "true"
+  set_env "DO_POSH_CHECK"     "true"
+  set_env "DO_ZOSH_CHECK"     "false"
+  set_env "DO_P10K_CHECK"     "true"
+  set_env "DO_ZSH_THEME"      "true"
+  set_env "DO_VERBOSE"        "false"
+  set_env "DO_DRYRUN"         'false'
+  set_env "DO_CONFIRM"        "false"
+  set_env "DO_DEBUG"          "false"
+  set_env "DO_BUILD"          "false"
+  set_env "DO_PLUGINS"        "true"
 }
 
 # Check zinit config
@@ -236,22 +273,11 @@ check_zinit_config () {
     if [ "$DO_ENV_SETUP" = "true" ]; then
       execute_command ". $ZINIT_HOME/zinit.zsh"
     fi
-    # Add in zsh plugins
-    execute_command "zinit light zsh-users/zsh-syntax-highlighting"
-    execute_command "zinit light zsh-users/zsh-completions"
-    execute_command "zinit light zsh-users/zsh-autosuggestions"
-    execute_command "zinit light Aloxaf/fzf-tab"
-    # Add in snippets
-    execute_command "zinit snippet OMZP::git"
-    execute_command "zinit snippet OMZP::sudo"
-    execute_command "zinit snippet OMZP::archlinux"
-    execute_command "zinit snippet OMZP::aws"
-    execute_command "zinit snippet OMZP::kubectl"
-    execute_command "zinit snippet OMZP::kubectx"
-    execute_command "zinit snippet OMZP::command-not-found"
-    # Load completions
-    execute_command "autoload -Uz compinit && compinit"
-    execute_command "zinit cdreplay -q"
+    if [ "$PLUGIN_MANAGER" = "zinit" ]; then
+      if [ -f "$ZINIT_FILE" ]; then
+        execute_from_file "$ZINIT_FILE"
+      fi
+    fi
   fi
 }
 
@@ -363,6 +389,12 @@ check_zosh_config () {
       verbose_message "Configuring oh-my-zsh environment"
       execute_command "source $ZOSH_HOME/oh-my-zsh.sh"
     fi
+    if [ "$PLUGIN_MANAGER" = "oh-my-zsh" ]; then
+      plugins=( git ansible aliases brew common-aliases copyfile copypath \
+                debian docker docker-compose docker-machine ubuntu ufw \
+                systemd sudo ssh-agent screen ruby rsync python pip perl \
+                macos history )
+    fi
   fi
 }
 
@@ -372,9 +404,9 @@ check_p10k_config () {
   if [ "$INSTALL_P10K" = "true" ]; then
     verbose_message "Configuring p10k"
     if [ "$INSTALL_ZINIT" = "false" ]; then
-      if [ ! -d "$P10k_HOME" ]; then
+      if [ ! -d "$P10K_HOME" ]; then
         verbose_message "Installing p10k"
-        execute_command "git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $P10k_HOME"
+        execute_command "git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $P10K_HOME"
       fi
       if [ "$DO_ENV_SETUP" = "true" ]; then
         verbose_message "Configuring p10k environment"
@@ -387,8 +419,6 @@ check_p10k_config () {
           if [ -f "$P10K_THEME" ]; then
             execute_command "source $P10K_THEME"
           fi
-        else
-          execute_command "zinit ice depth=1; zinit light romkatv/powerlevel10k"
         fi
       fi
     fi
@@ -447,11 +477,12 @@ update_package_list () {
   if [ "$OS_NAME" = "Darwin" ]; then
     if [ ! -f "$BREW_LIST" ]; then
       execute_command "brew list | sort > $BREW_LIST"
-    fi
-    BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
-    SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-    if [ -z "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
-      execute_command "brew list | sort > $BREW_LIST"
+    else
+      BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
+      SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+      if [ -z "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
+        execute_command "brew list | sort > $BREW_LIST"
+      fi
     fi
   fi
 }
@@ -538,7 +569,7 @@ check_osx_packages () {
     fi
     BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-    if [ -z "$BREW_TEST" ] || [ -z "$SCRIPT_TEST" ]; then
+    if [ "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
       update_package_list
       for PACKAGE in $PACKAGE_LIST; do
         check_osx_package "$PACKAGE" ""
@@ -574,7 +605,7 @@ check_for_update () {
 
 set_defaults () {
   set_all_defaults
-  if [ "$OS_NAME" ]; then
+  if [ "$OS_NAME" = "Darwin" ]; then
     set_osx_defaults
   fi
 }
@@ -596,6 +627,12 @@ check_package_config () {
 }
 
 # Set defauts
+
+if [[ "$*" =~ "verbose" ]]; then
+  DO_VERBOSE="true"
+else
+  DO_VERBOSE="false"
+fi
 
 set_defaults
 
@@ -647,6 +684,10 @@ if [ ! "$*" = "" ]; then
       -n|--nothene)
         DO_ZSH_THEME="false"
         shift
+        ;;
+      -m|--manager|--plugin)
+        PLUGIN_MANAGER="$2"
+        shift 2
         ;;
       -N|--noenv)
         DO_ENV_SETUP="false"
@@ -744,10 +785,10 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
   exit
 fi
 
-# Do OSX specific checks
+# Do package check
 
-if [ "$OS_NAME" = "Darwin" ]; then
-  check_osx_packages
+if [ "$DO_PACKAGE_CHECK" ]; then
+  check_package_config
 fi
 
 # Do font(s) check
@@ -758,12 +799,6 @@ fi
 
 if [ "$DO_POSH_CHECK" = "true" ]; then
   check_posh_config
-fi
-
-# Do package check
-
-if [ "$DO_PACKAGE_CHECK" ]; then
-  check_package_config
 fi
 
 # Do zinit checks

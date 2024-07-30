@@ -74,3 +74,9 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Improved verbose output
 # 0.3.8: Sat 27 Jul 2024 12:24:41 AEST
 # Improved package check
+# 0.3.9: Sat 27 Jul 2024 21:26:08 AEST
+# Added plugin manager switch
+# 0.4.0: Mon 29 Jul 2024 10:29:39 AEST
+# Fixed package check so it doesn't run twice
+# 0.4.1: Tue 30 Jul 2024 12:56:13 AEST
+# Improved verbose option and added set_env function
