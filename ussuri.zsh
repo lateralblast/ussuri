@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.6
+# Version: 0.4.7
 #
 
 SCRIPT_FILE="$0"
@@ -457,7 +457,8 @@ set_linux_defaults () {
     set_env "INSTALL_APT"     "true"
     set_env "REQUIRED_FILE"   "$WORK_DIR/apt.list"
   fi
-  REQUIRED_LIST="${(@f)"$(<$REQUIRED_FILE)"}"
+  REQUIRED_LIST=$( tr "\n" " " < $REQUIRED_FILE )
+  REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
 }
 
 # Set OSX defaults
@@ -470,7 +471,8 @@ set_osx_defaults () {
   set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
   set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
   set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
-  REQUIRED_LIST="${(@f)"$(<$REQUIRED_FILE)"}"
+  REQUIRED_LIST=$( tr "\n" " " < $REQUIRED_FILE )
+  REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
 }
 
 # Update package list
@@ -532,7 +534,10 @@ check_linux_package () {
   verbose_message "Configuring Linux package \"$PACKAGE\""
   if [ "$LSB_ID" = "Ubuntu" ]; then
     if [ "$INSTALL_APT" = "true" ]; then
-      execute_command "sudo apt install -y $PACKAGE"
+      PACKAGE_TEST=$( grep "^$PACKAGE$" "$REQUIRED_FILE" )
+      if [ -z "$PACKAGE_TEST" ]; then
+        execute_command "sudo apt install -y $PACKAGE"
+      fi
     fi
   fi
 }
@@ -544,7 +549,7 @@ check_osx_package () {
   TYPE="$2"
   verbose_message "Configuring OS X package \"$PACKAGE\""
   if [ "$INSTALL_BREW" = "true" ]; then
-    PACKAGE_TEST=$( grep "^$PACKAGE$" "$BREW_LIST" )
+    PACKAGE_TEST=$( grep "^$PACKAGE$" "$REQUIRED_FILE" )
     if [ -z "$PACKAGE_TEST" ]; then
       verbose_message "Installing package \"$PACKAGE\""
       if [ "$TYPE" = "cask" ]; then
@@ -562,6 +567,14 @@ check_osx_package () {
 check_linux_packages () {
   if [ "$LSB_ID" = "Ubuntu" ]; then  
     if [ "$INSTALL_APT" = "true" ]; then
+      REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
+      SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+      if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
+        update_package_list
+        for PACKAGE in $REQUIRED_LIST; do
+          check_linux_package "$PACKAGE" ""
+        done
+      fi
     fi
   fi
 }
@@ -604,9 +617,9 @@ check_osx_packages () {
         execute_command "$BREW_TEST shellenv"
       fi
     fi
-    BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
+    REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-    if [ "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
+    if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
       update_package_list
       for PACKAGE in $REQUIRED_LIST; do
         check_osx_package "$PACKAGE" ""
