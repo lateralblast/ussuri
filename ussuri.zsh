@@ -1,9 +1,13 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.3
+# Version: 0.4.6
 #
 
 SCRIPT_FILE="$0"
+SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
+if [ "$SCRIPT_DIR" = "." ]; then
+  SCRIPT_DIR=$( pwd )
+fi
 
 # Handle output
 
@@ -156,7 +160,6 @@ do_install () {
 # Print changelog
 
 print_changelog () {
-  SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
   CHANGE_FILE="$SCRIPT_DIR/changelog"
   echo ""
   echo "Changelog:"
@@ -184,6 +187,9 @@ set_env () {
 set_all_defaults () {
   SCRIPT_VERSION=$( grep '^# Version' < "$SCRIPT_FILE" |  awk '{print $3}' )
   OS_NAME=$(uname -o)
+  if [ "$OS_NAME" = "Linux" ]; then
+    LSB_ID=$( lsb_release -i -s 2> /dev/null )
+  fi
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   verbose_message "Setting defaults"
   execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
@@ -194,9 +200,7 @@ set_all_defaults () {
   set_env "DO_DEBUG"          "false"
   set_env "DO_BUILD"          "false"
   set_env "DO_PLUGINS"        "true"
-  set_env "SCRIPT_NAME"       "ussuri"
-  set_env "WORK_DIR"          "$HOME/.$SCRIPT_NAME"
-  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit"
+  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
   set_env "INSTALL_ZINIT"     "true"
   set_env "INSTALL_RBENV"     "true"
   set_env "INSTALL_PYENV"     "true"
@@ -437,47 +441,63 @@ osx_defaults_check () {
       execute_command "defaults write $APP $PARAM $VALUE"
     fi
     if [[ "$APP" =~ "Finder" ]]; then
-      RESTART_FINDER="true"
+      set_env "RESTART_FINDER" "true"
     fi
     if [[ "$APP" =~ "SystemUIServer" ]]; then
-      RESTART_UISERVER="true"
+      set_env "RESTART_UISERVER" "true"
     fi
   fi
+}
+
+# Set Linux defaults
+
+set_linux_defaults () {
+  if [ "$LSB_ID" = "Ubuntu" ]; then
+    set_env "INSTALLED_FILE"  "$WORK_DIR/files/packages/ubuntu.apt"
+    set_env "INSTALL_APT"     "true"
+    set_env "REQUIRED_FILE"   "$WORK_DIR/apt.list"
+  fi
+  REQUIRED_LIST="${(@f)"$(<$REQUIRED_FILE)"}"
 }
 
 # Set OSX defaults
 
 set_osx_defaults () {
-  INSTALL_BREW="true"
-  SHOW_HIDDEN_FILES="true"
-  RESTART_FINDER="false"
-  RESTART_UISERVER="false"
-  SCREENSHOT_LOCATION="$HOME/Pictures/Screenshots"
-  BREW_LIST="$WORK_DIR/brew.list"
-  PACKAGE_LIST=( ansible ansible-lint autoconf automake bat bash \
-                 blackhole-2ch bpytop btop bzip2 ca-certificates cmake cpio \
-                 cpufetch curl docker dos2unix exiftool ffmpeg flac fortune \
-                 fzf gcc gettext ghostscript giflib git git-lfs gmp gnu-getopt \
-                 gnu-sed gnutls go grep htop jpeg-turbo jpeg-xl jq imagemagick \
-                 lame lego lftp libarchive libheif libogg libpng libvirt libvirt-glib \
-                 libvirt-python libvorbis libxml2 libyaml lsd lua lz4 lzo mpg123 \
-                 multipass netpbm openssh openssl@3 opentofu osinfo-db osx-cpu-temp \
-                 p7zip pwgen python@3.12 qemu rpm2cpio ruby ruby-build rust shellcheck \
-                 socat sqlite tcl-tk tesseract tmux tree utm virt-manager warp wget \
-                 xorriso x264 x265 xquartz xz yamllint zsh )
+  set_env "INSTALL_BREW"        "true"
+  set_env "SHOW_HIDDEN_FILES"   "true"
+  set_env "RESTART_FINDER"      "false"
+  set_env "RESTART_UISERVER"    "false"
+  set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
+  set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
+  set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
+  REQUIRED_LIST="${(@f)"$(<$REQUIRED_FILE)"}"
 }
 
 # Update package list
 
 update_package_list () {
-  if [ "$OS_NAME" = "Darwin" ]; then
-    if [ ! -f "$BREW_LIST" ]; then
-      execute_command "brew list | sort > $BREW_LIST"
+  if [ ! -f "$INSTALLED_FILE" ]; then
+    if [ "$OS_NAME" = "Darwin" ]; then
+      execute_command "brew list | sort > $INSTALLED_FILE"
     else
-      BREW_TEST=$( find "$BREW_LIST" -mtime -2 2> /dev/null )
-      SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-      if [ -z "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
-        execute_command "brew list | sort > $BREW_LIST"
+      if [ "$OS_NAME" = "Linux" ]; then
+        if [ "$LSB_ID" = "Ubuntu" ]; then
+          execute_command "dpkg -l | awk '{ print \$2 }' > $APT_LIST"
+        fi
+      fi
+    fi
+  else
+    INSTALLED_TEST=$( find "$INSTALLED_FILE" -mtime -2 2> /dev/null )
+    SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+    if [ -z "$INSTALLED_TEST" ] || [ "$SCRIPT_TEST" ]; then
+      if [ "$OS_NAME" = "Darwin" ]; then
+        execute_command "brew list | sort > $INSTALLED_FILE"
+      else
+        if [ "$OS_NAME" = "Linux" ]; then
+          if [ "$LSB_ID" = "Ubuntu" ]; then
+            execute_command "dpkg -l | awk '{ print \$2 }' > $INSTALLED_FILE"
+          fi
+        fi
       fi
     fi
   fi
@@ -505,6 +525,18 @@ check_osx_defaults () {
   fi
 }
 
+# Check Linux Package
+
+check_linux_package () {
+  PACKAGE="$1"
+  verbose_message "Configuring Linux package \"$PACKAGE\""
+  if [ "$LSB_ID" = "Ubuntu" ]; then
+    if [ "$INSTALL_APT" = "true" ]; then
+      execute_command "sudo apt install -y $PACKAGE"
+    fi
+  fi
+}
+
 # Check OSX Package
 
 check_osx_package () {
@@ -521,6 +553,15 @@ check_osx_package () {
         execute_command "brew install $PACKAGE"
       fi
       update_package_list
+    fi
+  fi
+}
+
+# Check Linux Applications
+
+check_linux_packages () {
+  if [ "$LSB_ID" = "Ubuntu" ]; then  
+    if [ "$INSTALL_APT" = "true" ]; then
     fi
   fi
 }
@@ -567,7 +608,7 @@ check_osx_packages () {
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
     if [ "$BREW_TEST" ] || [ "$SCRIPT_TEST" ]; then
       update_package_list
-      for PACKAGE in $PACKAGE_LIST; do
+      for PACKAGE in $REQUIRED_LIST; do
         check_osx_package "$PACKAGE" ""
       done
     fi
@@ -578,7 +619,7 @@ check_osx_packages () {
 
 check_for_update () {
   verbose_message "Checking for updates"
-  README_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md"
+  set_env "README_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md"
   REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
   LOCAL_VERSION="${SCRIPT_VERSION/\./}"
   LOCAL_VERSION="${LOCAL_VERSION/\./}"
@@ -600,9 +641,19 @@ check_for_update () {
 # Set defaults
 
 set_defaults () {
+  set_env "SCRIPT_NAME" "ussuri"
+  set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
+  execute_command "mkdir -p $WORK_DIR/files/packages"
+  execute_command "mkdir -p $WORK_DIR/files/zinit"
+  if [ -d "$SCRIPT_DIR/files" ]; then
+    execute_command "cp -r $SCRIPT_DIR/files/* $WORK_DIR/files/"
+  fi
   set_all_defaults
   if [ "$OS_NAME" = "Darwin" ]; then
     set_osx_defaults
+  fi
+  if [ "$OS_NAME" = "Linux" ]; then
+    set_linux_defaults
   fi
 }
 
@@ -612,6 +663,9 @@ check_defaults () {
   if [ "$OS_NAME" = "Darwin" ]; then
     check_osx_defaults
   fi
+  if [ "$OS_NAME" = "Linux" ]; then
+    check_linux_defaults
+  fi
 }
 
 # Check packages
@@ -619,6 +673,9 @@ check_defaults () {
 check_package_config () {
   if [ "$OS_NAME" = "Darwin" ]; then
     check_osx_packages
+  fi
+  if [ "$OS_NAME" = "Linux" ]; then
+    check_linux_packages
   fi
 }
 
