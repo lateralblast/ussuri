@@ -357,8 +357,8 @@ check_fonts_config () {
       check_osx_package "font-fira-code-nerd-font" "cask"
     else
       if [ "$OS_NAME" = "Linux" ]; then
-        execute_command "git clone --depth 1 https://github.com/ryanoasis/nerd-fonts.git $WORK_DIR"
-        execute_command "cd $WORK_DIR ; ./install.sh"
+        execute_command "git clone --depth 1 https://github.com/ryanoasis/nerd-fonts.git $WORK_DIR/nerd-fonts"
+        execute_command "cd $WORK_DIR/nerd-fonts ; ./install.sh"
       fi
     fi
   fi
