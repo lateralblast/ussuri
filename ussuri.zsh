@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.8
+# Version: 0.4.9
 #
 
 SCRIPT_FILE="$0"
@@ -187,7 +187,8 @@ set_env () {
 set_all_defaults () {
   SCRIPT_VERSION=$( grep '^# Version' < "$SCRIPT_FILE" |  awk '{print $3}' )
   OS_NAME=$(uname -o)
-  if [ "$OS_NAME" = "Linux" ]; then
+  if [[ "$OS_NAME" =~ "Linux" ]]; then
+    OS_NAME="Linux"
     LSB_ID=$( lsb_release -i -s 2> /dev/null )
   fi
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
@@ -354,6 +355,11 @@ check_fonts_config () {
     verbose_message "Configuring fonts"
     if [ "$OS_NAME" = "Darwin" ]; then
       check_osx_package "font-fira-code-nerd-font" "cask"
+    else
+      if [ "$OS_NAME" = "Linux" ]; then
+        execute_command "git clone --depth 1 https://github.com/ryanoasis/nerd-fonts.git $WORK_DIR"
+        execute_command "cd $WORK_DIR ; ./install.sh"
+      fi
     fi
   fi
 }
