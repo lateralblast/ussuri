@@ -106,3 +106,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Set start directory
 # 0.5.4: Wed Jul 31 17:31:01 AEST 2024
 # Bug fixes
+# 0.5.5: Wed 31 Jul 2024 20:50:49 AEST
+# Fixes for running inline

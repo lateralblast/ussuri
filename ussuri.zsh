@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.4
+# Version: 0.5.5
 #
 
 SCRIPT_FILE="$0"
@@ -674,7 +674,7 @@ check_for_update () {
 set_defaults () {
   set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
   execute_command "mkdir -p $WORK_DIR/files" "run"
-  if [[ ! "$SCRIPT_FILE" =~ "zshrc" ]]; then
+  if [ ! "$SCRIPT_FILE" = "$HOME/.zshrc" ]  && [ ! "$SCRIPT_FILE" = "$HOME/.zprofile" ]; then
     if [ -d "$WORK_DIR/files" ]; then
       execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
     fi
