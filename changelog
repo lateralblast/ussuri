@@ -104,3 +104,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # More fixes for initial environment setup
 # 0.5.3: Wed Jul 31 16:41:08 AEST 2024
 # Set start directory
+# 0.5.4: Wed Jul 31 17:31:01 AEST 2024
+# Bug fixes
