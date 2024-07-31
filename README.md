@@ -69,6 +69,7 @@ Usage
     Do oh-my-posh check:  true
     Do oh-my-zsh check:   false
     Do verbose mode       false
+    Start Directory:      /Users/username
 ```
 
 License
