@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.0
+# Version: 0.5.1
 #
 
 SCRIPT_FILE="$0"
@@ -491,7 +491,7 @@ update_package_list () {
     else
       if [ "$OS_NAME" = "Linux" ]; then
         if [ "$LSB_ID" = "Ubuntu" ]; then
-          execute_command "dpkg -l | awk '{ print \$2 }' > $APT_LIST"
+          execute_command "dpkg -l | awk '{ print \$2 }' > $INSTALLED_FILE"
         fi
       fi
     fi
@@ -512,7 +512,13 @@ update_package_list () {
   fi
 }
 
-# Check OS defaults
+# Check Linux Defaults
+
+check_linux_defaults () {
+  # Insert code here, e.g. gsettings
+}
+
+# Check OS Defaults
 
 check_osx_defaults () {
   verbose_message "Configuring OS X defaults"
