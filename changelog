@@ -100,3 +100,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed environment setup
 @ 0.5.1: Wed Jul 31 13:28:43 AEST 2024
 # Fixed bug with package list creation
+# 0.5.2: Wed Jul 31 13:40:06 AEST 2024
+# More fixes for initial environment setup
+# 0.5.3: Wed Jul 31 16:41:08 AEST 2024
+# Set start directory
