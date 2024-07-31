@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.4.9
+# Version: 0.5.0
 #
 
 SCRIPT_FILE="$0"
@@ -54,10 +54,11 @@ verbose_message () {
 
 execute_command () {
   COMMAND="$1"
+  OPTION="$2"
   if [ "$DO_VERBOSE" = "true" ] || [ "$DO_DRYRUN" = "true" ]; then
     handle_output "$COMMAND" "execute"
   fi
-  if [ "$DO_DRYRUN" = "false" ]; then
+  if [ "$DO_DRYRUN" = "false" ] || [ "$OPTION" = "run" ]; then
     if [ "$DO_CONFIRM" = "true" ]; then
       RESPONSE=""
       handle_output "$COMMAND" "command"
@@ -459,9 +460,9 @@ osx_defaults_check () {
 
 set_linux_defaults () {
   if [ "$LSB_ID" = "Ubuntu" ]; then
-    set_env "INSTALLED_FILE"  "$WORK_DIR/files/packages/ubuntu.apt"
-    set_env "INSTALL_APT"     "true"
-    set_env "REQUIRED_FILE"   "$WORK_DIR/apt.list"
+    set_env "REQUIRED_FILE"  "$WORK_DIR/files/packages/ubuntu.apt"
+    set_env "INSTALL_APT"    "true"
+    set_env "INSTALLED_FILE" "$WORK_DIR/apt.list"
   fi
   REQUIRED_LIST=$( tr "\n" " " < $REQUIRED_FILE )
   REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
@@ -571,7 +572,7 @@ check_osx_package () {
 # Check Linux Applications
 
 check_linux_packages () {
-  if [ "$LSB_ID" = "Ubuntu" ]; then  
+  if [ "$LSB_ID" = "Ubuntu" ]; then
     if [ "$INSTALL_APT" = "true" ]; then
       REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
       SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
@@ -662,11 +663,8 @@ check_for_update () {
 set_defaults () {
   set_env "SCRIPT_NAME" "ussuri"
   set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
-  execute_command "mkdir -p $WORK_DIR/files/packages"
-  execute_command "mkdir -p $WORK_DIR/files/zinit"
-  if [ -d "$SCRIPT_DIR/files" ]; then
-    execute_command "cp -r $SCRIPT_DIR/files/* $WORK_DIR/files/"
-  fi
+  execute_command "mkdir -p $WORK_DIR/files" "run"
+  execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
   set_all_defaults
   if [ "$OS_NAME" = "Darwin" ]; then
     set_osx_defaults
