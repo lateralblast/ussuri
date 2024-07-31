@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.5.3
+Current Version: 0.5.4
 
 Introduction
 ------------
@@ -45,6 +45,7 @@ Usage
     -p|--pyenv        Do pyenv check      (default: false)
     -P|--package(s)   Do packages check   (default: false)
     -r|--rbenv        Do rbenv check      (default: false)
+    -s|--startdir     Set start dir       (default: /Users/username)
     -t|--dryrun       Dry run mode        (default: false)
     -T|--p10k         Do p10k config      (default: false)
     -U|--update       Check for updates   (default: false)

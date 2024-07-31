@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.3
+# Version: 0.5.4
 #
 
 SCRIPT_FILE="$0"
@@ -303,7 +303,7 @@ check_rbenv_config () {
       execute_command "export RBENV_ROOT=\"$RBENV_HOME\""
       execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
       execute_command "rbenv init - zsh"
-      if [ "DO_BUILD" = "true" ]; then
+      if [ "$DO_BUILD" = "true" ]; then
         RBENV_CHECK=$( rbenv versions --bare | grep -v "$RUBY_VER" )
         if [ -z "$RBENV_CHECK" ]; then
           verbose_message "Installing ruby version $RUBY_VER"
@@ -335,7 +335,7 @@ check_pyenv_config () {
       execute_command "export PYENV_ROOT=\"$PYENV_HOME\""
       execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
       execute_command "pyenv init -"
-      if [ "DO_BUILD" = "true" ]; then
+      if [ "$DO_BUILD" = "true" ]; then
         PYENV_CHECK=$( pyenv versions --bare | grep "$PYTHON_VER" )
         if [ -z "$PYENV_CHECK" ]; then
           verbose_message "Installing python version $PYTHON_VER"
@@ -468,7 +468,7 @@ set_linux_defaults () {
     set_env "INSTALL_APT"    "true"
     set_env "INSTALLED_FILE" "$WORK_DIR/apt.list"
   fi
-  REQUIRED_LIST=$( tr "\n" " " < $REQUIRED_FILE )
+  REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
   REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
 }
 
@@ -482,7 +482,7 @@ set_osx_defaults () {
   set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
   set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
   set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
-  REQUIRED_LIST=$( tr "\n" " " < $REQUIRED_FILE )
+  REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
   REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
 }
 
@@ -520,6 +520,7 @@ update_package_list () {
 
 check_linux_defaults () {
   # Insert code here, e.g. gsettings
+  true;
 }
 
 # Check OS Defaults
@@ -588,7 +589,7 @@ check_linux_packages () {
       SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
       if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
         update_package_list
-        for PACKAGE in $REQUIRED_LIST; do
+        for PACKAGE in "${REQUIRED_LIST[@]}"; do
           check_linux_package "$PACKAGE" ""
         done
       fi
@@ -606,8 +607,8 @@ check_osx_packages () {
       for BREW_FILE in /opt/homebrew/bin/brew /usr/local/homebrew/bin/brew; do
         if [ -f "$BREW_FILE" ]; then
           BREW_BIN="$BREW_FILE"
-          BREW_DIR=$( dirname $BREW_BIN )
-          BREW_BASE=$( dirname $BREW_DIR )
+          BREW_DIR=$( dirname "$BREW_BIN" )
+          BREW_BASE=$( dirname "$BREW_DIR" )
         fi
       done
       if [ -z "$BREW_BIN" ]; then
@@ -615,8 +616,8 @@ check_osx_packages () {
         for BREW_FILE in /opt/homebrew/bin/brew /usr/local/homebrew/bin/brew; do
           if [ -f "$BREW_FILE" ]; then
             BREW_BIN="$BREW_FILE"
-            BREW_DIR=$( dirname $BREW_BIN )
-            BREW_BASE=$( dirname $BREW_DIR )
+            BREW_DIR=$( dirname "$BREW_BIN" )
+            BREW_BASE=$( dirname "$BREW_DIR" )
           fi
         done
         execute_command "export PATH=\"$BREW_BASE/bin:$BREW_BASE/sbin:$PATH\""
@@ -638,7 +639,7 @@ check_osx_packages () {
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
     if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
       update_package_list
-      for PACKAGE in $REQUIRED_LIST; do
+      for PACKAGE in "${REQUIRED_LIST[@]}"; do
         check_osx_package "$PACKAGE" ""
       done
     fi
@@ -780,7 +781,7 @@ if [ ! "$*" = "" ]; then
         DO_POSH_CHECK="true"
         shift
         ;;
-      -o|--ohmyzsh|--zosh)
+      -O|--ohmyzsh|--zosh)
         DO_FONTS_CHECK="true"
         DO_ZOSH_CHECK="true"
         shift
@@ -926,4 +927,8 @@ if [ "$DO_ZSH_THEME" = "false" ]; then
   ZSH_THEME=""
 fi
 
-cd $START_DIR
+if [ -d "$START_DIR" ]; then
+  cd "$START_DIR" || return
+else
+ cd "$HOME_DIR" || return
+fi
