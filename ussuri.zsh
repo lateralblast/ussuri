@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.2
+# Version: 0.5.3
 #
 
 SCRIPT_FILE="$0"
@@ -9,6 +9,7 @@ if [ "$SCRIPT_DIR" = "." ]; then
   SCRIPT_DIR=$( pwd )
 fi
 SCRIPT_NAME="ussuri"
+START_DIR="$HOME"
 
 # Handle output
 
@@ -119,6 +120,7 @@ print_help () {
     -p|--pyenv        Do pyenv check      (default: $DO_PYENV_CHECK)
     -P|--package(s)   Do packages check   (default: $DO_PACKAGE_CHECK)
     -r|--rbenv        Do rbenv check      (default: $DO_RBENV_CHECK)
+    -s|--startdir     Set start dir       (default: $START_DIR)
     -t|--dryrun       Dry run mode        (default: $DO_DRYRUN)
     -T|--p10k         Do p10k config      (default: $DO_P10K_CHECK)
     -U|--update       Check for updates   (default: $DO_UPDATE_CHECK)
@@ -141,11 +143,12 @@ cat <<-INLINE
     Do zinit check:       $DO_ZINIT_CHECK
     Do pyenv check:       $DO_PYENV_CHECK
     Do rbenv check:       $DO_RBENV_CHECK
-    Do p10k  check        $DO_P10K_CHECK
+    Do p10k check         $DO_P10K_CHECK
     Do oh-my-posh check:  $DO_POSH_CHECK
     Do oh-my-zsh check:   $DO_ZOSH_CHECK
     Do verbose mode       $DO_VERBOSE
     Plugin Manager:       $PLUGIN_MANAGER
+    Start Directory:      $START_DIR
 
 INLINE
 }
@@ -794,6 +797,10 @@ if [ ! "$*" = "" ]; then
         DO_RBENV_CHECK="true"
         shift
         ;;
+      -s|--startdir)
+        START_DIR="$2"
+        shift 2
+        ;;
       -t|--test|--dryrun)
         DO_DRYRUN="true"
         shift
@@ -918,3 +925,5 @@ fi
 if [ "$DO_ZSH_THEME" = "false" ]; then
   ZSH_THEME=""
 fi
+
+cd $START_DIR
