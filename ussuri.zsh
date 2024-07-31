@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.1
+# Version: 0.5.2
 #
 
 SCRIPT_FILE="$0"
@@ -8,6 +8,7 @@ SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
 if [ "$SCRIPT_DIR" = "." ]; then
   SCRIPT_DIR=$( pwd )
 fi
+SCRIPT_NAME="ussuri"
 
 # Handle output
 
@@ -257,7 +258,7 @@ set_inline_defaults () {
   set_env "DO_P10K_CHECK"     "true"
   set_env "DO_ZSH_THEME"      "true"
   set_env "DO_VERBOSE"        "false"
-  set_env "DO_DRYRUN"         'false'
+  set_env "DO_DRYRUN"         "false"
   set_env "DO_CONFIRM"        "false"
   set_env "DO_DEBUG"          "false"
   set_env "DO_BUILD"          "false"
@@ -667,10 +668,13 @@ check_for_update () {
 # Set defaults
 
 set_defaults () {
-  set_env "SCRIPT_NAME" "ussuri"
   set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
   execute_command "mkdir -p $WORK_DIR/files" "run"
-  execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+  if [[ ! "$SCRIPT_FILE" =~ "zshrc" ]]; then
+    if [ -d "$WORK_DIR/files" ]; then
+      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+    fi
+  fi
   set_all_defaults
   if [ "$OS_NAME" = "Darwin" ]; then
     set_osx_defaults
