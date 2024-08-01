@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.5
+# Version: 0.5.6
 #
 
 SCRIPT_FILE="$0"
@@ -160,6 +160,17 @@ do_install () {
   execute_command "cp $HOME/.zshrc $WORK_DIR/.zshrc.$DATE_SUFFIX"
   verbose_message "Replacing $HOME/.zshrc"
   execute_command "cp $SCRIPT_FILE $HOME/.zshrc"
+  set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
+  execute_command "mkdir -p $WORK_DIR/files" "run"
+  if [ "$DO_INSTALL" = "true" ]; then
+    if [ ! "$SCRIPT_FILE" = "$HOME/.zshrc" ]  && [ ! "$SCRIPT_FILE" = "$HOME/.zprofile" ]; then
+      if [ -d "$WORK_DIR/files" ]; then
+        if [ ! "$SCRIPT_DIR" = "" ] && [ ! "$WORK_DIR" = "" ]; then
+          execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+        fi
+      fi
+    fi
+  fi
 }
 
 # Print changelog
@@ -674,17 +685,14 @@ check_for_update () {
 set_defaults () {
   set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
   execute_command "mkdir -p $WORK_DIR/files" "run"
-  if [ ! "$SCRIPT_FILE" = "$HOME/.zshrc" ]  && [ ! "$SCRIPT_FILE" = "$HOME/.zprofile" ]; then
-    if [ -d "$WORK_DIR/files" ]; then
-      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
-    fi
-  fi
   set_all_defaults
-  if [ "$OS_NAME" = "Darwin" ]; then
-    set_osx_defaults
-  fi
-  if [ "$OS_NAME" = "Linux" ]; then
-    set_linux_defaults
+  if [  "$DO_INSTALL" = "false" ]; then
+    if [ "$OS_NAME" = "Darwin" ]; then
+      set_osx_defaults
+    fi
+    if [ "$OS_NAME" = "Linux" ]; then
+      set_linux_defaults
+    fi
   fi
 }
 
