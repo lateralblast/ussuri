@@ -112,3 +112,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed install function
 # 0.5.7: Sat Aug  3 16:47:25 AEST 2024
 # More fixes for install function
+# 0.5.8: Sat Aug  3 17:04:29 AEST 2024
+# Added fix for inline script file determination
