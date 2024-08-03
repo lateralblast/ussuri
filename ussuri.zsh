@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.9
+# Version: 0.6.0
 #
 
 SCRIPT_FILE="$0"
@@ -132,7 +132,6 @@ print_help () {
     -z|--zinit        Do zinit check      (default: $DO_ZINIT_CHECK)
     -Z|--zshtheme     Set zsh theme       (default: $ZSH_THEME)
 HELP
-set_inline_defaults
 cat <<-INLINE
 
   Defaults when run inline (i.e. as login script):
@@ -270,6 +269,23 @@ set_all_defaults () {
 # Reset all defaults (when script is run inline i.e. as a login script with no options)
 
 set_inline_defaults () {
+  verbose_message "Setting defaults"
+  execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
+  execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
+  set_env "DO_HELP"           "false"
+  set_env "DO_DRYRUN"         "false"
+  set_env "DO_CONFIRM"        "false"
+  set_env "DO_DEBUG"          "false"
+  set_env "DO_BUILD"          "false"
+  set_env "DO_PLUGINS"        "true"
+  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
+  set_env "INSTALL_ZINIT"     "true"
+  set_env "INSTALL_RBENV"     "true"
+  set_env "INSTALL_PYENV"     "true"
+  set_env "INSTALL_POSH"      "true"
+  set_env "INSTALL_OZSH"      "false"
+  set_env "INSTALL_FONTS"     "true"
+  set_env "INSTALL_P10K"      "true"
   set_env "DO_DEFAULTS_CHECK" "true"
   set_env "DO_PACKAGE_CHECK"  "true"
   set_env "DO_ZINIT_CHECK"    "true"
@@ -455,6 +471,11 @@ check_p10k_config () {
             execute_command "source $P10K_THEME"
           fi
         fi
+      fi
+    else
+      execute_command "source $P10K_INIT"
+      if [ -f "$P10K_THEME" ]; then
+        execute_command "source $P10K_THEME"
       fi
     fi
   fi

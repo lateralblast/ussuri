@@ -116,3 +116,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added fix for inline script file determination
 # 0.5.9: Sat  3 Aug 2024 19:13:39 AEST
 # Updated powerlevel10k setup
+# 0.6.0: Sat  3 Aug 2024 20:36:13 AEST
+# Updated p10k config
