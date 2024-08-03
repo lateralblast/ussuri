@@ -1,12 +1,16 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.7
+# Version: 0.5.8
 #
 
 SCRIPT_FILE="$0"
-SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
-if [ "$SCRIPT_DIR" = "." ]; then
-  SCRIPT_DIR=$( pwd )
+if [ "$SCRIPT_FILE" = "-zsh" ]; then
+  SCRIPT_FILE="$HOME/.zshrc"
+else
+  SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
+  if [ "$SCRIPT_DIR" = "." ]; then
+    SCRIPT_DIR=$( pwd )
+  fi
 fi
 SCRIPT_NAME="ussuri"
 START_DIR="$HOME"
