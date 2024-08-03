@@ -22,6 +22,13 @@ It is coppied to .zshrc and runs inline, i.e. when you login or
 execute a new shell it will check the current environment and
 install components/configurations if they are not present.
 
+By default this script uses zinit as the zsh plugin manager,
+oh-my-posh, and powerlevel10k as the theme, e.g.
+
+![Config example](https://raw.githubusercontent.com/lateralblast/ussuri/master/ussuri.png)
+
+The defaults can be changed by editing the script.
+
 Usage
 -----
 
@@ -31,7 +38,7 @@ Usage
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
-    -I|--install      Installs ussuri as: /Users/username/.zshrc
+    -I|--install      Installs ussuri as: /Users/testuser/.zshrc
     -b|--build        Build sources       (default: false)
     -c|--confirm      Confirm commands    (default: false)
     -C|--check.       Check for updates   (default: false)
@@ -45,7 +52,7 @@ Usage
     -p|--pyenv        Do pyenv check      (default: false)
     -P|--package(s)   Do packages check   (default: false)
     -r|--rbenv        Do rbenv check      (default: false)
-    -s|--startdir     Set start dir       (default: /Users/username)
+    -s|--startdir     Set start dir       (default: /Users/testuser)
     -t|--dryrun       Dry run mode        (default: false)
     -T|--p10k         Do p10k config      (default: false)
     -U|--update       Check for updates   (default: false)
@@ -69,7 +76,7 @@ Usage
     Do oh-my-posh check:  true
     Do oh-my-zsh check:   false
     Do verbose mode       false
-    Start Directory:      /Users/username
+    Start Directory:      /Users/testuser/
 ```
 
 License
