@@ -29,6 +29,70 @@ oh-my-posh, and powerlevel10k as the theme, e.g.
 
 The defaults can be changed by editing the script.
 
+Installation
+------------
+
+The script will install as .zshrc using the --install switch.
+This will also make a backup of the existing .zshrc file.
+
+```
+./ussuri.zsh --install --verbose
+Setting:        Environment parameter "WORK_DIR" to "/Users/testuser/.ussuri"
+Executing:      mkdir -p /Users/testuser/.ussuri/files
+Information:    Setting defaults
+Executing:      PATH="/usr/local/bin:/usr/local/sbin:/Users/testuser/.rbenv/bin:/Users/testuser/.pyenv/bin:/Users/testuser/.zinit/polaris/bin:/Users/testuser/.oh-my-posh:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/X11/bin:/Library/Apple/usr/bin:/Applications/VMware Fusion.app/Contents/Public"
+Executing:      LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:/usr/local/lib:/"
+Setting:        Environment parameter "DO_HELP" to "false"
+Setting:        Environment parameter "DO_DRYRUN" to "false"
+Setting:        Environment parameter "DO_CONFIRM" to "false"
+Setting:        Environment parameter "DO_DEBUG" to "false"
+Setting:        Environment parameter "DO_BUILD" to "false"
+Setting:        Environment parameter "DO_PLUGINS" to "true"
+Setting:        Environment parameter "ZINIT_FILE" to "/Users/testuser/.ussuri/files/zinit/zinit.zsh"
+Setting:        Environment parameter "INSTALL_ZINIT" to "true"
+Setting:        Environment parameter "INSTALL_RBENV" to "true"
+Setting:        Environment parameter "INSTALL_PYENV" to "true"
+Setting:        Environment parameter "INSTALL_POSH" to "true"
+Setting:        Environment parameter "INSTALL_OZSH" to "false"
+Setting:        Environment parameter "INSTALL_FONTS" to "true"
+Setting:        Environment parameter "INSTALL_P10K" to "true"
+Setting:        Environment parameter "ZINIT_HOME" to "/Users/testuser/.zinit"
+Setting:        Environment parameter "RBENV_HOME" to "/Users/testuser/.rbenv"
+Setting:        Environment parameter "PYENV_HOME" to "/Users/testuser/.pyenv"
+Setting:        Environment parameter "POSH_HOME" to "/Users/testuser/.oh-my-posh"
+Setting:        Environment parameter "ZOSH_HOME" to "/Users/testuser/.oh-my-zsh"
+Setting:        Environment parameter "P10K_INIT" to "/Users/testuser/.p10k.zsh"
+Setting:        Environment parameter "SOURCE_P10K_INIT" to "/Users/testuser/.ussuri/files/p10k/p10k.zsh"
+Setting:        Environment parameter "P10K_HOME" to "/Users/testuser/.powerlevel10k"
+Setting:        Environment parameter "P10K_THEME" to "/Users/testuser/.powerlevel10k/powerlevel10k.zsh-theme"
+Setting:        Environment parameter "RUBY_VER" to "3.3.4"
+Setting:        Environment parameter "PYTHON_VER" to "3.12.4"
+Setting:        Environment parameter "DO_VERSION_CHECK" to "false"
+Setting:        Environment parameter "DO_DEFAULTS_CHECK" to "false"
+Setting:        Environment parameter "DO_PACKAGE_CHECK" to "false"
+Setting:        Environment parameter "DO_UPDATE_CHECK" to "false"
+Setting:        Environment parameter "DO_UPDATE_FUNCT" to "false"
+Setting:        Environment parameter "DO_PYENV_CHECK" to "false"
+Setting:        Environment parameter "DO_RBENV_CHECK" to "false"
+Setting:        Environment parameter "DO_ZINIT_CHECK" to "false"
+Setting:        Environment parameter "DO_FONTS_CHECK" to "false"
+Setting:        Environment parameter "DO_POSH_CHECK" to "false"
+Setting:        Environment parameter "DO_P10K_CHECK" to "false"
+Setting:        Environment parameter "DO_ZOSH_CHECK" to "false"
+Setting:        Environment parameter "DO_ENV_SETUP" to "true"
+Setting:        Environment parameter "DO_ZSH_THEME" to "true"
+Setting:        Environment parameter "ZSH_THEME" to "robbyrussell"
+Setting:        Environment parameter "PLUGIN_MANAGER" to "zinit"
+Information:    Backing up /Users/testuser/.zshrc to /Users/testuser/.ussuri/.zshrc.03_08_2024_21_09_20
+Executing:      cp /Users/testuser/.zshrc /Users/testuser/.ussuri/.zshrc.03_08_2024_21_09_20
+Information:    Replacing /Users/testuser/.zshrc
+Executing:      cp ./ussuri.zsh /Users/testuser/.zshrc
+Setting:        Environment parameter "WORK_DIR" to "/Users/testuser/.ussuri"
+Executing:      mkdir -p /Users/testuser/.ussuri/files
+Executing:      ( cd /Users/testuser/ussuri/files ; tar -cpf - . )|( cd /Users/testuser/.ussuri/files ; tar -xpf - )
+Executing:      cp /Users/testuser/.ussuri/files/p10k/p10k.zsh /Users/testuser/.p10k.zsh
+```
+
 Usage
 -----
 
