@@ -240,7 +240,7 @@ set_all_defaults () {
   set_env "POSH_HOME"         "$HOME/.oh-my-posh"
   set_env "ZOSH_HOME"         "$HOME/.oh-my-zsh"
   set_env "P10K_INIT"         "$HOME/.p10k.zsh"
-  set_env "SOURCE_P10K_INIT"  "$WORK_DIR/files/p10k/pk10.zsh"
+  set_env "SOURCE_P10K_INIT"  "$WORK_DIR/files/p10k/p10k.zsh"
   set_env "P10K_HOME"         "$HOME/.powerlevel10k"
   set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
   set_env "RUBY_VER"          "3.3.4"
