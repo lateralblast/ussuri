@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.8
+# Version: 0.5.9
 #
 
 SCRIPT_FILE="$0"
@@ -172,6 +172,11 @@ do_install () {
         if [ ! "$SCRIPT_DIR" = "" ] && [ ! "$WORK_DIR" = "" ]; then
           execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
         fi
+        if [ ! -f "$P10K_INIT" ]; then
+          if [ -f "$SOURCE_P10K_INIT" ]; then
+            execute_command "cp $SOURCE_P10K_INIT $P10K_INIT"
+          fi
+        fi
       fi
     fi
   fi
@@ -235,6 +240,7 @@ set_all_defaults () {
   set_env "POSH_HOME"         "$HOME/.oh-my-posh"
   set_env "ZOSH_HOME"         "$HOME/.oh-my-zsh"
   set_env "P10K_INIT"         "$HOME/.p10k.zsh"
+  set_env "SOURCE_P10K_INIT"  "$WORK_DIR/files/p10k/pk10.zsh"
   set_env "P10K_HOME"         "$HOME/.powerlevel10k"
   set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
   set_env "RUBY_VER"          "3.3.4"
@@ -437,8 +443,12 @@ check_p10k_config () {
         verbose_message "Configuring p10k environment"
         execute_command "typeset -g POWERLEVEL9K_INSTANT_PROMPT=off"
         if [ "$INSTALL_ZINIT" = "false" ]; then
-          if [ -f "$P10K_INIT" ]; then
-            execute_command "p10k configure"
+          if [ ! -f "$P10K_INIT" ]; then
+            if [ -f "$SOURCE_P10K_INIT" ]; then
+              execute_command "cp $SOURCE_P10K_INIT $P10K_INIT"
+            else
+              execute_command "p10k configure"
+            fi
           fi
           execute_command "source $P10K_INIT"
           if [ -f "$P10K_THEME" ]; then
