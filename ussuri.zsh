@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.5.6
+# Version: 0.5.7
 #
 
 SCRIPT_FILE="$0"
@@ -235,7 +235,6 @@ set_all_defaults () {
   set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
   set_env "RUBY_VER"          "3.3.4"
   set_env "PYTHON_VER"        "3.12.4"
-  set_env "DO_INSTALL"        "false"
   set_env "DO_VERSION_CHECK"  "false"
   set_env "DO_DEFAULTS_CHECK" "false"
   set_env "DO_PACKAGE_CHECK"  "false"
@@ -479,8 +478,10 @@ set_linux_defaults () {
     set_env "INSTALL_APT"    "true"
     set_env "INSTALLED_FILE" "$WORK_DIR/apt.list"
   fi
-  REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
-  REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
+  if [ "$DO_INSTALL" = "false" ]; then
+    REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
+    REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
+  fi
 }
 
 # Set OSX defaults
@@ -493,8 +494,10 @@ set_osx_defaults () {
   set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
   set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
   set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
-  REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
-  REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
+  if [ "$DO_INSTALL" = "false" ]; then
+    REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
+    REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
+  fi
 }
 
 # Update package list
@@ -502,7 +505,7 @@ set_osx_defaults () {
 update_package_list () {
   if [ ! -f "$INSTALLED_FILE" ]; then
     if [ "$OS_NAME" = "Darwin" ]; then
-      execute_command "brew list | sort > $INSTALLED_FILE"
+      execute_command "brew list 2> /dev/null | sort > $INSTALLED_FILE"
     else
       if [ "$OS_NAME" = "Linux" ]; then
         if [ "$LSB_ID" = "Ubuntu" ]; then
@@ -515,7 +518,7 @@ update_package_list () {
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
     if [ -z "$INSTALLED_TEST" ] || [ "$SCRIPT_TEST" ]; then
       if [ "$OS_NAME" = "Darwin" ]; then
-        execute_command "brew list | sort > $INSTALLED_FILE"
+        execute_command "brew list 2> /dev/null | sort > $INSTALLED_FILE"
       else
         if [ "$OS_NAME" = "Linux" ]; then
           if [ "$LSB_ID" = "Ubuntu" ]; then
@@ -686,7 +689,7 @@ set_defaults () {
   set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
   execute_command "mkdir -p $WORK_DIR/files" "run"
   set_all_defaults
-  if [  "$DO_INSTALL" = "false" ]; then
+  if [ "$DO_INSTALL" = "false" ]; then
     if [ "$OS_NAME" = "Darwin" ]; then
       set_osx_defaults
     fi
@@ -717,6 +720,14 @@ check_package_config () {
     check_linux_packages
   fi
 }
+
+# Handle install mode
+
+if [[ "$*" =~ "install" ]]; then
+  DO_INSTALL="true"
+else
+  DO_INSTALL="false"
+fi
 
 # Set defauts
 
@@ -855,17 +866,21 @@ if [ "$DO_DEBUG" = "true" ]; then
   set -x
 fi
 
-# Do install
+# Print help
 
 if [ "$DO_HELP" = "true" ]; then
   print_help
   exit
 fi
 
+# Print version
+
 if [ "$DO_VERSION" = "true" ]; then
   echo "$SCRIPT_VERSION"
   exit
 fi
+
+# Do install
 
 if [ "$DO_INSTALL" = "true" ]; then
   DO_ENV_SETUP="false"
