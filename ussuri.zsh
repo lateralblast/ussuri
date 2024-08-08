@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.4
+# Version: 0.6.5
 #
 
 SCRIPT_FILE="$0"
@@ -342,8 +342,7 @@ check_rbenv_config () {
       execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
       execute_command "rbenv init - zsh"
       if [ "$DO_BUILD" = "true" ]; then
-        RBENV_CHECK=$( rbenv versions --bare | grep -v "$RUBY_VER" )
-        if [ -z "$RBENV_CHECK" ]; then
+        if [ ! -d "$RBENV_HOME/versions/$RUBY_VER" ]; then
           verbose_message "Installing ruby version $RUBY_VER"
           execute_command "rbenv install $RUBY_VER"
           verbose_message "Setting ruby global version to $RUBY_VER"
@@ -366,7 +365,7 @@ check_pyenv_config () {
     verbose_message "Configuring pyenv"
     if [ ! -d "$PYENV_HOME" ]; then
       verbose_message "Installing pyenv"
-      execute_command "git clone https://github.com/rbenv/rbenv.git $PYENV_HOME"
+      execute_command "git clone https://github.com/pyenv/pyenv.git $PYENV_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
       verbose_message "Configuring pyenv environment"
@@ -374,8 +373,7 @@ check_pyenv_config () {
       execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
       execute_command "pyenv init -"
       if [ "$DO_BUILD" = "true" ]; then
-        PYENV_CHECK=$( pyenv versions --bare | grep "$PYTHON_VER" )
-        if [ -z "$PYENV_CHECK" ]; then
+        if [ ! -d "$PYENV_HOME/versions/$PYTHON_VER" ]; then
           verbose_message "Installing python version $PYTHON_VER"
           execute_command "pyenv install $PYTHON_VER"
           verbose_message "Setting python global version to $RUBY_VER"
@@ -385,7 +383,7 @@ check_pyenv_config () {
       PYENV_GLOBAL=$( pyenv global )
       if [ ! "$PYENV_GLOBAL" = "$PYTHON_VER" ]; then
         verbose_message "Setting python global version to $RUBY_VER"
-        execute_command "rbenv global $PYTHON_VER"
+        execute_command "pyenv global $PYTHON_VER"
       fi
     fi
   fi
@@ -875,11 +873,17 @@ if [ ! "$*" = "" ]; then
         shift
         ;;
       -p|--pyenv)
+        DO_BUILD="true"
         DO_PYENV_CHECK="true"
+        INSTALL_PYENV="true"
+        DO_ENV_SETUP="true"
         shift
         ;;
       -r|--rbenv)
+        DO_BUILD="true"
         DO_RBENV_CHECK="true"
+        INSTALL_RBENV="true"
+        DO_ENV_SETUP="true"
         shift
         ;;
       -s|--startdir)
