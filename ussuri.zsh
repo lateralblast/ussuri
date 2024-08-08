@@ -109,6 +109,7 @@ print_help () {
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
+    -A|--doall        Do all fuction (where set to true)
     -I|--install      Installs $SCRIPT_NAME as: $HOME/.zshrc
     -b|--build        Build sources       (default: $DO_BUILD)
     -c|--confirm      Confirm commands    (default: $DO_CONFIRM)

@@ -102,6 +102,7 @@ Usage
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
+    -A|--doall        Do all fuction (where set to true)
     -I|--install      Installs ussuri as: /Users/testuser/.zshrc
     -b|--build        Build sources       (default: false)
     -c|--confirm      Confirm commands    (default: false)
