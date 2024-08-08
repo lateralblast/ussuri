@@ -126,3 +126,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed packaged install check
 # 0.6.4: Thu  8 Aug 2024 22:13:18 AEST
 # Added -A/--doall switch and fixed p10k init
+# 0.6.5: Thu  8 Aug 2024 23:13:47 AEST
+# Fixed pyenv and rbenv install
