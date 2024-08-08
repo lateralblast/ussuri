@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.3
+# Version: 0.6.4
 #
 
 SCRIPT_FILE="$0"
@@ -474,6 +474,13 @@ check_p10k_config () {
         fi
       fi
     else
+      if [ ! -f "$P10K_INIT" ]; then
+        if [ -f "$SOURCE_P10K_INIT" ]; then
+          execute_command "cp $SOURCE_P10K_INIT $P10K_INIT"
+        else
+          execute_command "p10k configure"
+        fi
+      fi
       execute_command "source $P10K_INIT"
       if [ -f "$P10K_THEME" ]; then
         execute_command "source $P10K_THEME"
@@ -787,6 +794,21 @@ set_defaults
 if [ ! "$*" = "" ]; then
   while test $# -gt 0; do
     case $1 in
+      -A|--doall)
+        DO_BUILD="true"
+        DO_DEFAULTS_CHECK="true"
+        DO_FONTS_CHECK="true"
+        DO_ZSH_THEME="true"
+        DO_ZINIT_CHECK="true"
+        DO_P10K_CHECK="true"
+        DO_RBENV_CHECK="true"
+        DO_PYENV_CHECK="true"
+        DO_PACKAGE_CHECK="true"
+        DO_FONTS_CHECK="true"
+        DO_POSH_CHECK="true"
+        DO_ENV_SETUP="true"
+        shift
+        ;;
       -b|--build|--compile)
         DO_BUILD="true"
         shift

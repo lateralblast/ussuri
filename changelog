@@ -124,3 +124,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Set INSTALL_BREW to true for inline execution
 # 0.6.3: Thu  8 Aug 2024 18:23:37 AEST
 # Fixed packaged install check
+# 0.6.4: Thu  8 Aug 2024 22:13:18 AEST
+# Added -A/--doall switch and fixed p10k init
