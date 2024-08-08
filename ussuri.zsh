@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.0
+# Version: 0.6.3
 #
 
 SCRIPT_FILE="$0"
@@ -279,6 +279,7 @@ set_inline_defaults () {
   set_env "DO_BUILD"          "false"
   set_env "DO_PLUGINS"        "true"
   set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
+  set_env "INSTALL_BREW"      "true"
   set_env "INSTALL_ZINIT"     "true"
   set_env "INSTALL_RBENV"     "true"
   set_env "INSTALL_PYENV"     "true"
@@ -514,6 +515,9 @@ set_linux_defaults () {
     set_env "INSTALLED_FILE" "$WORK_DIR/apt.list"
   fi
   if [ "$DO_INSTALL" = "false" ]; then
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+    fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
     REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
   fi
@@ -530,6 +534,9 @@ set_osx_defaults () {
   set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
   set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
   if [ "$DO_INSTALL" = "false" ]; then
+    if [ ! -f "$REQUIRED_FILE" ]; then
+      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+    fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
     REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
   fi
@@ -601,7 +608,7 @@ check_linux_package () {
   verbose_message "Configuring Linux package \"$PACKAGE\""
   if [ "$LSB_ID" = "Ubuntu" ]; then
     if [ "$INSTALL_APT" = "true" ]; then
-      PACKAGE_TEST=$( grep "^$PACKAGE$" "$REQUIRED_FILE" )
+      PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
       if [ -z "$PACKAGE_TEST" ]; then
         execute_command "sudo apt install -y $PACKAGE"
       fi
@@ -616,7 +623,7 @@ check_osx_package () {
   TYPE="$2"
   verbose_message "Configuring OS X package \"$PACKAGE\""
   if [ "$INSTALL_BREW" = "true" ]; then
-    PACKAGE_TEST=$( grep "^$PACKAGE$" "$REQUIRED_FILE" )
+    PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
     if [ -z "$PACKAGE_TEST" ]; then
       verbose_message "Installing package \"$PACKAGE\""
       if [ "$TYPE" = "cask" ]; then

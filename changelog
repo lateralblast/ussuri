@@ -118,3 +118,9 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Updated powerlevel10k setup
 # 0.6.0: Sat  3 Aug 2024 20:36:13 AEST
 # Updated p10k config
+# 0.6.1: Thu  8 Aug 2024 18:14:01 AEST
+# Added check for required packages file existing
+# 0.6.2: Thu  8 Aug 2024 18:17:15 AEST
+# Set INSTALL_BREW to true for inline execution
+# 0.6.3: Thu  8 Aug 2024 18:23:37 AEST
+# Fixed packaged install check
