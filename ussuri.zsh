@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.5
+# Version: 0.6.6
 #
 
 SCRIPT_FILE="$0"
@@ -92,6 +92,12 @@ execute_from_file () {
   FILE="$1"
   for LINE in "${(@f)"$(<$FILE)"}"; do
     if [[ ! "$LINE" =~ "^#" ]]; then
+      if [[ "$LINE" =~ "Finder" ]]; then
+        set_env "RESTART_FINDER" "true"
+      fi
+      if [[ "$LINE" =~ "SystemUIServer" ]]; then
+        set_env "RESTART_UISERVER" "true"
+      fi
       execute_command "$LINE"
     fi
   done
@@ -488,40 +494,17 @@ check_p10k_config () {
   fi
 }
 
-# Check OSX Defaults
-
-osx_defaults_check () {
-  APP="$1"
-  PARAM="$2"
-  TYPE="$3"
-  VALUE="$4"
-  ACTUAL=$( defaults read "$APP" "$PARAM" )
-  if [ "$ACTUAL" != "$VALUE" ]; then
-    verbose_message "Setting parameter \"$PARAM\" to \"$VALUE\""
-    if [ ! "$TYPE" = "" ]; then
-      execute_command "defaults write $APP $PARAM -$TYPE $VALUE"
-    else
-      execute_command "defaults write $APP $PARAM $VALUE"
-    fi
-    if [[ "$APP" =~ "Finder" ]]; then
-      set_env "RESTART_FINDER" "true"
-    fi
-    if [[ "$APP" =~ "SystemUIServer" ]]; then
-      set_env "RESTART_UISERVER" "true"
-    fi
-  fi
-}
-
 # Set Linux defaults
 
 set_linux_defaults () {
+  set_env "DEFAULTS_FILE" "$WORK_DIR/files/defaults/linux.defaults"
   if [ "$LSB_ID" = "Ubuntu" ]; then
     set_env "REQUIRED_FILE"  "$WORK_DIR/files/packages/ubuntu.apt"
     set_env "INSTALL_APT"    "true"
     set_env "INSTALLED_FILE" "$WORK_DIR/apt.list"
   fi
   if [ "$DO_INSTALL" = "false" ]; then
-    if [ ! -f "$REQUIRED_FILE" ]; then
+    if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
       execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
     fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
@@ -533,14 +516,14 @@ set_linux_defaults () {
 
 set_osx_defaults () {
   set_env "INSTALL_BREW"        "true"
-  set_env "SHOW_HIDDEN_FILES"   "true"
   set_env "RESTART_FINDER"      "false"
   set_env "RESTART_UISERVER"    "false"
   set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
   set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
   set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
+  set_env "DEFAULTS_FILE"       "$WORK_DIR/files/defaults/macos.defaults"
   if [ "$DO_INSTALL" = "false" ]; then
-    if [ ! -f "$REQUIRED_FILE" ]; then
+    if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
       execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
     fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
@@ -592,11 +575,7 @@ check_osx_defaults () {
   if [ ! -d "$SCREENSHOT_LOCATION" ]; then
     execute_command "mkdir -p $SCREENSHOT_LOCATION"
   fi
-  osx_defaults_check "com.apple.screencapture" "location" "string" "$SCREENSHOT_LOCATION"
-  if [ "$SHOW_HIDDEN_FILES" = "true" ]; then
-    osx_defaults_check "com.apple.Finder" "AppleShowAllFiles" "" "$SHOW_HIDDEN_FILES"
-    execute_command    "chflags nohidden $HOME/Library"
-  fi
+  execute_from_file "$DEFAULTS_FILE"
   if [ "$RESTART_FINDER" = "true" ]; then
     verbose_message "Restarting Finder"
     execute_command "killall Finder"
@@ -827,7 +806,6 @@ if [ ! "$*" = "" ]; then
       -D|--default|--defaults)
         DO_DEFAULTS_CHECK="true"
         shift
-        exit
         ;;
       -e|--changes|--changelog)
         print_changelog
