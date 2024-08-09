@@ -1,0 +1,20 @@
+# Unhide Library directory in home directory
+chflags nohidden $HOME/Library
+# Show hidden files
+defaults write com.apple.Finder AppleShowAllFiles -bool true
+# Show path bar in Finder
+defaults write com.apple.finder ShowPathbar -bool true
+# Show status bar in Finder
+defaults write com.apple.finder ShowStatusBar -bool true
+# Show internal hard drives on desktop
+defaults write com.apple.finder ShowHardDrivesOnDesktop -bool true
+# Show external hard drives on desktop
+defaults write com.apple.finder ShowExternalHardDrivesOnDesktop -bool true
+# Show server mounts on desktop
+defaults write com.apple.finder ShowMountedServersOnDesktop -bool true
+# Show removable media on desktop
+defaults write com.apple.finder ShowRemovableMediaOnDesktop -bool true
+# Disable warning about changing file extensions
+defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
+# Set screenshot location
+defaults write com.apple.screencapture location -string $SCREENSHOT_LOCATION
