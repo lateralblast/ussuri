@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.6
+# Version: 0.6.7
 #
 
 SCRIPT_FILE="$0"
@@ -346,7 +346,7 @@ check_rbenv_config () {
       verbose_message "Configuring rbenv environment"
       execute_command "export RBENV_ROOT=\"$RBENV_HOME\""
       execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
-      execute_command "rbenv init - zsh"
+      execute_command "eval \"\$(rbenv init - zsh)\""
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$RBENV_HOME/versions/$RUBY_VER" ]; then
           verbose_message "Installing ruby version $RUBY_VER"
@@ -377,7 +377,7 @@ check_pyenv_config () {
       verbose_message "Configuring pyenv environment"
       execute_command "export PYENV_ROOT=\"$PYENV_HOME\""
       execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
-      execute_command "pyenv init -"
+      execute_command "eval \"\$(pyenv init -)\""
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$PYENV_HOME/versions/$PYTHON_VER" ]; then
           verbose_message "Installing python version $PYTHON_VER"

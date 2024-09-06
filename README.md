@@ -1,4 +1,4 @@
-![alt tag](ussuri.gif)
+![alt tag](ussuri.jpg)
 
 ussuri
 ======
@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.6.6
+Current Version: 0.6.7
 
 Introduction
 ------------
