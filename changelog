@@ -132,3 +132,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Updated defaults processing
 # 0.6.7: Fri  6 Sep 2024 16:34:22 AEST
 # Fixed rbenv/pyenv init
+# 0.6.8: Fri 20 Sep 2024 17:07:33 AEST
+# Improved startdir option
