@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.7
+# Version: 0.6.8
 #
 
 SCRIPT_FILE="$0"
@@ -13,7 +13,7 @@ else
   fi
 fi
 SCRIPT_NAME="ussuri"
-START_DIR="$HOME"
+START_DIR="none"
 
 # Handle output
 
@@ -997,8 +997,8 @@ if [ "$DO_ZSH_THEME" = "false" ]; then
   ZSH_THEME=""
 fi
 
-if [ -d "$START_DIR" ]; then
-  cd "$START_DIR" || return
-else
- cd "$HOME_DIR" || return
+if [ ! "$START_DIR" = "none" ] && [ ! "$START_DIR" = "" ]; then
+  if [ -d "$START_DIR" ]; then
+    cd "$START_DIR" || return
+  fi
 fi
