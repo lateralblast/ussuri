@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.6.8
+Current Version: 0.6.9
 
 Introduction
 ------------
@@ -97,19 +97,22 @@ Usage
 -----
 
 ```
+  Usage: ./ussuri.zsh [OPTIONS...]
+
   When run manually with switches:
 
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
     -A|--doall        Do all fuction (where set to true)
-    -I|--install      Installs ussuri as: /Users/testuser/.zshrc
+    -I|--install      Installs ussuri as: /Users/spindler/.zshrc
     -b|--build        Build sources       (default: false)
     -c|--confirm      Confirm commands    (default: false)
     -C|--check.       Check for updates   (default: false)
     -d|--debug        Enable debug        (default: false)
     -D|--default(s)   Set defaults        (default: false)
-    -f|--font(s).     Install font(s)     (default: false)
+    -f|--font(s)      Install font(s)     (default: false)
+    -m|--manager      Plugin manager      (default: zinit)
     -n|--notheme      No zsh theme        (default: true)
     -N|--noenv        Ignore environment  (default: true)
     -o|--ohmyposh     Install oh my posh  (default: false)
@@ -117,13 +120,13 @@ Usage
     -p|--pyenv        Do pyenv check      (default: false)
     -P|--package(s)   Do packages check   (default: false)
     -r|--rbenv        Do rbenv check      (default: false)
-    -s|--startdir     Set start dir       (default: /Users/testuser)
+    -s|--startdir     Set start dir       (default: none)
     -t|--dryrun       Dry run mode        (default: false)
     -T|--p10k         Do p10k config      (default: false)
     -U|--update       Check for updates   (default: false)
     -v|--verbose      Verbose output      (default: false)
     -z|--zinit        Do zinit check      (default: false)
-    -Z|--zshheme      Set zsh theme       (default: robbyrussell)
+    -Z|--zshtheme     Set zsh theme       (default: robbyrussell)
 
   Defaults when run inline (i.e. as login script):
 
@@ -137,11 +140,13 @@ Usage
     Do zinit check:       true
     Do pyenv check:       true
     Do rbenv check:       true
-    Do p10k  check        true
+    Do p10k check         true
     Do oh-my-posh check:  true
     Do oh-my-zsh check:   false
     Do verbose mode       false
-    Start Directory:      /Users/testuser/
+    Do sudoers check:     false
+    Plugin Manager:       zinit
+    Start Directory:      none
 ```
 
 License

@@ -134,3 +134,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed rbenv/pyenv init
 # 0.6.8: Fri 20 Sep 2024 17:07:33 AEST
 # Improved startdir option
+# 0.6.9: Fri 20 Sep 2024 17:57:46 AEST
+# Added sudoers option
