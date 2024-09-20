@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.8
+# Version: 0.6.9
 #
 
 SCRIPT_FILE="$0"
@@ -106,6 +106,7 @@ execute_from_file () {
 # Priny help information
 
 print_help () {
+  set_defaults
   cat <<-HELP
 
   Usage: $SCRIPT_FILE [OPTIONS...]
@@ -139,6 +140,7 @@ print_help () {
     -z|--zinit        Do zinit check      (default: $DO_ZINIT_CHECK)
     -Z|--zshtheme     Set zsh theme       (default: $ZSH_THEME)
 HELP
+set_inline_defaults
 cat <<-INLINE
 
   Defaults when run inline (i.e. as login script):
@@ -157,6 +159,7 @@ cat <<-INLINE
     Do oh-my-posh check:  $DO_POSH_CHECK
     Do oh-my-zsh check:   $DO_ZOSH_CHECK
     Do verbose mode       $DO_VERBOSE
+    Do sudoers check:     $DO_SUDOERS_CHECK
     Plugin Manager:       $PLUGIN_MANAGER
     Start Directory:      $START_DIR
 
@@ -265,8 +268,10 @@ set_all_defaults () {
   set_env "DO_ZOSH_CHECK"     "false"
   set_env "DO_ENV_SETUP"      "true"
   set_env "DO_ZSH_THEME"      "true"
+  set_env "DO_SUDOERS_CHECK"  "true"
   set_env "ZSH_THEME"         "robbyrussell"
   set_env "PLUGIN_MANAGER"    "zinit"
+  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
   if [ ! -d "$WORK_DIR" ]; then
     execute_command "mkdir -p $WORK_DIR"
     execute_command "mkdir -p $WORK_DIR/files"
@@ -310,6 +315,19 @@ set_inline_defaults () {
   set_env "DO_DEBUG"          "false"
   set_env "DO_BUILD"          "false"
   set_env "DO_PLUGINS"        "true"
+  set_env "DO_SUDOERS_CHECK"  "false"
+  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
+}
+
+# Check sudoers config
+
+check_sudoers_config () {
+  verbose_message "Checking sudoers"
+  SUDO_VALUE=$( echo "$SUDOERS_ENTRY" |cut -f2 -d= |cut -f1 -d: )
+  SUDO_CHECK=$( sudo -l |grep "$SUDO_VALUE" |wc -c |sed "s/ //g" )
+  if [ "$SUDO_CHECK" = "0" ] || [ "$DO_DRYRUN" = "true" ]; then
+    execute_command "echo \"$USER $SUDOERS_ENTRY\" |sudo tee -a /etc/sudoers.d/$USER"
+  fi
 }
 
 # Check zinit config
@@ -824,6 +842,10 @@ if [ ! "$*" = "" ]; then
         DO_INSTALL="true"
         shift
         ;;
+      -l|--location|--startdir)
+        START_DIR="$2"
+        shift 2
+        ;;
       -n|--nothene)
         DO_ZSH_THEME="false"
         shift
@@ -864,14 +886,17 @@ if [ ! "$*" = "" ]; then
         DO_ENV_SETUP="true"
         shift
         ;;
-      -s|--startdir)
-        START_DIR="$2"
+      -s|--sudoers)
+        DO_SUDOERS_CHECK="true"
+        shift
+        ;;
+      -S|--sudoersentry)
+        SUDOERS_ENTRY="$2"
         shift 2
         ;;
       -t|--test|--dryrun)
         DO_DRYRUN="true"
         shift
-        handle_output "Running without executing commands"
         ;;
       -T|--p10k)
         DO_P10K_CHECK="true"
@@ -907,6 +932,12 @@ else
   set_inline_defaults
 fi
 
+# Handle dryrun
+
+if [ "$DO_DRYRUN" = "true" ]; then
+  handle_output "Running without executing commands" "info"
+fi
+
 # Set debug
 
 if [ "$DO_DEBUG" = "true" ]; then
@@ -925,6 +956,12 @@ fi
 if [ "$DO_VERSION" = "true" ]; then
   echo "$SCRIPT_VERSION"
   exit
+fi
+
+# Do sudoers
+
+if [ "$DO_SUDOERS_CHECK" = "true" ]; then
+  check_sudoers_config
 fi
 
 # Do install
