@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.6.9
+# Version: 0.7.0
 #
 
 SCRIPT_FILE="$0"
