@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.3
+# Version: 0.7.5
 #
 
 SCRIPT_FILE="$0"
@@ -209,12 +209,17 @@ print_changelog () {
 }
 
 # Set environment variable if hasn't been set
-# Doing it this was allows a manul override at the top of the script
+# Doing it this was allows a manul override at the top of the script for some variables
 
 set_env () {
   PARAM="$1"
   VALUE="$2"
-  if [ "${(P)PARAM}" = "" ]; then
+  if [[ "$PARAM" =~ "VERBOSE|WORK_DIR" ]]; then
+    if [ "${(P)PARAM}" = "" ]; then
+      verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
+      eval "export $PARAM=\"$VALUE\""
+    fi
+  else
     verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
     eval "export $PARAM=\"$VALUE\""
   fi
@@ -256,8 +261,6 @@ set_all_defaults () {
   set_env "SOURCE_P10K_INIT"  "$WORK_DIR/files/p10k/p10k.zsh"
   set_env "P10K_HOME"         "$HOME/.powerlevel10k"
   set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
-  set_env "RUBY_VER"          "3.3.4"
-  set_env "PYTHON_VER"        "3.12.4"
   set_env "DO_VERSION_CHECK"  "false"
   set_env "DO_DEFAULTS_CHECK" "false"
   set_env "DO_PACKAGE_CHECK"  "false"
@@ -370,13 +373,23 @@ check_rbenv_config () {
       execute_command "export RBENV_ROOT=\"$RBENV_HOME\""
       execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
       execute_command "eval \"\$(rbenv init - zsh)\""
+      if [ "$RUBY_VER" = "" ]; then
+        RUBY_VER=$( rbenv install --list-all | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev 'd|b|p' | tail -1 )
+      fi
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$RBENV_HOME/versions/$RUBY_VER" ]; then
           verbose_message "Installing ruby version $RUBY_VER"
           execute_command "rbenv install $RUBY_VER"
+          verbose_message "Setting ruby local version to $RUBY_VER"
+          execute_command "rbenv local $RUBY_VER"
           verbose_message "Setting ruby global version to $RUBY_VER"
           execute_command "rbenv global $RUBY_VER"
         fi
+      fi
+      RBENV_LOCAL=$( rbenv local )
+      if [ ! "$RBENV_LOCAL" = "$RUBY_VER" ]; then
+        verbose_message "Setting ruby local version to $RUBY_VER"
+        execute_command "rbenv local $RUBY_VER"
       fi
       RBENV_GLOBAL=$( rbenv global )
       if [ ! "$RBENV_GLOBAL" = "$RUBY_VER" ]; then
@@ -401,17 +414,27 @@ check_pyenv_config () {
       execute_command "export PYENV_ROOT=\"$PYENV_HOME\""
       execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
       execute_command "eval \"\$(pyenv init -)\""
+      if [ "$PYTHON_VER" = "" ]; then
+        PYTHON_VER=$( pyenv install --list | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev 'd|b|p' | tail -1 )
+      fi
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$PYENV_HOME/versions/$PYTHON_VER" ]; then
           verbose_message "Installing python version $PYTHON_VER"
           execute_command "pyenv install $PYTHON_VER"
+          verbose_message "Setting python local version to $PYTHON_VER"
+          execute_command "pyenv global $PYTHON_VER"
           verbose_message "Setting python global version to $RUBY_VER"
           execute_command "pyenv global $PYTHON_VER"
         fi
       fi
+      PYENV_LOCAL=$( pyenv local )
+      if [ ! "$PYENV_LOCAL" = "$PYTHON_VER" ]; then
+        verbose_message "Setting python local version to $PYTHON_VER"
+        execute_command "pyenv global $PYTHON_VER"
+      fi
       PYENV_GLOBAL=$( pyenv global )
       if [ ! "$PYENV_GLOBAL" = "$PYTHON_VER" ]; then
-        verbose_message "Setting python global version to $RUBY_VER"
+        verbose_message "Setting python global version to $PYTHON_VER"
         execute_command "pyenv global $PYTHON_VER"
       fi
     fi
@@ -776,7 +799,7 @@ check_package_config () {
 if [[ "$*" =~ "install" ]]; then
   DO_INSTALL="true"
 else
-  DO_INSTALL="false"
+  set_env "DO_INSTALL" "false"
 fi
 
 # Set defauts
@@ -784,7 +807,7 @@ fi
 if [[ "$*" =~ "verbose" ]]; then
   DO_VERBOSE="true"
 else
-  DO_VERBOSE="false"
+  set_env "DO_VERBOSE" "false"
 fi
 
 set_defaults
