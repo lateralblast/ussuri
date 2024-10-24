@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.2
+# Version: 0.7.3
 #
 
 SCRIPT_FILE="$0"
@@ -208,17 +208,13 @@ print_changelog () {
   echo ""
 }
 
-# Set environment
+# Set environment variable if hasn't been set
+# Doing it this was allows a manul override at the top of the script
 
 set_env () {
   PARAM="$1"
   VALUE="$2"
-  if [[ "$PARAM" =~ "DO" ]]; then
-    if [ "${(P)PARAM}" = "" ]; then
-      verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
-      eval "export $PARAM=\"$VALUE\""
-    fi
-  else
+  if [ "${(P)PARAM}" = "" ]; then
     verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
     eval "export $PARAM=\"$VALUE\""
   fi

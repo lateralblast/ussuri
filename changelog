@@ -142,3 +142,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added ability to override some defaults and set inline defaults in non inline mode with --inline
 # 0.7.2: Thu 24 Oct 2024 18:10:56 AEDT
 # Fixes to package check on Ubuntu Linux
+# 0.7.3: Thu 24 Oct 2024 18:16:26 AEDT
+# Expanded environment override capability
