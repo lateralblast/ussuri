@@ -17,7 +17,7 @@ dos2unix
 exiftool
 ffmpeg
 flac
-fortune
+fortune-mod
 fzf
 gcc
 gettext
@@ -30,6 +30,7 @@ imagemagick
 lame
 lego
 lftp
+libimage-exiftool-perl
 libxml2
 libyaml-dev
 lsd

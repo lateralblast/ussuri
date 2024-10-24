@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.1
+# Version: 0.7.2
 #
 
 SCRIPT_FILE="$0"
@@ -292,6 +292,7 @@ set_inline_defaults () {
   verbose_message "Setting defaults"
   execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
   execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
+  set_env "WORK_DIR"          "$HOME/.$SCRIPT_NAME"
   set_env "DO_HELP"           "false"
   set_env "DO_DRYRUN"         "false"
   set_env "DO_CONFIRM"        "false"
@@ -566,7 +567,7 @@ update_package_list () {
     else
       if [ "$OS_NAME" = "Linux" ]; then
         if [ "$LSB_ID" = "Ubuntu" ]; then
-          execute_command "dpkg -l | awk '{ print \$2 }' > $INSTALLED_FILE"
+          execute_command "dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:amd64//g'> $INSTALLED_FILE"
         fi
       fi
     fi
@@ -579,7 +580,7 @@ update_package_list () {
       else
         if [ "$OS_NAME" = "Linux" ]; then
           if [ "$LSB_ID" = "Ubuntu" ]; then
-            execute_command "dpkg -l | awk '{ print \$2 }' > $INSTALLED_FILE"
+            execute_command "dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:amd64//g' > $INSTALLED_FILE"
           fi
         fi
       fi
