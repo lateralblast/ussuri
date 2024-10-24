@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.0
+# Version: 0.7.1
 #
 
 SCRIPT_FILE="$0"
@@ -117,6 +117,7 @@ print_help () {
     -V|--version      Print version
     -e|--changelog    Print changelog
     -A|--doall        Do all fuction (where set to true)
+    -i|--inline       Set inline defaults when not runing inline mode
     -I|--install      Installs $SCRIPT_NAME as: $HOME/.zshrc
     -b|--build        Build sources       (default: $DO_BUILD)
     -c|--confirm      Confirm commands    (default: $DO_CONFIRM)
@@ -212,8 +213,15 @@ print_changelog () {
 set_env () {
   PARAM="$1"
   VALUE="$2"
-  verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
-  eval "export $PARAM=\"$VALUE\""
+  if [[ "$PARAM" =~ "DO" ]]; then
+    if [ "${(P)PARAM}" = "" ]; then
+      verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
+      eval "export $PARAM=\"$VALUE\""
+    fi
+  else
+    verbose_message "Environment parameter \"$PARAM\" to \"$VALUE\"" "set"
+    eval "export $PARAM=\"$VALUE\""
+  fi
 }
 
 # Set All Defaults
@@ -836,6 +844,10 @@ if [ ! "$*" = "" ]; then
         ;;
       -h|--help|--usage)
         DO_HELP="true"
+        shift
+        ;;
+      -i|--inline)
+        set_inline_defaults
         shift
         ;;
       -I|--install)

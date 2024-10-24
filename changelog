@@ -138,3 +138,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added sudoers option
 # 0.7.0: Thu 24 Oct 2024 15:51:01 AEDT
 # Added libyaml-dev package for building ruby and improved package list creation on Ubuntu
+# 0.7.1: Thu 24 Oct 2024 16:10:55 AEDT
+# Added ability to override some defaults and set inline defaults in non inline mode with --inline
