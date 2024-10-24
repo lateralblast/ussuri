@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 0.7.0
+Current Version: 0.7.1
 
 Introduction
 ------------
@@ -105,6 +105,7 @@ Usage
     -V|--version      Print version
     -e|--changelog    Print changelog
     -A|--doall        Do all fuction (where set to true)
+    -i|--inline       Set inline defaults when not runing inline mode
     -I|--install      Installs ussuri as: /Users/spindler/.zshrc
     -b|--build        Build sources       (default: false)
     -c|--confirm      Confirm commands    (default: false)
@@ -148,6 +149,11 @@ Usage
     Plugin Manager:       zinit
     Start Directory:      none
 ```
+
+Defaults
+--------
+
+Some defaults can be overridden by declaring them at the top of the script, e.g. DO_VERBOSE.
 
 License
 -------
