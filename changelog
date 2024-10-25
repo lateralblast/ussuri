@@ -148,3 +148,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added check for ruby/python version using rbenv/pyenv and ability to override
 # 0.7.5: Fri 25 Oct 2024 10:11:23 AEDT
 # Cleaned up environment variable handling
+# 0.7.6: Fri 25 Oct 2024 10:39:09 AEDT
+# Added code to expand variable
+# 0.7.7: Fri 25 Oct 2024 13:14:08 AEDT
+# Improved package list update code
