@@ -1,9 +1,12 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.5
+# Version: 0.7.7
 #
 
 SCRIPT_FILE="$0"
+
+DO_UPDATE_LIST="false"
+
 if [ "$SCRIPT_FILE" = "-zsh" ]; then
   SCRIPT_FILE="$HOME/.zshrc"
 else
@@ -225,6 +228,16 @@ set_env () {
   fi
 }
 
+# Expand environment variable
+
+exp_env () {
+  PARAM="$1"
+  VALUE="$2"
+  if [[ ! "${(P)PARAM}" =~ "$VALUE" ]]; then
+    eval "export $PARAM=\"${(P)PARAM}:$VALUE\""
+  fi
+}
+
 # Set All Defaults
 
 set_all_defaults () {
@@ -236,8 +249,9 @@ set_all_defaults () {
   fi
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
   verbose_message "Setting defaults"
-  execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
-  execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
+  exp_env "PATH"              "/usr/local/bin"
+  exp_env "PATH"              "/usr/local/sbin"
+  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
   set_env "DO_HELP"           "false"
   set_env "DO_DRYRUN"         "false"
   set_env "DO_CONFIRM"        "false"
@@ -289,8 +303,9 @@ set_all_defaults () {
 
 set_inline_defaults () {
   verbose_message "Setting defaults"
-  execute_command "PATH=\"/usr/local/bin:/usr/local/sbin:$PATH\""
-  execute_command "LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\""
+  exp_env "PATH"              "/usr/local/bin"
+  exp_env "PATH"              "/usr/local/sbin"
+  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
   set_env "WORK_DIR"          "$HOME/.$SCRIPT_NAME"
   set_env "DO_HELP"           "false"
   set_env "DO_DRYRUN"         "false"
@@ -591,9 +606,9 @@ update_package_list () {
       fi
     fi
   else
-    INSTALLED_TEST=$( find "$INSTALLED_FILE" -mtime -2 2> /dev/null )
+    INSTALLED_TEST=$( find "$INSTALLED_FILE" -mtime +2 2> /dev/null )
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-    if [ -z "$INSTALLED_TEST" ] || [ "$SCRIPT_TEST" ]; then
+    if [ "$INSTALLED_TEST" ] || [ "$SCRIPT_TEST" ] || [ "$DO_UPDATE_LIST" = "true" ]; then
       if [ "$OS_NAME" = "Darwin" ]; then
         execute_command "brew list 2> /dev/null | sort > $INSTALLED_FILE"
       else
@@ -642,6 +657,7 @@ check_linux_package () {
       PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
       if [ -z "$PACKAGE_TEST" ]; then
         execute_command "sudo apt install -y $PACKAGE"
+        DO_UPDATE_LIST="true"
       fi
     fi
   fi
@@ -662,7 +678,7 @@ check_osx_package () {
       else
         execute_command "brew install $PACKAGE"
       fi
-      update_package_list
+      DO_UPDATE_LIST="true"
     fi
   fi
 }
@@ -1070,4 +1086,8 @@ if [ ! "$START_DIR" = "none" ] && [ ! "$START_DIR" = "" ]; then
   if [ -d "$START_DIR" ]; then
     cd "$START_DIR" || return
   fi
+fi
+
+if [ "$DO_UPDATE_LIST" = "true" ]; then
+  update_package_list
 fi
