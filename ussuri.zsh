@@ -1,7 +1,9 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.7
+# Version: 0.7.8
 #
+
+# Set some initial variables
 
 SCRIPT_FILE="$0"
 
@@ -17,6 +19,311 @@ else
 fi
 SCRIPT_NAME="ussuri"
 START_DIR="none"
+
+# Set OSX Finder defaults
+
+set_osx_finder_defaults () {
+  set_osx_default     "com.apple.finder"                  "AppleShowAllFiles"                           "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowPathbar"                                 "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowStatusBar"                               "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowHardDrivesOnDesktop"                     "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowExternalHardDrivesOnDesktop"             "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowMountedServersOnDesktop"                 "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowRemovableMediaOnDesktop"                 "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "FXEnableExtensionChangeWarning"              "bool"    "false"
+  set_osx_default     "com.apple.finder"                  "FXPreferredViewStyle"                        "string"  "Nlsv"
+  set_osx_default     "com.apple.finder"                  "ShowHardDrivesOnDesktop"                     "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowExternalHardDrivesOnDesktop"             "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowRemovableMediaOnDesktop"                 "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "ShowMountedServersOnDesktop"                 "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "DisableAllAnimations"                        "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "OpenWindowForNewRemovableDisk"               "bool"    "true"
+  set_osx_default     "com.apple.finder"                  "com.apple.springing.delay"                   "float"   "0"
+  set_osx_default     "com.apple.TimeMachine"             "DoNotOfferNewDisksForBackup"                 "bool"    "true"
+  set_osx_default     "com.apple.desktopservices"         "DSDontWriteNetworkStores"                    "bool"    "true"
+  set_osx_default     "com.apple.desktopservices"         "DSDontWriteUSBStores"                        "bool"    "true"
+  set_osx_default     "com.apple.frameworks.diskimages"   "auto-open-ro-root"                           "bool"    "true"
+  set_osx_default     "com.apple.frameworks.diskimages"   "auto-open-rw-root"                           "bool"    "true"
+}
+
+# Set OSX Dock defaults
+
+# Hot corners
+# Possible values:
+#  0: no-op
+#  2: Mission Control
+#  3: Show application windows
+#  4: Desktop
+#  5: Start screen saver
+#  6: Disable screen saver
+#  7: Dashboard
+# 10: Put display to sleep
+# 11: Launchpad
+# 12: Notification Center
+# 13: Lock Screen
+
+set_osx_dock_defaults () {
+  set_osx_default     "com.apple.dock"                    "orientation"                                 "string"  "bottom"
+  set_osx_default     "com.apple.dock"                    "tilesize"                                    "int"     "32"
+  set_osx_default     "com.apple.dock"                    "autohide"                                    "bool"    "false"
+  set_osx_default     "com.apple.dock"                    "autohide-time-modifier"                      "float"   "0.5"
+  set_osx_default     "com.apple.dock"                    "autohide-delay"                              "float"   "0.2"
+  set_osx_default     "com.apple.dock"                    "show-recents"                                "bool"    "false"
+  set_osx_default     "com.apple.dock"                    "mineffect"                                   "string"  "scale"
+  set_osx_default     "com.apple.dock"                    "wvous-tl-corner"                             "int"     "5"
+  set_osx_default     "com.apple.dock"                    "wvous-tl-modifier"                           "int"     "0"
+  set_osx_default     "com.apple.dock"                    "wvous-tr-corner"                             "int"     "2"
+  set_osx_default     "com.apple.dock"                    "wvous-tr-modifier"                           "int"     "0"
+  set_osx_default     "com.apple.dock"                    "wvous-bl-corner"                             "int"     "4"
+  set_osx_default     "com.apple.dock"                    "wvous-bl-modifier"                           "int"     "0"
+  set_osx_default     "com.apple.dock"                    "wvous-br-corner"                             "int"     "3"
+  set_osx_default     "com.apple.dock"                    "wvous-br-modifier"                           "int"     "0"
+}
+
+# Set OSX Screen Capture defaults
+
+set_osx_screencapture_defaults () {
+  set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
+  check_dir_exists    "$SCREENSHOT_LOCATION"
+  set_osx_default     "com.apple.screencapture"           "disable-shadow"                              "bool"    "true"
+  set_osx_default     "com.apple.screencapture"           "include-date"                                "bool"    "true"
+  set_osx_default     "com.apple.screencapture"           "show-thumbnail"                              "bool"    "true"
+  set_osx_default     "com.apple.screencapture"           "type"                                        "string"  "png"
+  set_osx_default     "com.apple.screencapture"           "location"                                    "string"  "$SCREENSHOT_LOCATION"
+}
+
+# Set OSX transmission defaults
+
+set_osx_transmission_defaults () {
+  set_env "TORRENT_DIR" "$HOME/Downloads/transmission"
+  check_dir_exists    "$TORRENT_DIR"
+  set_osx_default     "org.m0k.transmission"              "DownloadAsk"                                 "bool"    "false"
+  set_osx_default     "org.m0k.transmission"              "MagnetOpenAsk"                               "bool"    "false"
+  set_osx_default     "org.m0k.transmission"              "UseIncompleteDownloadFolder"                 "bool"    "true"
+  set_osx_default     "org.m0k.transmission"              "IncompleteDownloadFolder"                    "string"  "$TORRENT_DIR"
+  set_osx_default     "org.m0k.transmission"              "DownloadLocationConstant"                    "bool"    "true"
+  set_osx_default     "org.m0k.transmission"              "CheckRemoveDownloading"                      "bool"    "true"
+  set_osx_default     "org.m0k.transmission"              "DeleteOriginalTorrent"                       "bool"    "true"
+  set_osx_default     "org.m0k.transmission"              "WarningDonate"                               "bool"    "false"
+  set_osx_default     "org.m0k.transmission"              "WarningLegal"                                "bool"    "false"
+  set_osx_default     "org.m0k.transmission"              "BlocklistNew"                                "bool"    "true"
+  set_osx_default     "org.m0k.transmission"              "BlocklistURL"                                "string"  "http://john.bitsurge.net/public/biglist.p2p.gz"
+  set_osx_default     "org.m0k.transmission"              "BlocklistAutoUpdate"                         "bool"    "true"
+  set_osx_default     "org.m0k.transmission"              "RandomPort"                                  "bool"    "true"
+}
+
+# Set App Store and update defaults
+
+set_osx_update_defaults () {
+  set_osx_default     "com.apple.commerce"                "AutoUpdate"                                  "bool"    "true"
+  set_osx_default     "com.apple.SoftwareUpdate"          "ConfigDataInstall"                           "int"     "1"
+  set_osx_default     "com.apple.SoftwareUpdate"          "AutomaticDownload"                           "int"     "1"
+  set_osx_default     "com.apple.SoftwareUpdate"          "CriticalUpdateInstall"                       "int"     "1"
+  set_osx_default     "com.apple.SoftwareUpdate"          "ScheduleFrequency"                           "int"     "1"
+  set_osx_default     "com.apple.SoftwareUpdate"          "AutomaticCheckEnabled"                       "bool"    "true"
+  set_osx_default     "com.apple.appstore"                "ShowDebugMenu"                               "bool"    "true"
+  set_osx_default     "com.apple.appstore"                "WebKitDeveloperExtras"                       "bool"    "true"
+}
+
+# Set OSX App / Utility defaults
+
+set_osx_app_defaults () {
+  set_osx_default     "com.apple.DiskUtility"             "DUDebugMenuEnabled"                          "bool"    "true"
+  set_osx_default     "com.apple.DiskUtility"             "advanced-image-options"                      "bool"    "true"
+  set_osx_default     "com.apple.addressbook"             "ABShowDebugMenu"                             "bool"    "true"
+  set_osx_default     "com.apple.print.PrintingPrefs"     "Quit When Finished"                          "bool"    "true"
+  set_osx_default     "com.apple.systempreferences"       "NSQuitAlwaysKeepsWindows"                    "bool"    "false"
+}
+
+# Set OSX NSGLobal defaults 
+
+set_osx_nsglobal_defaults () {
+  set_osx_default     "NSGlobalDomain"                    "NSTableViewDefaultSizeMode"                  "int"     "1"
+  set_osx_default     "NSGlobalDomain"                    "KeyRepeat"                                   "int"     "1"
+  set_osx_default     "NSGlobalDomain"                    "InitialKeyRepeat"                            "int"     "10"
+  set_osx_default     "NSGlobalDomain"                    "NSToolbarTitleViewRolloverDelay"             "float"   "0"
+  set_osx_default     "NSGlobalDomain"                    "NSWindowResizeTime"                          "float"   "0.001"
+  set_osx_default     "NSGlobalDomain"                    "NSAutomaticCapitalizationEnabled"            "bool"    "false"
+  set_osx_default     "NSGlobalDomain"                    "NSAutomaticDashSubstitutionEnabled"          "bool"    "false"
+  set_osx_default     "NSGlobalDomain"                    "NSAutomaticPeriodSubstitutionEnabled"        "bool"    "false"
+  set_osx_default     "NSGlobalDomain"                    "NSUseAnimatedFocusRing"                      "bool"    "false"
+  set_osx_default     "NSGlobalDomain"                    "NSAutomaticQuoteSubstitutionEnabled"         "bool"    "false"
+  set_osx_default     "NSGlobalDomain"                    "AppleMetricUnits"                            "bool"    "true"
+  set_osx_default     "NSGlobalDomain"                    "NSNavPanelExpandedStateForSaveMode"          "bool"    "true"
+  set_osx_default     "NSGlobalDomain"                    "NSNavPanelExpandedStateForSaveMode2"         "bool"    "true"
+  set_osx_default     "NSGlobalDomain"                    "PMPrintingExpandedStateForPrint"             "bool"    "true"
+  set_osx_default     "NSGlobalDomain"                    "PMPrintingExpandedStateForPrint2"            "bool"    "true"
+  set_osx_default     "NSGlobalDomain"                    "WebKitDeveloperExtras"                       "bool"    "true"
+  set_osx_default     "NSGlobalDomain"                    "AppleMeasurementUnits"                       "string"  "Centimeters"
+  set_osx_default     "NSGlobalDomain"                    "AppleLocale"                                 "string"  "en_AU@currency=AUD"
+}
+
+# Set OSX Safari defaults
+
+set_osx_safari_defaults () {
+  set_osx_default     "com.apple.Safari"                  "InstallExtensionUpdatesAutomatically"        "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "InstallExtensionUpdatesAutomatically"        "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "IncludeDevelopMenu"                          "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "IncludeDevelopMenu"                          "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "IncludeInternalDebugMenu"                    "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "IncludeInternalDebugMenu"                    "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "WebKitDeveloperExtrasEnabledPreferenceKey"   "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "WebKitDeveloperExtrasEnabledPreferenceKey"   "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "WarnAboutFraudulentWebsites"                 "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "WarnAboutFraudulentWebsites"                 "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "SendDoNotTrackHTTPHeader"                    "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "SendDoNotTrackHTTPHeader"                    "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "SuppressSearchSuggestions"                   "bool"    "true"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "SuppressSearchSuggestions"                   "bool"    "true"
+  set_osx_default     "com.apple.Safari"                  "UniversalSearchEnabled"                      "bool"    "false"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "UniversalSearchEnabled"                      "bool"    "false"
+  set_osx_default     "com.apple.Safari"                  "WebKitMediaPlaybackAllowsInline"             "bool"    "false"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "WebKitMediaPlaybackAllowsInline"             "bool"    "false"
+  set_osx_default     "com.apple.Safari"                  "WebKitJavaScriptCanOpenWindowsAutomatically" "bool"    "false"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "WebKitJavaScriptCanOpenWindowsAutomatically" "bool"    "false"
+  set_osx_default     "com.apple.Safari"                  "AutoOpenSafeDownloads"                       "bool"    "false"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "AutoOpenSafeDownloads"                       "bool"    "false"
+  set_osx_default     "com.apple.Safari"                  "HomePage"                                    "string"  "about:blank"
+  set_osx_default     "com.apple.SafariTechnologyPreview" "HomePage"                                    "string"  "about:blank"
+}
+
+# Set OSX defaults
+
+set_osx_defaults () {
+  set_env "INSTALL_BREW"      "true"
+  set_env "RESTART_DOCK"      "false"
+  set_env "RESTART_FINDER"    "false"
+  set_env "RESTART_UISERVER"  "false"
+  set_env "INSTALLED_FILE"    "$WORK_DIR/brew.list"
+  set_env "REQUIRED_FILE"     "$WORK_DIR/files/packages/macos.brew"
+  set_env "DEFAULTS_FILE"     "$WORK_DIR/files/defaults/macos.defaults"
+  if [ "$DO_INSTALL" = "false" ]; then
+    if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
+      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+    fi
+    REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
+    REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
+  fi
+  set_osx_file_state "$HOME/Library" "nohidden"
+  set_osx_finder_defaults
+  set_osx_dock_defaults
+  set_osx_screencapture_defaults
+  set_osx_transmission_defaults
+  set_osx_update_defaults
+  set_osx_app_defaults
+  set_osx_safari_defaults
+  set_osx_nsglobal_defaults
+}
+
+# Set All Defaults
+
+set_all_defaults () {
+  SCRIPT_VERSION=$( grep '^# Version' < "$SCRIPT_FILE" |  awk '{print $3}' )
+  OS_NAME=$( uname -o )
+  if [[ "$OS_NAME" =~ "Linux" ]]; then
+    OS_NAME="Linux"
+    LSB_ID=$( lsb_release -i -s 2> /dev/null )
+  fi
+  DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
+  verbose_message "Setting defaults"
+  exp_env "PATH"              "/usr/local/bin"
+  exp_env "PATH"              "/usr/local/sbin"
+  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
+  set_env "DO_HELP"           "false"
+  set_env "DO_DRYRUN"         "false"
+  set_env "DO_CONFIRM"        "false"
+  set_env "DO_DEBUG"          "false"
+  set_env "DO_BUILD"          "false"
+  set_env "DO_PLUGINS"        "true"
+  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
+  set_env "INSTALL_ZINIT"     "true"
+  set_env "INSTALL_RBENV"     "true"
+  set_env "INSTALL_PYENV"     "true"
+  set_env "INSTALL_POSH"      "true"
+  set_env "INSTALL_OZSH"      "false"
+  set_env "INSTALL_FONTS"     "true"
+  set_env "INSTALL_P10K"      "true"
+  set_env "ZINIT_HOME"        "$HOME/.zinit"
+  set_env "RBENV_HOME"        "$HOME/.rbenv"
+  set_env "PYENV_HOME"        "$HOME/.pyenv"
+  set_env "POSH_HOME"         "$HOME/.oh-my-posh"
+  set_env "ZOSH_HOME"         "$HOME/.oh-my-zsh"
+  set_env "P10K_INIT"         "$HOME/.p10k.zsh"
+  set_env "SOURCE_P10K_INIT"  "$WORK_DIR/files/p10k/p10k.zsh"
+  set_env "P10K_HOME"         "$HOME/.powerlevel10k"
+  set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
+  set_env "DO_VERSION_CHECK"  "false"
+  set_env "DO_DEFAULTS_CHECK" "false"
+  set_env "DO_PACKAGE_CHECK"  "false"
+  set_env "DO_UPDATE_CHECK"   "false"
+  set_env "DO_UPDATE_FUNCT"   "false"
+  set_env "DO_PYENV_CHECK"    "false"
+  set_env "DO_RBENV_CHECK"    "false"
+  set_env "DO_ZINIT_CHECK"    "false"
+  set_env "DO_FONTS_CHECK"    "false"
+  set_env "DO_POSH_CHECK"     "false"
+  set_env "DO_P10K_CHECK"     "false"
+  set_env "DO_ZOSH_CHECK"     "false"
+  set_env "DO_ENV_SETUP"      "true"
+  set_env "DO_ZSH_THEME"      "true"
+  set_env "DO_SUDOERS_CHECK"  "true"
+  set_env "ZSH_THEME"         "robbyrussell"
+  set_env "PLUGIN_MANAGER"    "zinit"
+  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
+  check_dir_exists "$WORK_DIR/files"
+}
+
+# Reset all defaults (when script is run inline i.e. as a login script with no options)
+
+set_inline_defaults () {
+  verbose_message "Setting defaults"
+  exp_env "PATH"              "/usr/local/bin"
+  exp_env "PATH"              "/usr/local/sbin"
+  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
+  set_env "WORK_DIR"          "$HOME/.$SCRIPT_NAME"
+  set_env "DO_HELP"           "false"
+  set_env "DO_DRYRUN"         "false"
+  set_env "DO_CONFIRM"        "false"
+  set_env "DO_DEBUG"          "false"
+  set_env "DO_BUILD"          "false"
+  set_env "DO_PLUGINS"        "true"
+  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
+  set_env "INSTALL_BREW"      "true"
+  set_env "INSTALL_ZINIT"     "true"
+  set_env "INSTALL_RBENV"     "true"
+  set_env "INSTALL_PYENV"     "true"
+  set_env "INSTALL_POSH"      "true"
+  set_env "INSTALL_OZSH"      "false"
+  set_env "INSTALL_FONTS"     "true"
+  set_env "INSTALL_P10K"      "true"
+  set_env "DO_DEFAULTS_CHECK" "true"
+  set_env "DO_PACKAGE_CHECK"  "true"
+  set_env "DO_ZINIT_CHECK"    "true"
+  set_env "DO_PYENV_CHECK"    "true"
+  set_env "DO_RBENV_CHECK"    "true"
+  set_env "DO_FONTS_CHECK"    "true"
+  set_env "DO_POSH_CHECK"     "true"
+  set_env "DO_ZOSH_CHECK"     "false"
+  set_env "DO_P10K_CHECK"     "true"
+  set_env "DO_ZSH_THEME"      "true"
+  set_env "DO_VERBOSE"        "false"
+  set_env "DO_DRYRUN"         "false"
+  set_env "DO_CONFIRM"        "false"
+  set_env "DO_DEBUG"          "false"
+  set_env "DO_BUILD"          "false"
+  set_env "DO_PLUGINS"        "true"
+  set_env "DO_SUDOERS_CHECK"  "false"
+  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
+}
+
+# Check directory exists
+
+check_dir_exists () {
+  CHECK_DIR="$1"
+  if [ ! -d "$CHECK_DIR" ]; then
+    execute_command "mkdir -p $CHECK_DIR"
+  fi
+}
 
 # Handle output
 
@@ -38,6 +345,18 @@ handle_output () {
       ;;
     set|setting)
       echo "Setting:        $OUTPUT"
+      ;;
+    check|checking)
+      echo "Checking:       $OUTPUT"
+      ;;
+    save|saving)
+      echo "Saving:         $OUTPUT"
+      ;;
+    replace|replacing)
+      echo "Replacing:      $OUTPUT"
+      ;;
+    restart|restarting)
+      echo "Restarting:     $OUTPUT"
       ;;
     *)
       echo "$OUTPUT"
@@ -173,12 +492,12 @@ INLINE
 # Install script as .zshrc
 
 do_install () {
-  verbose_message "Backing up $HOME/.zshrc to $WORK_DIR/.zshrc.$DATE_SUFFIX"
-  execute_command "cp $HOME/.zshrc $WORK_DIR/.zshrc.$DATE_SUFFIX"
-  verbose_message "Replacing $HOME/.zshrc"
-  execute_command "cp $SCRIPT_FILE $HOME/.zshrc"
-  set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
-  execute_command "mkdir -p $WORK_DIR/files" "run"
+  set_env "WORK_DIR"  "$HOME/.$SCRIPT_NAME"
+  check_dir_exists    "$WORK_DIR/files"
+  verbose_message     "$HOME/.zshrc to $WORK_DIR/.zshrc.$DATE_SUFFIX" "save"
+  execute_command     "cp $HOME/.zshrc $WORK_DIR/.zshrc.$DATE_SUFFIX"
+  verbose_message     "$HOME/.zshrc with $SCRIPT_FILE" "replace"
+  execute_command     "cp $SCRIPT_FILE $HOME/.zshrc"
   if [ "$DO_INSTALL" = "true" ]; then
     if [ ! "$SCRIPT_FILE" = "$HOME/.zshrc" ]  && [ ! "$SCRIPT_FILE" = "$HOME/.zprofile" ]; then
       if [ -d "$WORK_DIR/files" ]; then
@@ -211,6 +530,51 @@ print_changelog () {
   echo ""
 }
 
+# Set OS X file state
+
+set_osx_file_state () {
+  FILE="$1"
+  STATE="$2"
+  CHECK="$STATE"
+  verbose_message "File $FILE is $STATE" "check"
+  if [ "$STATE" = "nohidden" ]; then
+    CHECK="-"
+  fi
+  CURRENT=$( ls -aOl $FILE | sed -n 2p | awk '{print $5}' )
+  if [ ! "$CURRENT" = "$CHECK" ]; then
+    verbose_message "File $FILE to $STATE" "set"
+    execute_command "chflags $STATE $FILE"
+  fi
+}
+
+# Set OS X defaults
+
+set_osx_default () {
+  D_DOMAIN="$1"
+  D_PARAM="$2"
+  D_TYPE="$3"
+  D_VALUE="$4"
+  D_CHECK="$D_VALUE"
+  if [ "$D_VALUE" = "true" ]; then
+    D_CHECK="1"
+  fi
+  if [ "$D_VALUE" = "false" ]; then
+    D_CHECK="0"
+  fi
+  verbose_message "Defaults domain \"$D_DOMAIN\" has parameter \"$D_PARAM\" set to \"$D_VALUE\"" "check"
+  D_CURRENT=$( defaults read "$D_DOMAIN" "$D_PARAM" 2> /dev/null) 
+  if [ ! "$D_CURRENT" = "$D_CHECK" ]; then
+    if [[ "$D_DOMAIN" =~ "finder" ]]; then
+      set_env "RESTART_FINDER" "true"
+    fi 
+    if [[ "$D_DOMAIN" =~ "dock" ]]; then
+      set_env "RESTART_DOCK" "true"
+    fi 
+    verbose_message "Defaults domain \"$D_DOMAIN\" parameter \"$D_PARAM\" to \"$D_VALUE\"" "set"
+    execute_command "defaults write \"$D_DOMAIN\" \"$D_PARAM\" -$D_TYPE $D_VALUE"
+  fi
+}
+
 # Set environment variable if hasn't been set
 # Doing it this was allows a manul override at the top of the script for some variables
 
@@ -236,110 +600,6 @@ exp_env () {
   if [[ ! "${(P)PARAM}" =~ "$VALUE" ]]; then
     eval "export $PARAM=\"${(P)PARAM}:$VALUE\""
   fi
-}
-
-# Set All Defaults
-
-set_all_defaults () {
-  SCRIPT_VERSION=$( grep '^# Version' < "$SCRIPT_FILE" |  awk '{print $3}' )
-  OS_NAME=$(uname -o)
-  if [[ "$OS_NAME" =~ "Linux" ]]; then
-    OS_NAME="Linux"
-    LSB_ID=$( lsb_release -i -s 2> /dev/null )
-  fi
-  DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
-  verbose_message "Setting defaults"
-  exp_env "PATH"              "/usr/local/bin"
-  exp_env "PATH"              "/usr/local/sbin"
-  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
-  set_env "DO_HELP"           "false"
-  set_env "DO_DRYRUN"         "false"
-  set_env "DO_CONFIRM"        "false"
-  set_env "DO_DEBUG"          "false"
-  set_env "DO_BUILD"          "false"
-  set_env "DO_PLUGINS"        "true"
-  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
-  set_env "INSTALL_ZINIT"     "true"
-  set_env "INSTALL_RBENV"     "true"
-  set_env "INSTALL_PYENV"     "true"
-  set_env "INSTALL_POSH"      "true"
-  set_env "INSTALL_OZSH"      "false"
-  set_env "INSTALL_FONTS"     "true"
-  set_env "INSTALL_P10K"      "true"
-  set_env "ZINIT_HOME"        "$HOME/.zinit"
-  set_env "RBENV_HOME"        "$HOME/.rbenv"
-  set_env "PYENV_HOME"        "$HOME/.pyenv"
-  set_env "POSH_HOME"         "$HOME/.oh-my-posh"
-  set_env "ZOSH_HOME"         "$HOME/.oh-my-zsh"
-  set_env "P10K_INIT"         "$HOME/.p10k.zsh"
-  set_env "SOURCE_P10K_INIT"  "$WORK_DIR/files/p10k/p10k.zsh"
-  set_env "P10K_HOME"         "$HOME/.powerlevel10k"
-  set_env "P10K_THEME"        "$P10K_HOME/powerlevel10k.zsh-theme"
-  set_env "DO_VERSION_CHECK"  "false"
-  set_env "DO_DEFAULTS_CHECK" "false"
-  set_env "DO_PACKAGE_CHECK"  "false"
-  set_env "DO_UPDATE_CHECK"   "false"
-  set_env "DO_UPDATE_FUNCT"   "false"
-  set_env "DO_PYENV_CHECK"    "false"
-  set_env "DO_RBENV_CHECK"    "false"
-  set_env "DO_ZINIT_CHECK"    "false"
-  set_env "DO_FONTS_CHECK"    "false"
-  set_env "DO_POSH_CHECK"     "false"
-  set_env "DO_P10K_CHECK"     "false"
-  set_env "DO_ZOSH_CHECK"     "false"
-  set_env "DO_ENV_SETUP"      "true"
-  set_env "DO_ZSH_THEME"      "true"
-  set_env "DO_SUDOERS_CHECK"  "true"
-  set_env "ZSH_THEME"         "robbyrussell"
-  set_env "PLUGIN_MANAGER"    "zinit"
-  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
-  if [ ! -d "$WORK_DIR" ]; then
-    execute_command "mkdir -p $WORK_DIR"
-    execute_command "mkdir -p $WORK_DIR/files"
-  fi
-}
-
-# Reset all defaults (when script is run inline i.e. as a login script with no options)
-
-set_inline_defaults () {
-  verbose_message "Setting defaults"
-  exp_env "PATH"              "/usr/local/bin"
-  exp_env "PATH"              "/usr/local/sbin"
-  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
-  set_env "WORK_DIR"          "$HOME/.$SCRIPT_NAME"
-  set_env "DO_HELP"           "false"
-  set_env "DO_DRYRUN"         "false"
-  set_env "DO_CONFIRM"        "false"
-  set_env "DO_DEBUG"          "false"
-  set_env "DO_BUILD"          "false"
-  set_env "DO_PLUGINS"        "true"
-  set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
-  set_env "INSTALL_BREW"      "true"
-  set_env "INSTALL_ZINIT"     "true"
-  set_env "INSTALL_RBENV"     "true"
-  set_env "INSTALL_PYENV"     "true"
-  set_env "INSTALL_POSH"      "true"
-  set_env "INSTALL_OZSH"      "false"
-  set_env "INSTALL_FONTS"     "true"
-  set_env "INSTALL_P10K"      "true"
-  set_env "DO_DEFAULTS_CHECK" "true"
-  set_env "DO_PACKAGE_CHECK"  "true"
-  set_env "DO_ZINIT_CHECK"    "true"
-  set_env "DO_PYENV_CHECK"    "true"
-  set_env "DO_RBENV_CHECK"    "true"
-  set_env "DO_FONTS_CHECK"    "true"
-  set_env "DO_POSH_CHECK"     "true"
-  set_env "DO_ZOSH_CHECK"     "false"
-  set_env "DO_P10K_CHECK"     "true"
-  set_env "DO_ZSH_THEME"      "true"
-  set_env "DO_VERBOSE"        "false"
-  set_env "DO_DRYRUN"         "false"
-  set_env "DO_CONFIRM"        "false"
-  set_env "DO_DEBUG"          "false"
-  set_env "DO_BUILD"          "false"
-  set_env "DO_PLUGINS"        "true"
-  set_env "DO_SUDOERS_CHECK"  "false"
-  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
 }
 
 # Check sudoers config
@@ -478,14 +738,14 @@ check_posh_config () {
   if [ "$INSTALL_POSH" = "true" ]; then
     verbose_message "Configuring oh-my-posh"
     if [ ! -d "$POSH_HOME" ]; then
-      verbose_message "Installing oh-my-posh"
-      execute_command "mkdir -p $POSH_HOME"
-      execute_command "curl -s https://ohmyposh.dev/install.sh | bash -s -- -d $POSH_HOME"
+      verbose_message   "Installing oh-my-posh"
+      check_dir_exists  "$POSH_HOME"
+      execute_command   "curl -s https://ohmyposh.dev/install.sh | bash -s -- -d $POSH_HOME"
     fi
     if [ "$DO_ENV_SETUP" = "true" ]; then
-      verbose_message "Configuring oh-my-posh environment"
-      execute_command "export PATH=\"$POSH_HOME:$PATH\""
-      execute_command "oh-my-posh init zsh"
+      verbose_message   "Configuring oh-my-posh environment"
+      execute_command   "export PATH=\"$POSH_HOME:$PATH\""
+      execute_command   "oh-my-posh init zsh"
     fi
   fi
 }
@@ -573,25 +833,6 @@ set_linux_defaults () {
   fi
 }
 
-# Set OSX defaults
-
-set_osx_defaults () {
-  set_env "INSTALL_BREW"        "true"
-  set_env "RESTART_FINDER"      "false"
-  set_env "RESTART_UISERVER"    "false"
-  set_env "SCREENSHOT_LOCATION" "$HOME/Pictures/Screenshots"
-  set_env "INSTALLED_FILE"      "$WORK_DIR/brew.list"
-  set_env "REQUIRED_FILE"       "$WORK_DIR/files/packages/macos.brew"
-  set_env "DEFAULTS_FILE"       "$WORK_DIR/files/defaults/macos.defaults"
-  if [ "$DO_INSTALL" = "false" ]; then
-    if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
-      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
-    fi
-    REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
-    REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
-  fi
-}
-
 # Update package list
 
 update_package_list () {
@@ -633,17 +874,17 @@ check_linux_defaults () {
 
 check_osx_defaults () {
   verbose_message "Configuring OS X defaults"
-  if [ ! -d "$SCREENSHOT_LOCATION" ]; then
-    execute_command "mkdir -p $SCREENSHOT_LOCATION"
-  fi
-  execute_from_file "$DEFAULTS_FILE"
   if [ "$RESTART_FINDER" = "true" ]; then
-    verbose_message "Restarting Finder"
+    verbose_message "Finder" "restart"
     execute_command "killall Finder"
   fi
   if [ "$RESTART_UISERVER" = "true" ]; then
-    verbose_message "Restarting SystemUIServer"
+    verbose_message "SystemUIServer" "restart"
     execute_command "killall SystemUIServer"
+  fi
+  if [ "$RESTART_DOCK" = "true" ]; then
+    verbose_message "Dock" "restart"
+    execute_command "killall Dock"
   fi
 }
 
@@ -775,8 +1016,8 @@ check_for_update () {
 # Set defaults
 
 set_defaults () {
-  set_env "WORK_DIR"    "$HOME/.$SCRIPT_NAME"
-  execute_command "mkdir -p $WORK_DIR/files" "run"
+  set_env "WORK_DIR" "$HOME/.$SCRIPT_NAME"
+  check_dir_exists   "$WORK_DIR/files"
   set_all_defaults
   if [ "$DO_INSTALL" = "false" ]; then
     if [ "$OS_NAME" = "Darwin" ]; then
