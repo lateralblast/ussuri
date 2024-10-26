@@ -152,3 +152,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added code to expand variable
 # 0.7.7: Fri 25 Oct 2024 13:14:08 AEDT
 # Improved package list update code
+# 0.7.8: Sat 26 Oct 2024 16:30:40 AEDT
+# Updated OSX defaults method
