@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.8
+# Version: 0.7.9
 #
 
 # Set some initial variables
@@ -17,8 +17,19 @@ else
     SCRIPT_DIR=$( pwd )
   fi
 fi
+
 SCRIPT_NAME="ussuri"
 START_DIR="none"
+
+# Create a lock file
+
+HOLD_LOCK="false"
+LOCK_FILE="$HOME/.$SCRIPT_NAME.lock"
+
+if [ ! -f "$LOCK_FILE" ]; then
+ touch $LOCK_FILE
+ HOLD_LOCK="true"
+fi
 
 # Set OSX Finder defaults
 
@@ -719,7 +730,7 @@ check_pyenv_config () {
 # Check fonts config
 
 check_fonts_config () {
-  if [ "$INSTALL_FONTS" = "true" ]; then
+  if [ "$INSTALL_FONTS" = "true" ] && [ "$HOLD_LOCK" = "true" ]; then
     verbose_message "Configuring fonts"
     if [ "$OS_NAME" = "Darwin" ]; then
       check_osx_package "font-fira-code-nerd-font" "cask"
@@ -737,7 +748,7 @@ check_fonts_config () {
 check_posh_config () {
   if [ "$INSTALL_POSH" = "true" ]; then
     verbose_message "Configuring oh-my-posh"
-    if [ ! -d "$POSH_HOME" ]; then
+    if [ ! -d "$POSH_HOME" ] && [ "$HOLD_LOCK" = "true" ]; then
       verbose_message   "Installing oh-my-posh"
       check_dir_exists  "$POSH_HOME"
       execute_command   "curl -s https://ohmyposh.dev/install.sh | bash -s -- -d $POSH_HOME"
@@ -755,7 +766,7 @@ check_posh_config () {
 check_zosh_config () {
   if [ "$INSTALL_ZOSH" = "true" ]; then
     verbose_message "Configuring oh-my-posh"
-    if [ ! -d "$ZOSH_HOME" ]; then
+    if [ ! -d "$ZOSH_HOME" ] && [ "$HOLD_LOCK" = "true" ]; then
       verbose_message "Installing oh-my-zsh"
       execute_command "git clone https://github.com/ohmyzsh/ohmyzsh.git $ZOSH_HOME"
     fi
@@ -800,7 +811,7 @@ check_p10k_config () {
         fi
       fi
     else
-      if [ ! -f "$P10K_INIT" ]; then
+      if [ ! -f "$P10K_INIT" ] && [ "$HOLD_LOCK" = "true" ]; then
         if [ -f "$SOURCE_P10K_INIT" ]; then
           execute_command "cp $SOURCE_P10K_INIT $P10K_INIT"
         else
@@ -826,7 +837,9 @@ set_linux_defaults () {
   fi
   if [ "$DO_INSTALL" = "false" ]; then
     if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
-      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+      if [ "$HOLD_LOCK" = "true" ]; then
+        execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+      fi
     fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
     REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
@@ -836,7 +849,7 @@ set_linux_defaults () {
 # Update package list
 
 update_package_list () {
-  if [ ! -f "$INSTALLED_FILE" ]; then
+  if [ ! -f "$INSTALLED_FILE" ] && [ "$HOLD_LOCK" = "true" ]; then
     if [ "$OS_NAME" = "Darwin" ]; then
       execute_command "brew list 2> /dev/null | sort > $INSTALLED_FILE"
     else
@@ -850,12 +863,14 @@ update_package_list () {
     INSTALLED_TEST=$( find "$INSTALLED_FILE" -mtime +2 2> /dev/null )
     SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
     if [ "$INSTALLED_TEST" ] || [ "$SCRIPT_TEST" ] || [ "$DO_UPDATE_LIST" = "true" ]; then
-      if [ "$OS_NAME" = "Darwin" ]; then
-        execute_command "brew list 2> /dev/null | sort > $INSTALLED_FILE"
-      else
-        if [ "$OS_NAME" = "Linux" ]; then
-          if [ "$LSB_ID" = "Ubuntu" ]; then
-            execute_command "dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:amd64//g' > $INSTALLED_FILE"
+      if [ "$HOLD_LOCK" = "true" ]; then
+        if [ "$OS_NAME" = "Darwin" ]; then
+          execute_command "brew list 2> /dev/null | sort > $INSTALLED_FILE"
+        else
+          if [ "$OS_NAME" = "Linux" ]; then
+            if [ "$LSB_ID" = "Ubuntu" ]; then
+              execute_command "dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:amd64//g' > $INSTALLED_FILE"
+            fi
           fi
         fi
       fi
@@ -873,18 +888,20 @@ check_linux_defaults () {
 # Check OS Defaults
 
 check_osx_defaults () {
-  verbose_message "Configuring OS X defaults"
-  if [ "$RESTART_FINDER" = "true" ]; then
-    verbose_message "Finder" "restart"
-    execute_command "killall Finder"
-  fi
-  if [ "$RESTART_UISERVER" = "true" ]; then
-    verbose_message "SystemUIServer" "restart"
-    execute_command "killall SystemUIServer"
-  fi
-  if [ "$RESTART_DOCK" = "true" ]; then
-    verbose_message "Dock" "restart"
-    execute_command "killall Dock"
+  if [ "$HOLD_LOCK" = "true" ]; then
+    verbose_message "Configuring OS X defaults"
+    if [ "$RESTART_FINDER" = "true" ]; then
+      verbose_message "Finder" "restart"
+      execute_command "killall Finder"
+    fi
+    if [ "$RESTART_UISERVER" = "true" ]; then
+      verbose_message "SystemUIServer" "restart"
+      execute_command "killall SystemUIServer"
+    fi
+    if [ "$RESTART_DOCK" = "true" ]; then
+      verbose_message "Dock" "restart"
+      execute_command "killall Dock"
+    fi
   fi
 }
 
@@ -892,13 +909,15 @@ check_osx_defaults () {
 
 check_linux_package () {
   PACKAGE="$1"
-  verbose_message "Configuring Linux package \"$PACKAGE\""
-  if [ "$LSB_ID" = "Ubuntu" ]; then
-    if [ "$INSTALL_APT" = "true" ]; then
-      PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
-      if [ -z "$PACKAGE_TEST" ]; then
-        execute_command "sudo apt install -y $PACKAGE"
-        DO_UPDATE_LIST="true"
+  if [ "$HOLD_LOCK" = "true" ]; then
+    verbose_message "Configuring Linux package \"$PACKAGE\""
+    if [ "$LSB_ID" = "Ubuntu" ]; then
+      if [ "$INSTALL_APT" = "true" ]; then
+        PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
+        if [ -z "$PACKAGE_TEST" ]; then
+          execute_command "sudo apt install -y $PACKAGE"
+          DO_UPDATE_LIST="true"
+        fi
       fi
     fi
   fi
@@ -909,17 +928,19 @@ check_linux_package () {
 check_osx_package () {
   PACKAGE="$1"
   TYPE="$2"
-  verbose_message "Configuring OS X package \"$PACKAGE\""
-  if [ "$INSTALL_BREW" = "true" ]; then
-    PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
-    if [ -z "$PACKAGE_TEST" ]; then
-      verbose_message "Installing package \"$PACKAGE\""
-      if [ "$TYPE" = "cask" ]; then
-        execute_command "brew install --cask $PACKAGE"
-      else
-        execute_command "brew install $PACKAGE"
+  if [ "$HOLD_LOCK" = "true" ]; then
+    verbose_message "Configuring OS X package \"$PACKAGE\""
+    if [ "$INSTALL_BREW" = "true" ]; then
+      PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
+      if [ -z "$PACKAGE_TEST" ]; then
+        verbose_message "Installing package \"$PACKAGE\""
+        if [ "$TYPE" = "cask" ]; then
+          execute_command "brew install --cask $PACKAGE"
+        else
+          execute_command "brew install $PACKAGE"
+        fi
+        DO_UPDATE_LIST="true"
       fi
-      DO_UPDATE_LIST="true"
     fi
   fi
 }
@@ -927,15 +948,17 @@ check_osx_package () {
 # Check Linux Applications
 
 check_linux_packages () {
-  if [ "$LSB_ID" = "Ubuntu" ]; then
-    if [ "$INSTALL_APT" = "true" ]; then
-      REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
-      SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-      if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
-        update_package_list
-        for PACKAGE in "${REQUIRED_LIST[@]}"; do
-          check_linux_package "$PACKAGE" ""
-        done
+  if [ "$HOLD_LOCK" = "true" ]; then
+    if [ "$LSB_ID" = "Ubuntu" ]; then
+      if [ "$INSTALL_APT" = "true" ]; then
+        REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
+        SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+        if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
+          update_package_list
+          for PACKAGE in "${REQUIRED_LIST[@]}"; do
+            check_linux_package "$PACKAGE" ""
+          done
+        fi
       fi
     fi
   fi
@@ -944,7 +967,7 @@ check_linux_packages () {
 # Check OSX Applications
 
 check_osx_packages () {
-  if [ "$INSTALL_BREW" = "true" ]; then
+  if [ "$INSTALL_BREW" = "true" ] && [ "$HOLD_LOCK" = "true" ]; then
     verbose_message "Configuring brew"
     BREW_TEST=$(command -v brew)
     if [ -z "$BREW_TEST" ]; then
@@ -979,13 +1002,15 @@ check_osx_packages () {
         execute_command "$BREW_TEST shellenv"
       fi
     fi
-    REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
-    SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-    if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
-      update_package_list
-      for PACKAGE in "${REQUIRED_LIST[@]}"; do
-        check_osx_package "$PACKAGE" ""
-      done
+    if [ "$HOLD_LOCK" = "true" ]; then
+      REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
+      SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+      if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
+        update_package_list
+        for PACKAGE in "${REQUIRED_LIST[@]}"; do
+          check_osx_package "$PACKAGE" ""
+        done
+      fi
     fi
   fi
 }
@@ -993,22 +1018,24 @@ check_osx_packages () {
 # Check for update
 
 check_for_update () {
-  verbose_message "Checking for updates"
-  set_env "README_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md"
-  REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
-  LOCAL_VERSION="${SCRIPT_VERSION/\./}"
-  LOCAL_VERSION="${LOCAL_VERSION/\./}"
-  echo "Local version:  $SCRIPT_VERSION"
-  echo "Remote version: $REMOTE_VERSION"
-  REMOTE_VERSION="${REMOTE_VERSION/\./}"
-  REMOTE_VERSION="${REMOTE_VERSION/\./}"
-  if [ "$LOCAL_VERSION" -lt "$REMOTE_VERSION" ]; then
-    handle_output "Local version is older than remote version" "info"
-  else
-    if [ "$LOCAL_VERSION" -gt "$REMOTE_VERSION" ]; then
-      handle_output "Local version is newer than remote version" "info"
+  if [ "$HOLD_LOCK" = "true" ]; then
+    verbose_message "Checking for updates"
+    set_env "README_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/main/README.md"
+    REMOTE_VERSION=$( curl -vs "$README_URL" 2>&1 | grep "Current Version" | awk '{ print $3 }' )
+    LOCAL_VERSION="${SCRIPT_VERSION/\./}"
+    LOCAL_VERSION="${LOCAL_VERSION/\./}"
+    echo "Local version:  $SCRIPT_VERSION"
+    echo "Remote version: $REMOTE_VERSION"
+    REMOTE_VERSION="${REMOTE_VERSION/\./}"
+    REMOTE_VERSION="${REMOTE_VERSION/\./}"
+    if [ "$LOCAL_VERSION" -lt "$REMOTE_VERSION" ]; then
+      handle_output "Local version is older than remote version" "info"
     else
-      handle_output "Local version is the same as remote version" "info"
+      if [ "$LOCAL_VERSION" -gt "$REMOTE_VERSION" ]; then
+        handle_output "Local version is newer than remote version" "info"
+      else
+        handle_output "Local version is the same as remote version" "info"
+      fi
     fi
   fi
 }
@@ -1043,11 +1070,13 @@ check_defaults () {
 # Check packages
 
 check_package_config () {
-  if [ "$OS_NAME" = "Darwin" ]; then
-    check_osx_packages
-  fi
-  if [ "$OS_NAME" = "Linux" ]; then
-    check_linux_packages
+  if [ "$HOLD_LOCK" = "true" ]; then
+    if [ "$OS_NAME" = "Darwin" ]; then
+      check_osx_packages
+    fi
+    if [ "$OS_NAME" = "Linux" ]; then
+      check_linux_packages
+    fi
   fi
 }
 
@@ -1331,4 +1360,12 @@ fi
 
 if [ "$DO_UPDATE_LIST" = "true" ]; then
   update_package_list
+fi
+
+# Remove lock file
+
+if [ "$HOLD_LOCK" = "true" ]; then
+  if [ -f "$LOCK_FILE" ]; then
+    rm "$LOCK_FILE"
+  fi
 fi
