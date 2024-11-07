@@ -156,3 +156,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Updated OSX defaults method
 # 0.7.9: Sun  3 Nov 2024 22:08:38 AEDT
 # Added code to create lock and only run one session of updates/installs
+# 0.8.0: Thu  7 Nov 2024 17:53:45 AEDT
+# Improved lock file check
+# 0.8.1: Thu  7 Nov 2024 17:54:35 AEDT
+# Fixed issue with brew environment not being set

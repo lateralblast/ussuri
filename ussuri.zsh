@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.7.9
+# Version: 0.8.1
 #
 
 # Set some initial variables
@@ -25,6 +25,13 @@ START_DIR="none"
 
 HOLD_LOCK="false"
 LOCK_FILE="$HOME/.$SCRIPT_NAME.lock"
+
+LOCK_TEST=$( find $LOCK_FILE -mmin +10 )
+if [ "$LOCK_TEST" ]; then
+  rm $LOCK_FILE
+  touch $LOCK_FILE
+  HOLD_LOCK="true"
+fi
 
 if [ ! -f "$LOCK_FILE" ]; then
  touch $LOCK_FILE
@@ -202,6 +209,7 @@ set_osx_safari_defaults () {
 
 set_osx_defaults () {
   set_env "INSTALL_BREW"      "true"
+  set_env "DO_BREW_CHECK"     "true"
   set_env "RESTART_DOCK"      "false"
   set_env "RESTART_FINDER"    "false"
   set_env "RESTART_UISERVER"  "false"
@@ -964,6 +972,24 @@ check_linux_packages () {
   fi
 }
 
+# Seyup brew environment
+
+setup_brew_env () {
+  for BREW_FILE in /opt/homebrew/bin/brew /usr/local/homebrew/bin/brew; do
+    if [ -f "$BREW_FILE" ]; then
+      BREW_BIN="$BREW_FILE"
+      BREW_DIR=$( dirname "$BREW_BIN" )
+      BREW_BASE=$( dirname "$BREW_DIR" )
+    fi
+  done
+  execute_command "export PATH=\"$BREW_BASE/bin:$BREW_BASE/sbin:$PATH\""
+  execute_command "export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:/"
+  if [ "$DO_ENV_SETUP" = "true" ]; then
+    verbose_message "Configuring brew environment"
+    execute_command "$BREW_BIN shellenv"
+  fi
+}
+
 # Check OSX Applications
 
 check_osx_packages () {
@@ -1012,6 +1038,8 @@ check_osx_packages () {
         done
       fi
     fi
+  else
+    setup_brew_env
   fi
 }
 
@@ -1077,6 +1105,14 @@ check_package_config () {
     if [ "$OS_NAME" = "Linux" ]; then
       check_linux_packages
     fi
+  fi
+}
+
+# Check brew config
+
+check_brew_config () {
+  if [ "$OS_NAME" = "Darwin" ]; then
+    setup_brew_env
   fi
 }
 
@@ -1304,6 +1340,12 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
     update_script
   fi
   exit
+fi
+
+# Handle brew config
+
+if "$DO_BREW_CHECK" = "true" ] ; then
+  check_brew_config
 fi
 
 # Do package check
