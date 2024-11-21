@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.8.1
+# Version: 0.8.3
 #
 
 # Set some initial variables
@@ -26,7 +26,7 @@ START_DIR="none"
 HOLD_LOCK="false"
 LOCK_FILE="$HOME/.$SCRIPT_NAME.lock"
 
-LOCK_TEST=$( find $LOCK_FILE -mmin +10 )
+LOCK_TEST=$( find $LOCK_FILE -mmin +10 2> /dev/null )
 if [ "$LOCK_TEST" ]; then
   rm $LOCK_FILE
   touch $LOCK_FILE
@@ -668,7 +668,7 @@ check_rbenv_config () {
       execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
       execute_command "eval \"\$(rbenv init - zsh)\""
       if [ "$RUBY_VER" = "" ]; then
-        RUBY_VER=$( rbenv install --list-all | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev 'd|b|p' | tail -1 )
+        RUBY_VER=$( rbenv install --list-all 2> /dev/null | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev '[a-z' | tail -1 )
       fi
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$RBENV_HOME/versions/$RUBY_VER" ]; then
@@ -709,7 +709,7 @@ check_pyenv_config () {
       execute_command "export PATH=\"$PYENV_ROOT/bin:$PATH\""
       execute_command "eval \"\$(pyenv init -)\""
       if [ "$PYTHON_VER" = "" ]; then
-        PYTHON_VER=$( pyenv install --list | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev 'd|b|p' | tail -1 )
+        PYTHON_VER=$( pyenv install --list 2> /dev/null | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev '[a-z]' | tail -1 )
       fi
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$PYENV_HOME/versions/$PYTHON_VER" ]; then
