@@ -164,3 +164,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed find command
 $ 0.8.3: Thu 21 Nov 2024 14:17:34 AEDT
 # Improvements for pyenv/rbenv
+# 0.8.4: Mon 25 Nov 2024 14:41:46 AEDT
+# More improvements for pyenv/rbenv

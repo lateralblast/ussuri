@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.8.3
+# Version: 0.8.4
 #
 
 # Set some initial variables
@@ -680,12 +680,12 @@ check_rbenv_config () {
           execute_command "rbenv global $RUBY_VER"
         fi
       fi
-      RBENV_LOCAL=$( rbenv local )
+      RBENV_LOCAL=$( rbenv local 2> /dev/null )
       if [ ! "$RBENV_LOCAL" = "$RUBY_VER" ]; then
         verbose_message "Setting ruby local version to $RUBY_VER"
         execute_command "rbenv local $RUBY_VER"
       fi
-      RBENV_GLOBAL=$( rbenv global )
+      RBENV_GLOBAL=$( rbenv global 2> /dev/null )
       if [ ! "$RBENV_GLOBAL" = "$RUBY_VER" ]; then
         verbose_message "Setting ruby global version to $RUBY_VER"
         execute_command "rbenv global $RUBY_VER"
@@ -721,12 +721,12 @@ check_pyenv_config () {
           execute_command "pyenv global $PYTHON_VER"
         fi
       fi
-      PYENV_LOCAL=$( pyenv local )
+      PYENV_LOCAL=$( pyenv local 2> /dev/null )
       if [ ! "$PYENV_LOCAL" = "$PYTHON_VER" ]; then
         verbose_message "Setting python local version to $PYTHON_VER"
         execute_command "pyenv global $PYTHON_VER"
       fi
-      PYENV_GLOBAL=$( pyenv global )
+      PYENV_GLOBAL=$( pyenv global 2> /dev/null )
       if [ ! "$PYENV_GLOBAL" = "$PYTHON_VER" ]; then
         verbose_message "Setting python global version to $PYTHON_VER"
         execute_command "pyenv global $PYTHON_VER"
