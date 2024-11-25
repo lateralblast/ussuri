@@ -668,7 +668,7 @@ check_rbenv_config () {
       execute_command "export PATH=\"$RBENV_ROOT/bin:$PATH\""
       execute_command "eval \"\$(rbenv init - zsh)\""
       if [ "$RUBY_VER" = "" ]; then
-        RUBY_VER=$( rbenv install --list-all 2> /dev/null | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev '[a-z' | tail -1 )
+        RUBY_VER=$( rbenv install --list-all 2> /dev/null | awk '{ print $1 }' |grep "^[0-9]" | grep -Ev '[a-z]' | tail -1 )
       fi
       if [ "$DO_BUILD" = "true" ]; then
         if [ ! -d "$RBENV_HOME/versions/$RUBY_VER" ]; then
