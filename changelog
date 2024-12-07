@@ -166,3 +166,5 @@ $ 0.8.3: Thu 21 Nov 2024 14:17:34 AEDT
 # Improvements for pyenv/rbenv
 # 0.8.4: Mon 25 Nov 2024 14:41:46 AEDT
 # More improvements for pyenv/rbenv
+# 0.8.5: Sun  8 Dec 2024 10:21:03 AEDT
+# Disabled package install for inline mode
