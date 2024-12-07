@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.8.4
+# Version: 0.8.5
 #
 
 # Set some initial variables
@@ -316,7 +316,7 @@ set_inline_defaults () {
   set_env "INSTALL_FONTS"     "true"
   set_env "INSTALL_P10K"      "true"
   set_env "DO_DEFAULTS_CHECK" "true"
-  set_env "DO_PACKAGE_CHECK"  "true"
+  set_env "DO_PACKAGE_CHECK"  "false"
   set_env "DO_ZINIT_CHECK"    "true"
   set_env "DO_PYENV_CHECK"    "true"
   set_env "DO_RBENV_CHECK"    "true"
