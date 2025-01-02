@@ -168,3 +168,5 @@ $ 0.8.3: Thu 21 Nov 2024 14:17:34 AEDT
 # More improvements for pyenv/rbenv
 # 0.8.5: Sun  8 Dec 2024 10:21:03 AEDT
 # Disabled package install for inline mode
+# 0.8.6: Fri  3 Jan 2025 08:06:26 AEDT
+# Fix for determining calling script when running inline

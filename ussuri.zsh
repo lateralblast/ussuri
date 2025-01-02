@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.8.5
+# Version: 0.8.6
 #
 
 # Set some initial variables
@@ -9,7 +9,7 @@ SCRIPT_FILE="$0"
 
 DO_UPDATE_LIST="false"
 
-if [ "$SCRIPT_FILE" = "-zsh" ]; then
+if [ "$SCRIPT_FILE" = "-zsh" ] || [ "$SCRIPT_FILE" = "-/bin/zsh" ]; then
   SCRIPT_FILE="$HOME/.zshrc"
 else
   SCRIPT_DIR=$( dirname "$SCRIPT_FILE" )
