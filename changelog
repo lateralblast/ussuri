@@ -162,7 +162,7 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Fixed issue with brew environment not being set
 # 0.8.2: Sat  9 Nov 2024 07:09:35 AEDT
 # Fixed find command
-$ 0.8.3: Thu 21 Nov 2024 14:17:34 AEDT
+# 0.8.3: Thu 21 Nov 2024 14:17:34 AEDT
 # Improvements for pyenv/rbenv
 # 0.8.4: Mon 25 Nov 2024 14:41:46 AEDT
 # More improvements for pyenv/rbenv
@@ -170,3 +170,7 @@ $ 0.8.3: Thu 21 Nov 2024 14:17:34 AEDT
 # Disabled package install for inline mode
 # 0.8.6: Fri  3 Jan 2025 08:06:26 AEDT
 # Fix for determining calling script when running inline
+# 0.8.7: Tue 25 Mar 2025 13:39:51 AEDT
+# Added support for Arch/Endeavour Linux
+# 0.8.8: Tue 25 Mar 2025 14:37:20 AEDT
+# Bug fixes

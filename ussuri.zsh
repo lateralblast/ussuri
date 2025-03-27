@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.8.6
+# Version: 0.8.8
 #
 
 # Set some initial variables
@@ -253,6 +253,7 @@ set_all_defaults () {
   set_env "DO_CONFIRM"        "false"
   set_env "DO_DEBUG"          "false"
   set_env "DO_BUILD"          "false"
+  set_env "DO_FORCE"          "false"
   set_env "DO_PLUGINS"        "true"
   set_env "ZINIT_FILE"        "$WORK_DIR/files/zinit/zinit.zsh"
   set_env "INSTALL_ZINIT"     "true"
@@ -383,6 +384,12 @@ handle_output () {
   esac
 }
 
+if [ "$DO_FORCE" = "true" ]; then
+  if [ -f "$LOCK_FILE" ]; then
+    execute_command "rm $LOCK_FILE"
+  fi
+fi
+
 # Verbose message
 
 verbose_message () {
@@ -466,6 +473,7 @@ print_help () {
     -d|--debug        Enable debug        (default: $DO_DEBUG)
     -D|--default(s)   Set defaults        (default: $DO_DEFAULTS_CHECK)
     -f|--font(s)      Install font(s)     (default: $DO_FONTS_CHECK)
+    -f|--force        Force action        (default: $DO_FORCE)
     -m|--manager      Plugin manager      (default: $PLUGIN_MANAGER)
     -n|--notheme      No zsh theme        (default: $DO_ZSH_THEME)
     -N|--noenv        Ignore environment  (default: $DO_ENV_SETUP)
@@ -840,8 +848,18 @@ set_linux_defaults () {
   set_env "DEFAULTS_FILE" "$WORK_DIR/files/defaults/linux.defaults"
   if [ "$LSB_ID" = "Ubuntu" ]; then
     set_env "REQUIRED_FILE"  "$WORK_DIR/files/packages/ubuntu.apt"
-    set_env "INSTALL_APT"    "true"
+    set_env "INSTALL_PKG"    "true"
     set_env "INSTALLED_FILE" "$WORK_DIR/apt.list"
+  fi
+  if [ "$LSB_ID" = "Arch" ]; then
+    set_env "REQUIRED_FILE"  "$WORK_DIR/files/packages/arch.pacman"
+    set_env "INSTALL_PKG"    "true"
+    set_env "INSTALLED_FILE" "$WORK_DIR/pacman.list"
+  fi
+  if [ "$LSB_ID" = "EndeavourOS" ]; then
+    set_env "REQUIRED_FILE"  "$WORK_DIR/files/packages/endeavouros.pacman"
+    set_env "INSTALL_PKG"    "true"
+    set_env "INSTALLED_FILE" "$WORK_DIR/pacman.list"
   fi
   if [ "$DO_INSTALL" = "false" ]; then
     if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
@@ -865,6 +883,9 @@ update_package_list () {
         if [ "$LSB_ID" = "Ubuntu" ]; then
           execute_command "dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:amd64//g'> $INSTALLED_FILE"
         fi
+        if [ "$LSB_ID" = "Arch" ] || [ "$LSB_ID" = "EndeavourOS" ]; then
+          execute_command "pacman -Q | awk '{ print \$1 }' > $INSTALLED_FILE"
+        fi
       fi
     fi
   else
@@ -878,6 +899,9 @@ update_package_list () {
           if [ "$OS_NAME" = "Linux" ]; then
             if [ "$LSB_ID" = "Ubuntu" ]; then
               execute_command "dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:amd64//g' > $INSTALLED_FILE"
+            fi
+            if [ "$LSB_ID" = "Arch" ] || [ "$LSB_ID" = "EndeavourOS" ]; then
+              execute_command "pacman -Q | awk '{ print \$1 }' > $INSTALLED_FILE"
             fi
           fi
         fi
@@ -919,11 +943,16 @@ check_linux_package () {
   PACKAGE="$1"
   if [ "$HOLD_LOCK" = "true" ]; then
     verbose_message "Configuring Linux package \"$PACKAGE\""
-    if [ "$LSB_ID" = "Ubuntu" ]; then
-      if [ "$INSTALL_APT" = "true" ]; then
+    if [ "$OS_NAME" = "Linux" ]; then
+      if [ "$INSTALL_PKG" = "true" ]; then
         PACKAGE_TEST=$( grep "^$PACKAGE$" "$INSTALLED_FILE" )
         if [ -z "$PACKAGE_TEST" ]; then
-          execute_command "sudo apt install -y $PACKAGE"
+          if [ "$LSB_ID" = "Ubuntu" ]; then
+            execute_command "sudo apt install -y $PACKAGE"
+          fi
+          if [ "$LSB_ID" = "Arch" ] || [ "$LSB_ID" = "EndeavourOS" ]; then
+            execute_command "sudo pacman --noconfirm -Sy $PACKAGE"
+          fi
           DO_UPDATE_LIST="true"
         fi
       fi
@@ -957,16 +986,14 @@ check_osx_package () {
 
 check_linux_packages () {
   if [ "$HOLD_LOCK" = "true" ]; then
-    if [ "$LSB_ID" = "Ubuntu" ]; then
-      if [ "$INSTALL_APT" = "true" ]; then
-        REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
-        SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
-        if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
-          update_package_list
-          for PACKAGE in "${REQUIRED_LIST[@]}"; do
-            check_linux_package "$PACKAGE" ""
-          done
-        fi
+    if [ "$INSTALL_PKG" = "true" ]; then
+      REQUIRED_TEST=$( find "$REQUIRED_FILE" -mtime -2 2> /dev/null )
+      SCRIPT_TEST=$( find "$SCRIPT_FILE" -mtime -2 2> /dev/null )
+      if [ "$REQUIRED_TEST" ] || [ "$SCRIPT_TEST" ]; then
+        update_package_list
+        for PACKAGE in "${REQUIRED_LIST[@]}"; do
+          check_linux_package "$PACKAGE" ""
+        done
       fi
     fi
   fi
@@ -1184,6 +1211,10 @@ if [ ! "$*" = "" ]; then
         DO_FONTS_CHECK="true"
         shift
         ;;
+      -F|--force)
+        DO_FORCE="true"
+        shift
+        ;;
       -h|--help|--usage)
         DO_HELP="true"
         shift
@@ -1343,9 +1374,10 @@ if [ "$DO_UPDATE_CHECK" = "true" ] || [ "$DO_VERSION_CHECK" = "true" ]; then
 fi
 
 # Handle brew config
-
-if "$DO_BREW_CHECK" = "true" ] ; then
-  check_brew_config
+if [ "$OS_NAME" = "Darwin" ]; then
+  if "$DO_BREW_CHECK" = "true" ] ; then
+    check_brew_config
+  fi
 fi
 
 # Do package check
