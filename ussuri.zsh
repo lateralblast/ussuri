@@ -868,7 +868,9 @@ set_linux_defaults () {
   if [ "$DO_INSTALL" = "false" ]; then
     if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
       if [ "$HOLD_LOCK" = "true" ]; then
-        execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+        if [ ! "$SCRIPT_DIR" = "/usr/bin" ]; then
+          execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+        fi
       fi
     fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
