@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.8.8
+# Version: 0.8.9
 #
 
 # Set some initial variables
@@ -218,7 +218,9 @@ set_osx_defaults () {
   set_env "DEFAULTS_FILE"     "$WORK_DIR/files/defaults/macos.defaults"
   if [ "$DO_INSTALL" = "false" ]; then
     if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
-      execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+      if [ ! "$SCRIPT_DIR" = "/usr/bin" ]; then
+        execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+      fi
     fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
     REQUIRED_LIST=(${(@s: :)REQUIRED_LIST})
@@ -529,7 +531,9 @@ do_install () {
     if [ ! "$SCRIPT_FILE" = "$HOME/.zshrc" ]  && [ ! "$SCRIPT_FILE" = "$HOME/.zprofile" ]; then
       if [ -d "$WORK_DIR/files" ]; then
         if [ ! "$SCRIPT_DIR" = "" ] && [ ! "$WORK_DIR" = "" ]; then
-          execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+          if [ ! "$SCRIPT_DIR" = "/usr/bin" ]; then
+            execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+          fi
         fi
         if [ ! -f "$P10K_INIT" ]; then
           if [ -f "$SOURCE_P10K_INIT" ]; then

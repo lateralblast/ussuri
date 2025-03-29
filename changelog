@@ -174,3 +174,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added support for Arch/Endeavour Linux
 # 0.8.8: Tue 25 Mar 2025 14:37:20 AEDT
 # Bug fixes
+# 0.8.9: Sat 29 Mar 2025 18:24:43 AEDT
+# Fixed issue with running inline and script dir being set to /usr/bin
