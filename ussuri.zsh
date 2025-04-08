@@ -218,8 +218,10 @@ set_osx_defaults () {
   set_env "DEFAULTS_FILE"     "$WORK_DIR/files/defaults/macos.defaults"
   if [ "$DO_INSTALL" = "false" ]; then
     if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
-      if [ ! "$SCRIPT_DIR" = "/usr/bin" ]; then
-        execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+      if [ ! "$SCRIPT_DIR" = "/usr/bin" ] && [ ! "$SCRIPT_DIR" = "" ]; then
+        if [ -d "$SCRIPT_DIR/files" ]; then
+          execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+        fi
       fi
     fi
     REQUIRED_LIST=$( tr "\n" " " < "$REQUIRED_FILE" )
@@ -531,8 +533,10 @@ do_install () {
     if [ ! "$SCRIPT_FILE" = "$HOME/.zshrc" ]  && [ ! "$SCRIPT_FILE" = "$HOME/.zprofile" ]; then
       if [ -d "$WORK_DIR/files" ]; then
         if [ ! "$SCRIPT_DIR" = "" ] && [ ! "$WORK_DIR" = "" ]; then
-          if [ ! "$SCRIPT_DIR" = "/usr/bin" ]; then
-            execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+          if [ ! "$SCRIPT_DIR" = "/usr/bin" ] && [ ! "$SCRIPT_DIR" = "" ]; then
+            if [ -d "$SCRIPT_DIR/files" ]; then
+              execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+            fi
           fi
         fi
         if [ ! -f "$P10K_INIT" ]; then
@@ -868,8 +872,10 @@ set_linux_defaults () {
   if [ "$DO_INSTALL" = "false" ]; then
     if [ ! -f "$REQUIRED_FILE" ] || [ ! -f "$DEFAULTS_FILE" ]; then
       if [ "$HOLD_LOCK" = "true" ]; then
-        if [ ! "$SCRIPT_DIR" = "/usr/bin" ]; then
-          execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+        if [ ! "$SCRIPT_DIR" = "/usr/bin" ] && [ ! "$SCRIPT_DIR" = "" ]; then
+          if [ -d "$SCRIPT_DIR/files" ]; then
+            execute_command "( cd $SCRIPT_DIR/files ; tar -cpf - . )|( cd $WORK_DIR/files ; tar -xpf - )" "run"
+          fi
         fi
       fi
     fi
