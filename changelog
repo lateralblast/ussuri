@@ -176,3 +176,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Bug fixes
 # 0.8.9: Sat 29 Mar 2025 18:24:43 AEDT
 # Fixed issue with running inline and script dir being set to /usr/bin
+# 0.9.0: Tue  8 Apr 2025 12:56:16 AEST
+# Add check to see files directory exists
