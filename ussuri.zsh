@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.9.2
+# Version: 0.9.3
 #
 
 # Set some initial variables
@@ -31,9 +31,80 @@ START_DIR="none"
 HOLD_LOCK="false"
 LOCK_FILE="${HOME_DIR}/.${SCRIPT_NAME}.lock"
 
+# Handle output
+
+handle_output () {
+  OUTPUT="$1"
+  STYLE="$2"
+  case "${STYLE}" in
+    warn|warning)
+      echo "Warning:        ${OUTPUT}"
+      ;;
+    execute|executing)
+      echo "Executing:      ${OUTPUT}"
+      ;;
+    command)
+      echo "Command:        ${OUTPUT}"
+      ;;
+    info|information)
+      echo "Information:    ${OUTPUT}"
+      ;;
+    set|setting)
+      echo "Setting:        ${OUTPUT}"
+      ;;
+    check|checking)
+      echo "Checking:       ${OUTPUT}"
+      ;;
+    save|saving)
+      echo "Saving:         ${OUTPUT}"
+      ;;
+    replace|replacing)
+      echo "Replacing:      ${OUTPUT}"
+      ;;
+    restart|restarting)
+      echo "Restarting:     ${OUTPUT}"
+      ;;
+    *)
+      echo "${OUTPUT}"
+      ;;
+  esac
+}
+
+# Execute command
+
+execute_command () {
+  COMMAND="$1"
+  OPTION="$2"
+  if [ "${DO_VERBOSE}" = "true" ] || [ "${DO_DRYRUN}" = "true" ]; then
+    handle_output "${COMMAND}" "execute"
+  fi
+  if [ "${DO_DRYRUN}" = "false" ] || [ "${OPTION}" = "run" ]; then
+    if [ "${DO_CONFIRM}" = "true" ]; then
+      RESPONSE=""
+      handle_output "${COMMAND}" "command"
+      vared -p "Execute [y/n]:  " RESPONSE
+      if [ "${RESPONSE}" = "y" ]; then
+        if [ "${DO_VERBOSE}" = "true" ]; then
+          eval "${COMMAND}"
+        else
+          eval "${COMMAND} > /dev/null 2>&1"
+        fi
+      fi
+    else
+      if [ "${DO_VERBOSE}" = "true" ]; then
+        eval "${COMMAND}"
+      else
+        eval "${COMMAND} > /dev/null 2>&1"
+      fi
+    fi
+  fi
+}
+
 LOCK_TEST=$( find ${LOCK_FILE} -mmin +10 2> /dev/null )
 if [ "${LOCK_TEST}" ]; then
-  rm "${LOCK_FILE}"
+  if [ -f "${LOCK_FILE}" ]; then
+    execute_command "rm ${LOCK_FILE}"
+  fi
   touch "${LOCK_FILE}"
   HOLD_LOCK="true"
 fi
@@ -354,45 +425,6 @@ check_dir_exists () {
   fi
 }
 
-# Handle output
-
-handle_output () {
-  OUTPUT="$1"
-  STYLE="$2"
-  case "${STYLE}" in
-    warn|warning)
-      echo "Warning:        ${OUTPUT}"
-      ;;
-    execute|executing)
-      echo "Executing:      ${OUTPUT}"
-      ;;
-    command)
-      echo "Command:        ${OUTPUT}"
-      ;;
-    info|information)
-      echo "Information:    ${OUTPUT}"
-      ;;
-    set|setting)
-      echo "Setting:        ${OUTPUT}"
-      ;;
-    check|checking)
-      echo "Checking:       ${OUTPUT}"
-      ;;
-    save|saving)
-      echo "Saving:         ${OUTPUT}"
-      ;;
-    replace|replacing)
-      echo "Replacing:      ${OUTPUT}"
-      ;;
-    restart|restarting)
-      echo "Restarting:     ${OUTPUT}"
-      ;;
-    *)
-      echo "${OUTPUT}"
-      ;;
-  esac
-}
-
 if [ "${DO_FORCE}" = "true" ]; then
   if [ -f "${LOCK_FILE}" ]; then
     execute_command "rm ${LOCK_FILE}"
@@ -409,36 +441,6 @@ verbose_message () {
       handle_output "${MESSAGE}" "info"
     else
       handle_output "${MESSAGE}" "${TYPE}"
-    fi
-  fi
-}
-
-# Execute command
-
-execute_command () {
-  COMMAND="$1"
-  OPTION="$2"
-  if [ "${DO_VERBOSE}" = "true" ] || [ "${DO_DRYRUN}" = "true" ]; then
-    handle_output "${COMMAND}" "execute"
-  fi
-  if [ "${DO_DRYRUN}" = "false" ] || [ "${OPTION}" = "run" ]; then
-    if [ "${DO_CONFIRM}" = "true" ]; then
-      RESPONSE=""
-      handle_output "${COMMAND}" "command"
-      vared -p "Execute [y/n]:  " RESPONSE
-      if [ "${RESPONSE}" = "y" ]; then
-        if [ "${DO_VERBOSE}" = "true" ]; then
-          eval "${COMMAND}"
-        else
-          eval "${COMMAND} > /dev/null 2>&1"
-        fi
-      fi
-    else
-      if [ "${DO_VERBOSE}" = "true" ]; then
-        eval "${COMMAND}"
-      else
-        eval "${COMMAND} > /dev/null 2>&1"
-      fi
     fi
   fi
 }
@@ -478,7 +480,7 @@ print_help () {
     -I|--install      Installs ${SCRIPT_NAME} as: ${HOME_DIR}/.zshrc
     -b|--build        Build sources       (default: ${DO_BUILD})
     -c|--confirm      Confirm commands    (default: ${DO_CONFIRM})
-    -C|--check.       Check for updates   (default: ${DO_UPDATE_CHECK})
+    -C|--check        Check for updates   (default: ${DO_UPDATE_CHECK})
     -d|--debug        Enable debug        (default: ${DO_DEBUG})
     -D|--default(s)   Set defaults        (default: ${DO_DEFAULTS_CHECK})
     -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
@@ -1459,7 +1461,7 @@ fi
 
 if [ "${HOLD_LOCK}" = "true" ]; then
   if [ -f "${LOCK_FILE}" ]; then
-    rm "${LOCK_FILE}"
+    execute_command "rm ${LOCK_FILE}"
   fi
 fi
 
