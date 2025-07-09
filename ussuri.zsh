@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.9.3
+# Version: 0.9.4
 #
 
 # Set some initial variables
@@ -9,6 +9,14 @@ SCRIPT_FILE="$0"
 DO_UPDATE_LIST="false"
 HOME_DIR="${HOME}"
 INIT_DIR=$( pwd )
+
+OS_NAME=$( uname -o )
+OS_REL=$( uname -r )
+OS_REL_MAJ=$( echo "${OS_REL}" | cut -f1 -d. )
+OS_REL_MIN=$( echo "${OS_REL}" | cut -f2 -d. )
+OS_REL_DOT=$( echo "${OS_REL}" | cut -f3 -d. )
+
+GO_HOME="${HOME}/go"
 
 if [ "$INIT_DIR" = "" ]; then
   INIT_DIR="${HOME_DIR}"
@@ -36,38 +44,43 @@ LOCK_FILE="${HOME_DIR}/.${SCRIPT_NAME}.lock"
 handle_output () {
   OUTPUT="$1"
   STYLE="$2"
-  case "${STYLE}" in
-    warn|warning)
-      echo "Warning:        ${OUTPUT}"
-      ;;
-    execute|executing)
-      echo "Executing:      ${OUTPUT}"
-      ;;
-    command)
-      echo "Command:        ${OUTPUT}"
-      ;;
-    info|information)
-      echo "Information:    ${OUTPUT}"
-      ;;
-    set|setting)
-      echo "Setting:        ${OUTPUT}"
-      ;;
-    check|checking)
-      echo "Checking:       ${OUTPUT}"
-      ;;
-    save|saving)
-      echo "Saving:         ${OUTPUT}"
-      ;;
-    replace|replacing)
-      echo "Replacing:      ${OUTPUT}"
-      ;;
-    restart|restarting)
-      echo "Restarting:     ${OUTPUT}"
-      ;;
-    *)
-      echo "${OUTPUT}"
-      ;;
-  esac
+  if [ "${DO_VERBOSE}" = "true" ]; then
+    case "${STYLE}" in
+      add|adding)
+        echo "Adding:         ${OUTPUT}"
+        ;;
+      warn|warning)
+        echo "Warning:        ${OUTPUT}"
+        ;;
+      execute|executing)
+        echo "Executing:      ${OUTPUT}"
+        ;;
+      command)
+        echo "Command:        ${OUTPUT}"
+        ;;
+      info|information)
+        echo "Information:    ${OUTPUT}"
+        ;;
+      set|setting)
+        echo "Setting:        ${OUTPUT}"
+        ;;
+      check|checking)
+        echo "Checking:       ${OUTPUT}"
+        ;;
+      save|saving)
+        echo "Saving:         ${OUTPUT}"
+        ;;
+      replace|replacing)
+        echo "Replacing:      ${OUTPUT}"
+        ;;
+      restart|restarting)
+        echo "Restarting:     ${OUTPUT}"
+        ;;
+      *)
+        echo "${OUTPUT}"
+        ;;
+    esac
+  fi
 }
 
 # Execute command
@@ -226,7 +239,9 @@ set_osx_app_defaults () {
   set_osx_default     "com.apple.DiskUtility"             "advanced-image-options"                      "bool"    "true"
   set_osx_default     "com.apple.addressbook"             "ABShowDebugMenu"                             "bool"    "true"
   set_osx_default     "com.apple.print.PrintingPrefs"     "Quit When Finished"                          "bool"    "true"
-  set_osx_default     "com.apple.systempreferences"       "NSQuitAlwaysKeepsWindows"                    "bool"    "false"
+  if [ "${OS_REL_MAJ}" -lt 25 ]; then
+    set_osx_default     "com.apple.systempreferences"       "NSQuitAlwaysKeepsWindows"                    "bool"    "false"
+  fi
 }
 
 # Set OSX NSGLobal defaults 
@@ -318,7 +333,6 @@ set_osx_defaults () {
 
 set_all_defaults () {
   SCRIPT_VERSION=$( grep '^# Version' < "${SCRIPT_FILE}" |  awk '{print $3}' )
-  OS_NAME=$( uname -o )
   if [[ "${OS_NAME}" =~ "Linux" ]]; then
     OS_NAME="Linux"
     LSB_ID=$( lsb_release -i -s 2> /dev/null )
@@ -640,6 +654,7 @@ exp_env () {
   PARAM="$1"
   VALUE="$2"
   if [[ ! "${(P)PARAM}" =~ "${VALUE}" ]]; then
+    handle_output "${VALUE} to ${PARAM}" "add"
     eval "export ${PARAM}=\"${(P)PARAM}:${VALUE}\""
   fi
 }
@@ -1236,6 +1251,10 @@ if [ ! "$*" = "" ]; then
         DO_FORCE="true"
         shift
         ;;
+      -g|--gopath|--gohome)
+        GO_HOME="$2"
+        shift 2
+        ;;
       -h|--help|--usage)
         DO_HELP="true"
         shift
@@ -1364,6 +1383,13 @@ if [ "${DO_VERSION}" = "true" ]; then
   exit
 fi
 
+# Set Go PATH
+
+if [ -d "$GO_HOME" ]; then
+  exp_env "PATH"    "${GO_HOME}"
+  set_env "GOPATH"  "${GO_HOME}"  
+fi
+
 # Do sudoers
 
 if [ "${DO_SUDOERS_CHECK}" = "true" ]; then
@@ -1374,7 +1400,7 @@ fi
 
 if [ "${DO_INSTALL}" = "true" ]; then
   DO_ENV_SETUP="false"
-  do_install
+  do_install "" "set"
   exit
 fi
 
