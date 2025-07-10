@@ -186,3 +186,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Improvements
 # 0.9.4: Wed  9 Jul 2025 16:18:10 AEST
 # Fixes for MacOS 25 Tahoe
+# 0.9.5: Thu 10 Jul 2025 10:08:44 AEST
+# Added option to incrementally update history and share across sessions
