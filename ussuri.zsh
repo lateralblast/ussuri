@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.9.4
+# Version: 0.9.5
 #
 
 # Set some initial variables
@@ -383,6 +383,7 @@ set_all_defaults () {
   set_env "DO_SUDOERS_CHECK"  "true"
   set_env "ZSH_THEME"         "robbyrussell"
   set_env "PLUGIN_MANAGER"    "zinit"
+  set_env "SHARE_HISTORY"     "true"
   set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
   check_dir_exists "${WORK_DIR}/files"
 }
@@ -1355,6 +1356,13 @@ if [ ! "$*" = "" ]; then
   done
 else
   set_inline_defaults
+fi
+
+# Incrementally append and hare history between sessions
+
+if [ "${SHARE_HISTORY}" = "true" ]; then
+  setopt inc_append_history
+  setopt share_history
 fi
 
 # Handle dryrun
