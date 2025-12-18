@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.9.5
+# Version: 0.9.6
 #
 
 # Set some initial variables
@@ -341,7 +341,10 @@ set_all_defaults () {
   verbose_message "Setting defaults"
   exp_env "PATH"              "/usr/local/bin"
   exp_env "PATH"              "/usr/local/sbin"
+  exp_env "PATH"              "/opt/local/bin"
+  exp_env "PATH"              "/opt/local/sbin"
   exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
+  exp_env "LD_LIBRARY_PATH"   "/opt/local/lib"
   set_env "DO_HELP"           "false"
   set_env "DO_DRYRUN"         "false"
   set_env "DO_CONFIRM"        "false"
