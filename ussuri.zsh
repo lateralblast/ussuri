@@ -9,6 +9,7 @@ SCRIPT_FILE="$0"
 DO_UPDATE_LIST="false"
 HOME_DIR="${HOME}"
 INIT_DIR=$( pwd )
+CALLER=$( basename "$*" )
 
 OS_NAME=$( uname -o )
 OS_REL=$( uname -r )
@@ -1183,329 +1184,335 @@ check_brew_config () {
   fi
 }
 
-# Handle install mode
+if [ "${CALLER}" != "X11.bin" ]; then
 
-if [[ "$*" =~ "install" ]]; then
-  DO_INSTALL="true"
-else
-  set_env "DO_INSTALL" "false"
-fi
+  # Handle install mode
 
-# Set defauts
-
-if [[ "$*" =~ "verbose" ]]; then
-  DO_VERBOSE="true"
-else
-  set_env "DO_VERBOSE" "false"
-fi
-
-set_defaults
-
-# If given no command arguments run as a normal login script
-# Otherwise handle commandline argument
-
-if [ ! "$*" = "" ]; then
-  while test $# -gt 0; do
-    case $1 in
-      -A|--doall)
-        DO_BUILD="true"
-        DO_DEFAULTS_CHECK="true"
-        DO_FONTS_CHECK="true"
-        DO_ZSH_THEME="true"
-        DO_ZINIT_CHECK="true"
-        DO_P10K_CHECK="true"
-        DO_RBENV_CHECK="true"
-        DO_PYENV_CHECK="true"
-        DO_PACKAGE_CHECK="true"
-        DO_FONTS_CHECK="true"
-        DO_POSH_CHECK="true"
-        DO_ENV_SETUP="true"
-        shift
-        ;;
-      -b|--build|--compile)
-        DO_BUILD="true"
-        shift
-        ;;
-      -c|--confirm)
-        DO_CONFIRM="true"
-        shift
-        ;;
-      -C|--check)
-        DO_VERSION_CHECK="true"
-        shift
-        ;;
-      -d|--debug)
-        DO_DEBUG="true"
-        shift
-        ;;
-      -D|--default|--defaults)
-        DO_DEFAULTS_CHECK="true"
-        shift
-        ;;
-      -e|--changes|--changelog)
-        print_changelog
-        shift
-        exit
-        ;;
-      -f|--font|--fonts)
-        DO_FONTS_CHECK="true"
-        shift
-        ;;
-      -F|--force)
-        DO_FORCE="true"
-        shift
-        ;;
-      -g|--gopath|--gohome)
-        GO_HOME="$2"
-        shift 2
-        ;;
-      -h|--help|--usage)
-        DO_HELP="true"
-        shift
-        ;;
-      -i|--inline)
-        set_inline_defaults
-        shift
-        ;;
-      -I|--install)
-        DO_INSTALL="true"
-        shift
-        ;;
-      -l|--location|--startdir)
-        START_DIR="$2"
-        shift 2
-        ;;
-      -n|--nothene)
-        DO_ZSH_THEME="false"
-        shift
-        ;;
-      -m|--manager|--plugin)
-        PLUGIN_MANAGER="$2"
-        shift 2
-        ;;
-      -N|--noenv)
-        DO_ENV_SETUP="false"
-        shift
-        ;;
-      -o|--ohmyposh|--posh)
-        DO_FONTS_CHECK="true"
-        DO_POSH_CHECK="true"
-        shift
-        ;;
-      -O|--ohmyzsh|--zosh)
-        DO_FONTS_CHECK="true"
-        DO_ZOSH_CHECK="true"
-        shift
-        ;;
-      -P|--package|--packages)
-        DO_PACKAGE_CHECK="true"
-        shift
-        ;;
-      -p|--pyenv)
-        DO_BUILD="true"
-        DO_PYENV_CHECK="true"
-        INSTALL_PYENV="true"
-        DO_ENV_SETUP="true"
-        shift
-        ;;
-      -r|--rbenv)
-        DO_BUILD="true"
-        DO_RBENV_CHECK="true"
-        INSTALL_RBENV="true"
-        DO_ENV_SETUP="true"
-        shift
-        ;;
-      -s|--sudoers)
-        DO_SUDOERS_CHECK="true"
-        shift
-        ;;
-      -S|--sudoersentry)
-        SUDOERS_ENTRY="$2"
-        shift 2
-        ;;
-      -t|--test|--dryrun)
-        DO_DRYRUN="true"
-        shift
-        ;;
-      -T|--p10k)
-        DO_P10K_CHECK="true"
-        shift
-        ;;
-      -U|--update)
-        DO_UPDATE_FUNCT="true"
-        shift
-        ;;
-      -v|--verbose)
-        DO_VERBOSE="true"
-        shift
-        ;;
-      -V|--version)
-        DO_VERSION="true"
-        shift
-        ;;
-      -z|--zinit)
-        DO_ZINIT_CHECK="true"
-        shift
-        ;;
-      -Z|--zshtheme)
-        ZSH_THEME="$2"
-        shift 2
-        ;;
-      *)
-        print_help
-        exit
-        ;;
-    esac
-  done
-else
-  set_inline_defaults
-fi
-
-# Incrementally append and hare history between sessions
-
-if [ "${SHARE_HISTORY}" = "true" ]; then
-  setopt inc_append_history
-  setopt share_history
-fi
-
-# Handle dryrun
-
-if [ "${DO_DRYRUN}" = "true" ]; then
-  handle_output "Running without executing commands" "info"
-fi
-
-# Set debug
-
-if [ "${DO_DEBUG}" = "true" ]; then
-  set -x
-fi
-
-# Print help
-
-if [ "${DO_HELP}" = "true" ]; then
-  print_help
-  exit
-fi
-
-# Print version
-
-if [ "${DO_VERSION}" = "true" ]; then
-  echo "${SCRIPT_VERSION}"
-  exit
-fi
-
-# Set Go PATH
-
-if [ -d "$GO_HOME" ]; then
-  exp_env "PATH"    "${GO_HOME}"
-  set_env "GOPATH"  "${GO_HOME}"  
-fi
-
-# Do sudoers
-
-if [ "${DO_SUDOERS_CHECK}" = "true" ]; then
-  check_sudoers_config
-fi
-
-# Do install
-
-if [ "${DO_INSTALL}" = "true" ]; then
-  DO_ENV_SETUP="false"
-  do_install "" "set"
-  exit
-fi
-
-# Do check defaults
-
-if [ "${DO_DEFAULTS_CHECK}" = "true" ]; then
-  check_defaults
-fi
-
-# Do check for updates
-
-if [ "${DO_UPDATE_CHECK}" = "true" ] || [ "${DO_VERSION}_CHECK" = "true" ]; then
-  check_for_update
-  if [ "${DO_UPDATE_CHECK}" = "true" ]; then
-    update_script
+  if [[ "$*" =~ "install" ]]; then
+    DO_INSTALL="true"
+  else
+    set_env "DO_INSTALL" "false"
   fi
-  exit
-fi
 
-# Handle brew config
-if [ "${OS_NAME}" = "Darwin" ]; then
-  if "${DO_BREW_CHECK}" = "true" ] ; then
-    check_brew_config
+  # Set defauts
+
+  if [[ "$*" =~ "verbose" ]]; then
+    DO_VERBOSE="true"
+  else
+    set_env "DO_VERBOSE" "false"
   fi
-fi
 
-# Do package check
+  set_defaults
 
-if [ "${DO_PACKAGE_CHECK}" ]; then
-  check_package_config
-fi
+  # If given no command arguments run as a normal login script
+  # Otherwise handle commandline argument
 
-# Do font(s) check
-
-if [ "${DO_FONTS_CHECK}" = "true" ]; then
-  check_fonts_config
-fi
-
-if [ "${DO_POSH_CHECK}" = "true" ]; then
-  check_posh_config
-fi
-
-# Do zinit checks
-
-if [ "${DO_ZINIT_CHECK}" = "true" ]; then
-  check_zinit_config
-fi
-
-# Do pyenv checks
-
-if [ "${DO_PYENV_CHECK}" = "true" ]; then
-  check_pyenv_config
-fi
-
-# Do rbenv checks
-
-if [ "${DO_RBENV_CHECK}" = "true" ]; then
-  check_rbenv_config
-fi
-
-# Do Powerlevel10k config
-
-if [ "${DO_P10K_CHECK}" = "true" ]; then
-  check_p10k_config
-fi
-
-# Handle zsh theme
-
-if [ "${DO_ZSH_THEME}" = "false" ]; then
-  ZSH_THEME=""
-fi
-
-if [ ! "${START_DIR}" = "none" ] && [ ! "${START_DIR}" = "" ]; then
-  if [ -d "${START_DIR}" ]; then
-    cd "${START_DIR}" || return
+  if [ ! "$*" = "" ]; then
+    while test $# -gt 0; do
+      case $1 in
+        -A|--doall)
+          DO_BUILD="true"
+          DO_DEFAULTS_CHECK="true"
+          DO_FONTS_CHECK="true"
+          DO_ZSH_THEME="true"
+          DO_ZINIT_CHECK="true"
+          DO_P10K_CHECK="true"
+          DO_RBENV_CHECK="true"
+          DO_PYENV_CHECK="true"
+          DO_PACKAGE_CHECK="true"
+          DO_FONTS_CHECK="true"
+          DO_POSH_CHECK="true"
+          DO_ENV_SETUP="true"
+          shift
+          ;;
+        -b|--build|--compile)
+          DO_BUILD="true"
+          shift
+          ;;
+        -c|--confirm)
+          DO_CONFIRM="true"
+          shift
+          ;;
+        -C|--check)
+          DO_VERSION_CHECK="true"
+          shift
+          ;;
+        -d|--debug)
+          DO_DEBUG="true"
+          shift
+          ;;
+        -D|--default|--defaults)
+          DO_DEFAULTS_CHECK="true"
+          shift
+          ;;
+        -e|--changes|--changelog)
+          print_changelog
+          shift
+          exit
+          ;;
+        -f|--font|--fonts)
+          DO_FONTS_CHECK="true"
+          shift
+          ;;
+        -F|--force)
+          DO_FORCE="true"
+          shift
+          ;;
+        -g|--gopath|--gohome)
+          GO_HOME="$2"
+          shift 2
+          ;;
+        -h|--help|--usage)
+          DO_HELP="true"
+          shift
+          ;;
+        -i|--inline)
+          set_inline_defaults
+          shift
+          ;;
+        -I|--install)
+          DO_INSTALL="true"
+          shift
+          ;;
+        -l|--location|--startdir)
+          START_DIR="$2"
+          shift 2
+          ;;
+        -n|--nothene)
+          DO_ZSH_THEME="false"
+          shift
+          ;;
+        -m|--manager|--plugin)
+          PLUGIN_MANAGER="$2"
+          shift 2
+          ;;
+        -N|--noenv)
+          DO_ENV_SETUP="false"
+          shift
+          ;;
+        -o|--ohmyposh|--posh)
+          DO_FONTS_CHECK="true"
+          DO_POSH_CHECK="true"
+          shift
+          ;;
+        -O|--ohmyzsh|--zosh)
+          DO_FONTS_CHECK="true"
+          DO_ZOSH_CHECK="true"
+          shift
+          ;;
+        -P|--package|--packages)
+          DO_PACKAGE_CHECK="true"
+          shift
+          ;;
+        -p|--pyenv)
+          DO_BUILD="true"
+          DO_PYENV_CHECK="true"
+          INSTALL_PYENV="true"
+          DO_ENV_SETUP="true"
+          shift
+          ;;
+        -r|--rbenv)
+          DO_BUILD="true"
+          DO_RBENV_CHECK="true"
+          INSTALL_RBENV="true"
+          DO_ENV_SETUP="true"
+          shift
+          ;;
+        -s|--sudoers)
+          DO_SUDOERS_CHECK="true"
+          shift
+          ;;
+        -S|--sudoersentry)
+          SUDOERS_ENTRY="$2"
+          shift 2
+          ;;
+        -t|--test|--dryrun)
+          DO_DRYRUN="true"
+          shift
+          ;;
+        -T|--p10k)
+          DO_P10K_CHECK="true"
+          shift
+          ;;
+        -U|--update)
+          DO_UPDATE_FUNCT="true"
+          shift
+          ;;
+        -v|--verbose)
+          DO_VERBOSE="true"
+          shift
+          ;;
+        -V|--version)
+          DO_VERSION="true"
+          shift
+          ;;
+        -z|--zinit)
+          DO_ZINIT_CHECK="true"
+          shift
+          ;;
+        -Z|--zshtheme)
+          ZSH_THEME="$2"
+          shift 2
+          ;;
+        *)
+          print_help
+          exit
+          ;;
+      esac
+    done
+  else
+    set_inline_defaults
   fi
-fi
 
-if [ "${DO_UPDATE_LIST}" = "true" ]; then
-  update_package_list
-fi
+  # Incrementally append and hare history between sessions
 
-# Remove lock file
-
-if [ "${HOLD_LOCK}" = "true" ]; then
-  if [ -f "${LOCK_FILE}" ]; then
-    execute_command "rm ${LOCK_FILE}"
+  if [ "${SHARE_HISTORY}" = "true" ]; then
+    setopt inc_append_history
+    setopt share_history
   fi
-fi
 
-# Change to start directory
+  # Handle dryrun
 
-if [ "${START_DIR}" = "none" ] || [ "${START_DIR}" = "" ]; then
-  cd "${INIT_DIR}"
-else
-  cd "${START_DIR}"
+  if [ "${DO_DRYRUN}" = "true" ]; then
+    handle_output "Running without executing commands" "info"
+  fi
+
+  # Set debug
+
+  if [ "${DO_DEBUG}" = "true" ]; then
+    set -x
+  fi
+
+  # Print help
+
+  if [ "${DO_HELP}" = "true" ]; then
+    print_help
+    exit
+  fi
+
+  # Print version
+
+  if [ "${DO_VERSION}" = "true" ]; then
+    echo "${SCRIPT_VERSION}"
+    exit
+  fi
+
+  # Set Go PATH
+
+  if [ -d "$GO_HOME" ]; then
+    exp_env "PATH"    "${GO_HOME}"
+    set_env "GOPATH"  "${GO_HOME}"  
+  fi
+
+  # Do sudoers
+
+  if [ "${DO_SUDOERS_CHECK}" = "true" ]; then
+    check_sudoers_config
+  fi
+
+  # Do install
+
+  if [ "${DO_INSTALL}" = "true" ]; then
+    DO_ENV_SETUP="false"
+    do_install "" "set"
+    exit
+  fi
+
+  # Do check defaults
+
+  if [ "${DO_DEFAULTS_CHECK}" = "true" ]; then
+    check_defaults
+  fi
+
+  # Do check for updates
+
+  if [ "${DO_UPDATE_CHECK}" = "true" ] || [ "${DO_VERSION}_CHECK" = "true" ]; then
+    check_for_update
+    if [ "${DO_UPDATE_CHECK}" = "true" ]; then
+      update_script
+    fi
+    exit
+  fi
+
+  # Handle brew config
+
+  if [ "${OS_NAME}" = "Darwin" ]; then
+    if "${DO_BREW_CHECK}" = "true" ] ; then
+      check_brew_config
+    fi
+  fi
+
+  # Do package check
+
+  if [ "${DO_PACKAGE_CHECK}" ]; then
+    check_package_config
+  fi
+
+  # Do font(s) check
+
+  if [ "${DO_FONTS_CHECK}" = "true" ]; then
+    check_fonts_config
+  fi
+
+  if [ "${DO_POSH_CHECK}" = "true" ]; then
+    check_posh_config
+  fi
+
+  # Do zinit checks
+
+  if [ "${DO_ZINIT_CHECK}" = "true" ]; then
+    check_zinit_config
+  fi
+
+  # Do pyenv checks
+
+  if [ "${DO_PYENV_CHECK}" = "true" ]; then
+    check_pyenv_config
+  fi
+
+  # Do rbenv checks
+
+  if [ "${DO_RBENV_CHECK}" = "true" ]; then
+    check_rbenv_config
+  fi
+
+  # Do Powerlevel10k config
+
+  if [ "${DO_P10K_CHECK}" = "true" ]; then
+    check_p10k_config
+  fi
+
+  # Handle zsh theme
+
+  if [ "${DO_ZSH_THEME}" = "false" ]; then
+    ZSH_THEME=""
+  fi
+
+  if [ ! "${START_DIR}" = "none" ] && [ ! "${START_DIR}" = "" ]; then
+    if [ -d "${START_DIR}" ]; then
+      cd "${START_DIR}" || return
+    fi
+  fi
+
+  # Update package list
+
+  if [ "${DO_UPDATE_LIST}" = "true" ]; then
+    update_package_list
+  fi
+
+  # Remove lock file
+
+  if [ "${HOLD_LOCK}" = "true" ]; then
+    if [ -f "${LOCK_FILE}" ]; then
+      execute_command "rm ${LOCK_FILE}"
+    fi
+  fi
+
+  # Change to start directory
+
+  if [ "${START_DIR}" = "none" ] || [ "${START_DIR}" = "" ]; then
+    cd "${INIT_DIR}"
+  else
+    cd "${START_DIR}"
+  fi
 fi
