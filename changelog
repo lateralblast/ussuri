@@ -190,3 +190,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added option to incrementally update history and share across sessions
 # 0.9.6: Sun 18 Dec 2025 21:14:54 AEDT
 # Added /opt/local to PATH and LD_LIBRARY_PATH
+# 0.9.7: Wed 14 May 2026 16:08:06 AEST
+# Added check to see if being called from XQuartz
