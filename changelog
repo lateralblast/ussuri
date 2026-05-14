@@ -192,3 +192,13 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added /opt/local to PATH and LD_LIBRARY_PATH
 # 0.9.7: Wed 14 May 2026 16:08:06 AEST
 # Added check to see if being called from XQuartz
+# 0.9.8: Thu 15 May 2026 16:25:01 AEST
+# Additional fixes for XQuartz check
+# 0.9.9: Thu 14 May 2026 16:59:48 AEST
+# Added pkgconfig check
+# 1.0.0: Thu 14 May 2026 17:21:17 AEST
+# Added CPPFLAGS check
+# 1.0.1: Thu 14 May 2026 17:22:17 AEST
+# Added LDFLAGS check
+# 1.0.2: Thu 14 May 2026 17:33:24 AEST
+# Improved environment updates

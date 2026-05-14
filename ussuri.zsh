@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 0.9.6
+# Version: 1.0.2
 #
 
 # Set some initial variables
@@ -10,25 +10,28 @@ DO_UPDATE_LIST="false"
 HOME_DIR="${HOME}"
 INIT_DIR=$( pwd )
 CALLER=$( basename "$*" )
+MY_ID=$( id -u )
 
-OS_NAME=$( uname -o )
-OS_REL=$( uname -r )
-OS_REL_MAJ=$( echo "${OS_REL}" | cut -f1 -d. )
-OS_REL_MIN=$( echo "${OS_REL}" | cut -f2 -d. )
-OS_REL_DOT=$( echo "${OS_REL}" | cut -f3 -d. )
+if [ "${CALLER}" != "X11.bin" ]; then
+  OS_NAME=$( uname -o )
+  OS_REL=$( uname -r )
+  OS_REL_MAJ=$( echo "${OS_REL}" | cut -f1 -d. )
+  OS_REL_MIN=$( echo "${OS_REL}" | cut -f2 -d. )
+  OS_REL_DOT=$( echo "${OS_REL}" | cut -f3 -d. )
 
-GO_HOME="${HOME}/go"
+  GO_HOME="${HOME}/go"
 
-if [ "$INIT_DIR" = "" ]; then
-  INIT_DIR="${HOME_DIR}"
-fi
+  if [ "$INIT_DIR" = "" ]; then
+    INIT_DIR="${HOME_DIR}"
+  fi
 
-if [ "${SCRIPT_FILE}" = "-zsh" ] || [ "${SCRIPT_FILE}" = "-/bin/zsh" ] || [ "${SCRIPT_FILE}" = "zsh" ]; then
-  SCRIPT_FILE="${HOME_DIR}/.zshrc"
-else
-  SCRIPT_DIR=$( dirname "${SCRIPT_FILE}" )
-  if [ "${SCRIPT_DIR}" = "." ]; then
-    SCRIPT_DIR=$( pwd )
+  if [ "${SCRIPT_FILE}" = "-zsh" ] || [ "${SCRIPT_FILE}" = "-/bin/zsh" ] || [ "${SCRIPT_FILE}" = "zsh" ]; then
+    SCRIPT_FILE="${HOME_DIR}/.zshrc"
+  else
+    SCRIPT_DIR=$( dirname "${SCRIPT_FILE}" )
+    if [ "${SCRIPT_DIR}" = "." ]; then
+      SCRIPT_DIR=$( pwd )
+    fi
   fi
 fi
 
@@ -339,100 +342,105 @@ set_all_defaults () {
     LSB_ID=$( lsb_release -i -s 2> /dev/null )
   fi
   DATE_SUFFIX=$( date +%d_%m_%Y_%H_%M_%S )
-  verbose_message "Setting defaults"
-  exp_env "PATH"              "/usr/local/bin"
-  exp_env "PATH"              "/usr/local/sbin"
-  exp_env "PATH"              "/opt/local/bin"
-  exp_env "PATH"              "/opt/local/sbin"
-  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
-  exp_env "LD_LIBRARY_PATH"   "/opt/local/lib"
-  set_env "DO_HELP"           "false"
-  set_env "DO_DRYRUN"         "false"
-  set_env "DO_CONFIRM"        "false"
-  set_env "DO_DEBUG"          "false"
-  set_env "DO_BUILD"          "false"
-  set_env "DO_FORCE"          "false"
-  set_env "DO_PLUGINS"        "true"
-  set_env "ZINIT_FILE"        "${WORK_DIR}/files/zinit/zinit.zsh"
-  set_env "INSTALL_ZINIT"     "true"
-  set_env "INSTALL_RBENV"     "true"
-  set_env "INSTALL_PYENV"     "true"
-  set_env "INSTALL_POSH"      "true"
-  set_env "INSTALL_OZSH"      "false"
-  set_env "INSTALL_FONTS"     "true"
-  set_env "INSTALL_P10K"      "true"
-  set_env "ZINIT_HOME"        "${HOME_DIR}/.zinit"
-  set_env "RBENV_HOME"        "${HOME_DIR}/.rbenv"
-  set_env "PYENV_HOME"        "${HOME_DIR}/.pyenv"
-  set_env "POSH_HOME"         "${HOME_DIR}/.oh-my-posh"
-  set_env "ZOSH_HOME"         "${HOME_DIR}/.oh-my-zsh"
-  set_env "P10K_INIT"         "${HOME_DIR}/.p10k.zsh"
-  set_env "SOURCE_P10K_INIT"  "${WORK_DIR}/files/p10k/p10k.zsh"
-  set_env "P10K_HOME"         "${HOME_DIR}/.powerlevel10k"
-  set_env "P10K_THEME"        "${P10K_HOME}/powerlevel10k.zsh-theme"
-  set_env "DO_VERSION_CHECK"  "false"
-  set_env "DO_DEFAULTS_CHECK" "false"
-  set_env "DO_PACKAGE_CHECK"  "false"
-  set_env "DO_UPDATE_CHECK"   "false"
-  set_env "DO_UPDATE_FUNCT"   "false"
-  set_env "DO_PYENV_CHECK"    "false"
-  set_env "DO_RBENV_CHECK"    "false"
-  set_env "DO_ZINIT_CHECK"    "false"
-  set_env "DO_FONTS_CHECK"    "false"
-  set_env "DO_POSH_CHECK"     "false"
-  set_env "DO_P10K_CHECK"     "false"
-  set_env "DO_ZOSH_CHECK"     "false"
-  set_env "DO_ENV_SETUP"      "true"
-  set_env "DO_ZSH_THEME"      "true"
-  set_env "DO_SUDOERS_CHECK"  "true"
-  set_env "ZSH_THEME"         "robbyrussell"
-  set_env "PLUGIN_MANAGER"    "zinit"
-  set_env "SHARE_HISTORY"     "true"
-  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
-  check_dir_exists "${WORK_DIR}/files"
+  verbose_message               "Setting defaults"
+  exp_env "PATH"                "/usr/local/bin"
+  exp_env "PATH"                "/usr/local/sbin"
+  exp_env "PATH"                "/opt/local/bin"
+  exp_env "PATH"                "/opt/local/sbin"
+  exp_env "LD_LIBRARY_PATH"     "/usr/local/lib"
+  set_env "DO_HELP"             "false"
+  set_env "DO_DRYRUN"           "false"
+  set_env "DO_CONFIRM"          "false"
+  set_env "DO_DEBUG"            "false"
+  set_env "DO_BUILD"            "false"
+  set_env "DO_FORCE"            "false"
+  set_env "DO_PLUGINS"          "true"
+  set_env "ZINIT_FILE"          "${WORK_DIR}/files/zinit/zinit.zsh"
+  set_env "INSTALL_ZINIT"       "true"
+  set_env "INSTALL_RBENV"       "true"
+  set_env "INSTALL_PYENV"       "true"
+  set_env "INSTALL_POSH"        "true"
+  set_env "INSTALL_OZSH"        "false"
+  set_env "INSTALL_FONTS"       "true"
+  set_env "INSTALL_P10K"        "true"
+  set_env "ZINIT_HOME"          "${HOME_DIR}/.zinit"
+  set_env "RBENV_HOME"          "${HOME_DIR}/.rbenv"
+  set_env "PYENV_HOME"          "${HOME_DIR}/.pyenv"
+  set_env "POSH_HOME"           "${HOME_DIR}/.oh-my-posh"
+  set_env "ZOSH_HOME"           "${HOME_DIR}/.oh-my-zsh"
+  set_env "P10K_INIT"           "${HOME_DIR}/.p10k.zsh"
+  set_env "SOURCE_P10K_INIT"    "${WORK_DIR}/files/p10k/p10k.zsh"
+  set_env "P10K_HOME"           "${HOME_DIR}/.powerlevel10k"
+  set_env "P10K_THEME"          "${P10K_HOME}/powerlevel10k.zsh-theme"
+  set_env "DO_VERSION_CHECK"    "false"
+  set_env "DO_DEFAULTS_CHECK"   "false"
+  set_env "DO_PACKAGE_CHECK"    "false"
+  set_env "DO_UPDATE_CHECK"     "false"
+  set_env "DO_UPDATE_FUNCT"     "false"
+  set_env "DO_PYENV_CHECK"      "false"
+  set_env "DO_RBENV_CHECK"      "false"
+  set_env "DO_ZINIT_CHECK"      "false"
+  set_env "DO_FONTS_CHECK"      "false"
+  set_env "DO_POSH_CHECK"       "false"
+  set_env "DO_P10K_CHECK"       "false"
+  set_env "DO_ZOSH_CHECK"       "false"
+  set_env "DO_ENV_SETUP"        "true"
+  set_env "DO_ZSH_THEME"        "true"
+  set_env "DO_SUDOERS_CHECK"    "true"
+  set_env "DO_PKGCONFIG_CHECK"  "true"
+  set_env "DO_CPPFLAGS_CHECK"   "true"
+  set_env "DO_LDFLAGS_CHECK"    "true"
+  set_env "ZSH_THEME"           "robbyrussell"
+  set_env "PLUGIN_MANAGER"      "zinit"
+  set_env "SHARE_HISTORY"       "true"
+  set_env "SUDOERS_ENTRY"       "ALL=(ALL) NOPASSWD:ALL"
+  check_dir_exists              "${WORK_DIR}/files"
 }
 
 # Reset all defaults (when script is run inline i.e. as a login script with no options)
 
 set_inline_defaults () {
-  verbose_message "Setting defaults"
-  exp_env "PATH"              "/usr/local/bin"
-  exp_env "PATH"              "/usr/local/sbin"
-  exp_env "LD_LIBRARY_PATH"   "/usr/local/lib"
-  set_env "WORK_DIR"          "${HOME_DIR}/.${SCRIPT_NAME}"
-  set_env "DO_HELP"           "false"
-  set_env "DO_DRYRUN"         "false"
-  set_env "DO_CONFIRM"        "false"
-  set_env "DO_DEBUG"          "false"
-  set_env "DO_BUILD"          "false"
-  set_env "DO_PLUGINS"        "true"
-  set_env "ZINIT_FILE"        "${WORK_DIR}/files/zinit/zinit.zsh"
-  set_env "INSTALL_BREW"      "true"
-  set_env "INSTALL_ZINIT"     "true"
-  set_env "INSTALL_RBENV"     "true"
-  set_env "INSTALL_PYENV"     "true"
-  set_env "INSTALL_POSH"      "true"
-  set_env "INSTALL_OZSH"      "false"
-  set_env "INSTALL_FONTS"     "true"
-  set_env "INSTALL_P10K"      "true"
-  set_env "DO_DEFAULTS_CHECK" "true"
-  set_env "DO_PACKAGE_CHECK"  "false"
-  set_env "DO_ZINIT_CHECK"    "true"
-  set_env "DO_PYENV_CHECK"    "true"
-  set_env "DO_RBENV_CHECK"    "true"
-  set_env "DO_FONTS_CHECK"    "true"
-  set_env "DO_POSH_CHECK"     "true"
-  set_env "DO_ZOSH_CHECK"     "false"
-  set_env "DO_P10K_CHECK"     "true"
-  set_env "DO_ZSH_THEME"      "true"
-  set_env "DO_VERBOSE"        "false"
-  set_env "DO_DRYRUN"         "false"
-  set_env "DO_CONFIRM"        "false"
-  set_env "DO_DEBUG"          "false"
-  set_env "DO_BUILD"          "false"
-  set_env "DO_PLUGINS"        "true"
-  set_env "DO_SUDOERS_CHECK"  "false"
-  set_env "SUDOERS_ENTRY"     "ALL=(ALL) NOPASSWD:ALL"
+  verbose_message               "Setting defaults"
+  exp_env "PATH"                "/usr/local/bin"
+  exp_env "PATH"                "/usr/local/sbin"
+  exp_env "LD_LIBRARY_PATH"     "/usr/local/lib"
+  set_env "WORK_DIR"            "${HOME_DIR}/.${SCRIPT_NAME}"
+  set_env "DO_HELP"             "false"
+  set_env "DO_DRYRUN"           "false"
+  set_env "DO_CONFIRM"          "false"
+  set_env "DO_DEBUG"            "false"
+  set_env "DO_BUILD"            "false"
+  set_env "DO_PLUGINS"          "true"
+  set_env "ZINIT_FILE"          "${WORK_DIR}/files/zinit/zinit.zsh"
+  set_env "INSTALL_BREW"        "true"
+  set_env "INSTALL_ZINIT"       "true"
+  set_env "INSTALL_RBENV"       "true"
+  set_env "INSTALL_PYENV"       "true"
+  set_env "INSTALL_POSH"        "true"
+  set_env "INSTALL_OZSH"        "false"
+  set_env "INSTALL_FONTS"       "true"
+  set_env "INSTALL_P10K"        "true"
+  set_env "DO_DEFAULTS_CHECK"   "true"
+  set_env "DO_PACKAGE_CHECK"    "false"
+  set_env "DO_ZINIT_CHECK"      "true"
+  set_env "DO_PYENV_CHECK"      "true"
+  set_env "DO_RBENV_CHECK"      "true"
+  set_env "DO_FONTS_CHECK"      "true"
+  set_env "DO_POSH_CHECK"       "true"
+  set_env "DO_ZOSH_CHECK"       "false"
+  set_env "DO_P10K_CHECK"       "true"
+  set_env "DO_ZSH_THEME"        "true"
+  set_env "DO_VERBOSE"          "false"
+  set_env "DO_DRYRUN"           "false"
+  set_env "DO_CONFIRM"          "false"
+  set_env "DO_DEBUG"            "false"
+  set_env "DO_BUILD"            "false"
+  set_env "DO_PLUGINS"          "true"
+  set_env "DO_SUDOERS_CHECK"    "false"
+  set_env "DO_PKGCONFIG_CHECK"  "true"
+  set_env "DO_CPPFLAGS_CHECK"   "true"
+  set_env "DO_LDFLAGS_CHECK"    "true"
+  set_env "SUDOERS_ENTRY"       "ALL=(ALL) NOPASSWD:ALL"
 }
 
 # Check directory exists
@@ -540,6 +548,9 @@ cat <<-INLINE
     Do oh-my-zsh check:   ${DO_ZOSH_CHECK}
     Do verbose mode       ${DO_VERBOSE}
     Do sudoers check:     ${DO_SUDOERS_CHECK}
+    Do PKGCONFIG check:   ${DO_PKGCONFIG_CHECK}
+    Do CPPFLAGS check:    ${DO_CPPFLAGS_CHECK}
+    Do LDFLAGS check:     ${DO_LDFLAGS_CHECK}
     Plugin Manager:       ${PLUGIN_MANAGER}
     Start Directory:      ${START_DIR}
 
@@ -660,7 +671,27 @@ exp_env () {
   VALUE="$2"
   if [[ ! "${(P)PARAM}" =~ "${VALUE}" ]]; then
     handle_output "${VALUE} to ${PARAM}" "add"
-    eval "export ${PARAM}=\"${(P)PARAM}:${VALUE}\""
+    if [ "${PARAM}" = "LDFLAGS" ]; then
+      if [ "${(P)PARAM}" = "" ]; then
+        eval "export ${PARAM}=\"-L ${VALUE}\""
+      else
+        eval "export ${PARAM}=\"${(P)PARAM} -L ${VALUE}\""
+      fi
+    else
+      if [ "${PARAM}" = "CPPFLAGS" ]; then
+        if [ "${(P)PARAM}" = "" ]; then
+          eval "export ${PARAM}=\"-I ${VALUE}\""
+        else
+          eval "export ${PARAM}=\"${(P)PARAM} -I ${VALUE}\""
+        fi
+      else
+        if [ "${(P)PARAM}" = "" ]; then
+          eval "export ${PARAM}=\"${VALUE}\""
+        else
+          eval "export ${PARAM}=\"${(P)PARAM}:${VALUE}\""
+        fi
+      fi
+    fi
   fi
 }
 
@@ -1176,6 +1207,42 @@ check_package_config () {
   fi
 }
 
+# Check CPPFLAGS
+
+check_cppflags_config () {
+  for CHECK_DIR in "/usr" "/usr/local" "/usr/local/share" "/opt/local" \
+    "/opt/local/share" "/opt/homebrew" "/usr/local/homebrew"; do
+    if [ -d "${CHECK_DIR}/include" ]; then
+      exp_env "CPPFLAGS" "${CHECK_DIR}/include" 
+    fi
+  done
+}
+
+# Check LDFAGS
+
+check_ldflags_config () {
+  for CHECK_DIR in "/usr" "/usr/local" "/usr/local/share" "/opt/local" \
+    "/opt/local/share" "/opt/homebrew" "/usr/local/homebrew"; do
+    if [ -d "${CHECK_DIR}/lib" ]; then
+      exp_env "LDFLAGS" "${CHECK_DIR}/lib" 
+    fi
+  done
+}
+
+# Check PKGCONFIG
+
+check_pkgconfig_config () {
+  for CHECK_DIR in "/usr" "/usr/local" "/usr/local/share" "/opt/local" \
+    "/opt/local/share" "/opt/homebrew" "/usr/local/homebrew"; do
+    if [ -d "${CHECK_DIR}/pkgconfig" ]; then
+      exp_env "PKG_CONFIG_PATH" "${CHECK_DIR}/pkgconfig" 
+    fi
+    if [ -d "${CHECK_DIR}/lib/pkgconfig" ]; then
+      exp_env "PKG_CONFIG_PATH" "${CHECK_DIR}/lib/pkgconfig" 
+    fi
+  done
+}
+
 # Check brew config
 
 check_brew_config () {
@@ -1508,11 +1575,35 @@ if [ "${CALLER}" != "X11.bin" ]; then
     fi
   fi
 
+  # Do LDFLAGS check
+
+  if [ "${DO_LDFLAGS_CHECK}" = "true" ]; then
+    check_ldflags_config
+  fi
+
+  # Do PKGCONFIG check
+
+  if [ "${DO_PKGCONFIG_CHECK}" = "true" ]; then
+    check_pkgconfig_config
+  fi
+
+  # Do CPPFLAGS check
+
+  if [ "${DO_CPPFLAGS_CHECK}" = "true" ]; then
+    check_cppflags_config
+  fi
+
   # Change to start directory
 
   if [ "${START_DIR}" = "none" ] || [ "${START_DIR}" = "" ]; then
     cd "${INIT_DIR}"
   else
     cd "${START_DIR}"
+  fi
+else
+  if [ "${MY_ID}" = "0" ]; then
+    export PS1="%n@%m %1#:"
+  else
+    export PS1="%n@%m %1~:"
   fi
 fi
