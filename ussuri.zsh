@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.0.2
+# Version: 1.0.3
 #
 
 # Set some initial variables
@@ -9,7 +9,7 @@ SCRIPT_FILE="$0"
 DO_UPDATE_LIST="false"
 HOME_DIR="${HOME}"
 INIT_DIR=$( pwd )
-CALLER=$( basename "$*" )
+CALLER="${0}"
 MY_ID=$( id -u )
 
 if [ "${CALLER}" != "X11.bin" ]; then
