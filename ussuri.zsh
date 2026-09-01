@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.0.3
+# Version: 1.0.4
 #
 
 # Set some initial variables
@@ -10,9 +10,12 @@ DO_UPDATE_LIST="false"
 HOME_DIR="${HOME}"
 INIT_DIR=$( pwd )
 CALLER="${0}"
-MY_ID=$( id -u )
+MY_USERID=$( id -u )
+MY_USERNAME=$( whoami )
+HOSTNAME=$( hostname )
+DATE=$( date )
 
-if [ "${CALLER}" != "X11.bin" ]; then
+if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   OS_NAME=$( uname -o )
   OS_REL=$( uname -r )
   OS_REL_MAJ=$( echo "${OS_REL}" | cut -f1 -d. )
@@ -34,6 +37,8 @@ if [ "${CALLER}" != "X11.bin" ]; then
     fi
   fi
 fi
+
+echo "Instantiated by ${CALLER} on ${DATE} by ${MY_USERNAME}@${HOSTNAME}"
 
 SCRIPT_NAME="ussuri"
 START_DIR="none"
@@ -1601,7 +1606,7 @@ if [ "${CALLER}" != "X11.bin" ]; then
     cd "${START_DIR}"
   fi
 else
-  if [ "${MY_ID}" = "0" ]; then
+  if [ "${MY_USERID}" = "0" ]; then
     export PS1="%n@%m %1#:"
   else
     export PS1="%n@%m %1~:"
