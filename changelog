@@ -204,3 +204,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Improved environment updates
 # 1.0.3: Fri Jul 24 10:09:51 AM AEST 2026
 # Improved determination of what is calling shell
+# 1.0.4: Mon 1 Sep 15:31:59 PM AEST 2026
+# Added instantiation information
