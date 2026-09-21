@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.0.4
+# Version: 1.0.10
 #
 
 # Set some initial variables
@@ -381,7 +381,6 @@ set_all_defaults () {
   set_env "DO_DEFAULTS_CHECK"   "false"
   set_env "DO_PACKAGE_CHECK"    "false"
   set_env "DO_UPDATE_CHECK"     "false"
-  set_env "DO_UPDATE_FUNCT"     "false"
   set_env "DO_PYENV_CHECK"      "false"
   set_env "DO_RBENV_CHECK"      "false"
   set_env "DO_ZINIT_CHECK"      "false"
@@ -517,6 +516,7 @@ print_help () {
     -D|--default(s)   Set defaults        (default: ${DO_DEFAULTS_CHECK})
     -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
     -f|--force        Force action        (default: ${DO_FORCE})
+    -l|--location     Set start dir       (default: ${START_DIR})
     -m|--manager      Plugin manager      (default: ${PLUGIN_MANAGER})
     -n|--notheme      No zsh theme        (default: ${DO_ZSH_THEME})
     -N|--noenv        Ignore environment  (default: ${DO_ENV_SETUP})
@@ -525,7 +525,6 @@ print_help () {
     -p|--pyenv        Do pyenv check      (default: ${DO_PYENV_CHECK})
     -P|--package(s)   Do packages check   (default: ${DO_PACKAGE_CHECK})
     -r|--rbenv        Do rbenv check      (default: ${DO_RBENV_CHECK})
-    -s|--startdir     Set start dir       (default: ${START_DIR})
     -t|--dryrun       Dry run mode        (default: ${DO_DRYRUN})
     -T|--p10k         Do p10k config      (default: ${DO_P10K_CHECK})
     -U|--update       Check for updates   (default: ${DO_UPDATE_CHECK})
@@ -1172,6 +1171,40 @@ check_for_update () {
   fi
 }
 
+# Update script
+
+update_script () {
+  if [ "${HOLD_LOCK}" = "true" ]; then
+    verbose_message "Checking for updates"
+    set_env "SCRIPT_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/refs/heads/main/ussuri.zsh"
+    if command -v curl > /dev/null 2>&1; then
+      REMOTE_VERSION=$( curl -vs "${SCRIPT_URL}" 2>&1 | grep '^# Version' | awk '{ print $3 }' )
+    else
+      if command -v wget > /dev/null 2>&1; then
+        REMOTE_VERSION=$( wget -qO- "${SCRIPT_URL}" 2> /dev/null | grep '^# Version' | awk '{ print $3 }' )
+      else
+        handle_output "Neither curl nor wget found, cannot check for updates" "warn"
+        return
+      fi
+    fi
+    LOCAL_VERSION="${SCRIPT_VERSION/\./}"
+    LOCAL_VERSION="${LOCAL_VERSION/\./}"
+    echo "Local version:  ${SCRIPT_VERSION}"
+    echo "Remote version: ${REMOTE_VERSION}"
+    REMOTE_VERSION="${REMOTE_VERSION/\./}"
+    REMOTE_VERSION="${REMOTE_VERSION/\./}"
+    if [ "${LOCAL_VERSION}" -lt "${REMOTE_VERSION}" ]; then
+      handle_output "Local version is older than remote version" "info"
+    else
+      if [ "${LOCAL_VERSION}" -gt "${REMOTE_VERSION}" ]; then
+        handle_output "Local version is newer than remote version" "info"
+      else
+        handle_output "Local version is the same as remote version" "info"
+      fi
+    fi
+  fi
+}
+
 # Set defaults
 
 set_defaults () {
@@ -1350,7 +1383,7 @@ if [ "${CALLER}" != "X11.bin" ]; then
           START_DIR="$2"
           shift 2
           ;;
-        -n|--nothene)
+        -n|--notheme)
           DO_ZSH_THEME="false"
           shift
           ;;
@@ -1407,7 +1440,7 @@ if [ "${CALLER}" != "X11.bin" ]; then
           shift
           ;;
         -U|--update)
-          DO_UPDATE_FUNCT="true"
+          DO_UPDATE_CHECK="true"
           shift
           ;;
         -v|--verbose)
@@ -1498,7 +1531,7 @@ if [ "${CALLER}" != "X11.bin" ]; then
 
   # Do check for updates
 
-  if [ "${DO_UPDATE_CHECK}" = "true" ] || [ "${DO_VERSION}_CHECK" = "true" ]; then
+  if [ "${DO_UPDATE_CHECK}" = "true" ] || [ "${DO_VERSION_CHECK}" = "true" ]; then
     check_for_update
     if [ "${DO_UPDATE_CHECK}" = "true" ]; then
       update_script
@@ -1509,14 +1542,14 @@ if [ "${CALLER}" != "X11.bin" ]; then
   # Handle brew config
 
   if [ "${OS_NAME}" = "Darwin" ]; then
-    if "${DO_BREW_CHECK}" = "true" ] ; then
+    if [ "${DO_BREW_CHECK}" = "true" ]; then
       check_brew_config
     fi
   fi
 
   # Do package check
 
-  if [ "${DO_PACKAGE_CHECK}" ]; then
+  if [ "${DO_PACKAGE_CHECK}" = "true" ]; then
     check_package_config
   fi
 
