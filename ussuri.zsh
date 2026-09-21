@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.0.10
+# Version: 1.0.11
 #
 
 # Set some initial variables
@@ -125,7 +125,7 @@ execute_command () {
 LOCK_TEST=$( find ${LOCK_FILE} -mmin +10 2> /dev/null )
 if [ "${LOCK_TEST}" ]; then
   if [ -f "${LOCK_FILE}" ]; then
-    execute_command "rm ${LOCK_FILE}"
+    rm -f "${LOCK_FILE}"
   fi
   touch "${LOCK_FILE}"
   HOLD_LOCK="true"
@@ -515,7 +515,7 @@ print_help () {
     -d|--debug        Enable debug        (default: ${DO_DEBUG})
     -D|--default(s)   Set defaults        (default: ${DO_DEFAULTS_CHECK})
     -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
-    -f|--force        Force action        (default: ${DO_FORCE})
+    -F|--force        Force action        (default: ${DO_FORCE})
     -l|--location     Set start dir       (default: ${START_DIR})
     -m|--manager      Plugin manager      (default: ${PLUGIN_MANAGER})
     -n|--notheme      No zsh theme        (default: ${DO_ZSH_THEME})

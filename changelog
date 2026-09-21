@@ -218,3 +218,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Added update_script function to fetch and compare remote version via curl or wget
 # 1.0.10: Mon 21 Sep 2026 18:43:42 AEST
 # Wired up -C/--check and -U/--update flags to trigger check_for_update and update_script
+# 1.0.11: Mon 21 Sep 2026 18:48:32 AEST
+# Fixed -F/--force help text and made stale lock file removal actually execute
