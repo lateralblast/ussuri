@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.0.11
+# Version: 1.0.12
 #
 
 # Set some initial variables
@@ -516,6 +516,7 @@ print_help () {
     -D|--default(s)   Set defaults        (default: ${DO_DEFAULTS_CHECK})
     -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
     -F|--force        Force action        (default: ${DO_FORCE})
+    -g|--gopath       Set GOPATH          (default: ${GO_HOME})
     -l|--location     Set start dir       (default: ${START_DIR})
     -m|--manager      Plugin manager      (default: ${PLUGIN_MANAGER})
     -n|--notheme      No zsh theme        (default: ${DO_ZSH_THEME})
@@ -525,6 +526,8 @@ print_help () {
     -p|--pyenv        Do pyenv check      (default: ${DO_PYENV_CHECK})
     -P|--package(s)   Do packages check   (default: ${DO_PACKAGE_CHECK})
     -r|--rbenv        Do rbenv check      (default: ${DO_RBENV_CHECK})
+    -s|--sudoers      Do sudoers check    (default: ${DO_SUDOERS_CHECK})
+    -S|--sudoersentry Set sudoers entry   (default: ${SUDOERS_ENTRY})
     -t|--dryrun       Dry run mode        (default: ${DO_DRYRUN})
     -T|--p10k         Do p10k config      (default: ${DO_P10K_CHECK})
     -U|--update       Check for updates   (default: ${DO_UPDATE_CHECK})

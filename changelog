@@ -220,3 +220,5 @@ $ 0.0.5: Sat 20 Jul 2024 22:08:41 AEST
 # Wired up -C/--check and -U/--update flags to trigger check_for_update and update_script
 # 1.0.11: Mon 21 Sep 2026 18:48:32 AEST
 # Fixed -F/--force help text and made stale lock file removal actually execute
+# 1.0.12: Mon 21 Sep 2026 18:53:09 AEST
+# Added missing help entries for -g/--gopath, -s/--sudoers and -S/--sudoersentry
