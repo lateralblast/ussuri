@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.0.12
+# Version: 1.1.5
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -124,6 +124,17 @@ execute_command () {
     fi
   fi
 }
+
+# Handle force mode (must be checked before the lock file is evaluated below)
+
+if [[ "$*" =~ "force" ]]; then
+  DO_FORCE="true"
+  if [ -f "${LOCK_FILE}" ]; then
+    execute_command "rm ${LOCK_FILE}"
+  fi
+else
+  DO_FORCE="false"
+fi
 
 LOCK_TEST=$( find ${LOCK_FILE} -mmin +10 2> /dev/null )
 if [ "${LOCK_TEST}" ]; then
@@ -459,12 +470,6 @@ check_dir_exists () {
   fi
 }
 
-if [ "${DO_FORCE}" = "true" ]; then
-  if [ -f "${LOCK_FILE}" ]; then
-    execute_command "rm ${LOCK_FILE}"
-  fi
-fi
-
 # Verbose message
 
 verbose_message () {
@@ -661,12 +666,7 @@ set_osx_default () {
 set_env () {
   PARAM="$1"
   VALUE="$2"
-  if [[ "${PARAM}" =~ "VERBOSE|WORK_DIR" ]]; then
-    if [ "${(P)PARAM}" = "" ]; then
-      verbose_message "Environment parameter \"${PARAM}\" to \"${VALUE}\"" "set"
-      eval "export ${PARAM}=\"${VALUE}\""
-    fi
-  else
+  if [ "${(P)PARAM}" = "" ]; then
     verbose_message "Environment parameter \"${PARAM}\" to \"${VALUE}\"" "set"
     eval "export ${PARAM}=\"${VALUE}\""
   fi
@@ -856,8 +856,8 @@ check_posh_config () {
 # Check oh-my-zsh config
 
 check_zosh_config () {
-  if [ "$INSTALL_ZOSH" = "true" ]; then
-    verbose_message "Configuring oh-my-posh"
+  if [ "${INSTALL_OZSH}" = "true" ]; then
+    verbose_message "Configuring oh-my-zsh"
     if [ ! -d "${ZOSH_HOME}" ] && [ "${HOLD_LOCK}" = "true" ]; then
       verbose_message "Installing oh-my-zsh"
       execute_command "git clone https://github.com/ohmyzsh/ohmyzsh.git ${ZOSH_HOME}"
@@ -1026,7 +1026,7 @@ check_linux_package () {
     if [ "${OS_NAME}" = "Linux" ]; then
       if [ "${INSTALL_PKG}" = "true" ]; then
         PACKAGE_TEST=$( grep "^${PACKAGE}$" "${INSTALLED_FILE}" )
-        if [ -z "${PACKAGE}_TEST" ]; then
+        if [ -z "${PACKAGE_TEST}" ]; then
           if [ "${LSB_ID}" = "Ubuntu" ]; then
             execute_command "sudo apt install -y ${PACKAGE}"
           fi
@@ -1049,7 +1049,7 @@ check_osx_package () {
     verbose_message "Configuring OS X package \"${PACKAGE}\""
     if [ "${INSTALL_BREW}" = "true" ]; then
       PACKAGE_TEST=$( grep "^${PACKAGE}$" "${INSTALLED_FILE}" )
-      if [ -z "${PACKAGE}_TEST" ]; then
+      if [ -z "${PACKAGE_TEST}" ]; then
         verbose_message "Installing package \"${PACKAGE}\""
         if [ "${TYPE}" = "cask" ]; then
           execute_command "brew install --cask ${PACKAGE}"
@@ -1293,7 +1293,7 @@ check_brew_config () {
   fi
 }
 
-if [ "${CALLER}" != "X11.bin" ]; then
+if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Handle install mode
 
@@ -1591,6 +1591,12 @@ if [ "${CALLER}" != "X11.bin" ]; then
     check_p10k_config
   fi
 
+  # Do oh-my-zsh config
+
+  if [ "${DO_ZOSH_CHECK}" = "true" ]; then
+    check_zosh_config
+  fi
+
   # Handle zsh theme
 
   if [ "${DO_ZSH_THEME}" = "false" ]; then
@@ -1640,7 +1646,11 @@ if [ "${CALLER}" != "X11.bin" ]; then
   if [ "${START_DIR}" = "none" ] || [ "${START_DIR}" = "" ]; then
     cd "${INIT_DIR}"
   else
-    cd "${START_DIR}"
+    if [ -d "${START_DIR}" ]; then
+      cd "${START_DIR}"
+    else
+      cd "${INIT_DIR}"
+    fi
   fi
 else
   if [ "${MY_USERID}" = "0" ]; then
