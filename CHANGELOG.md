@@ -4,6 +4,42 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.5] - 2026-09-29
+
+### Fixed
+
+- Final `cd` to the start directory no longer errors when the directory doesn't exist; falls back to the initial directory like the earlier check does
+
+## [1.1.4] - 2026-09-29
+
+### Fixed
+
+- `-F/--force` now actually clears a stale lock file: the check is pre-scanned before the lock file is evaluated instead of running (with `DO_FORCE` unset) before argument parsing
+
+## [1.1.3] - 2026-09-29
+
+### Fixed
+
+- Main dispatch guard now matches the same X11/XQuartz detection used for OS detection, instead of an inconsistent exact-string comparison
+
+## [1.1.2] - 2026-09-29
+
+### Fixed
+
+- `-O/--ohmyzsh` now installs and configures oh-my-zsh: fixed `check_zosh_config`'s variable name (`INSTALL_OZSH`) and wired the function into the main dispatch
+
+## [1.1.1] - 2026-09-29
+
+### Fixed
+
+- Missing brace in the package-installed check for Linux and macOS packages so `-P/--packages` actually installs missing packages
+
+## [1.1.0] - 2026-09-29
+
+### Fixed
+
+- `set_env` no longer clobbers pre-set environment variables on every run; overrides declared before the script runs are now respected for all variables, not just `DO_VERBOSE`/`WORK_DIR`
+
 ## [1.0.12] - 2026-09-21
 
 ### Added
