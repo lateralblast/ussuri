@@ -2,6 +2,9 @@
 #
 # Version: 1.0.12
 #
+# License: CC BY-NC-SA 4.0
+# https://creativecommons.org/licenses/by-nc-sa/4.0/
+#
 
 # Set some initial variables
 
@@ -596,15 +599,13 @@ do_install () {
 # Print changelog
 
 print_changelog () {
-  CHANGE_FILE="${SCRIPT_DIR}/changelog"
-  echo ""
-  echo "Changelog:"
+  CHANGE_FILE="${SCRIPT_DIR}/CHANGELOG.md"
   echo ""
   if [ -f "$CHANGE_FILE" ]; then
-    grep "^#" "$CHANGE_FILE" | sed "s/^# //g"
+    cat "$CHANGE_FILE"
   else
-    CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/changelog"
-    curl -vs "$CHANGE_URL" 2>&1 | grep "^#" |sed "s/^# //g"
+    CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/CHANGELOG.md"
+    curl -fsSL "$CHANGE_URL" 2> /dev/null
   fi
   echo ""
 }
