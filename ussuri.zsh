@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.1.5
+# Version: 1.1.6
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -366,6 +366,8 @@ set_all_defaults () {
   exp_env "PATH"                "/usr/local/sbin"
   exp_env "PATH"                "/opt/local/bin"
   exp_env "PATH"                "/opt/local/sbin"
+  exp_env "PATH"                "${HOME}/.local/bin"
+  exp_env "PATH"                "${HOME}/.cargo/bin"
   exp_env "LD_LIBRARY_PATH"     "/usr/local/lib"
   set_env "DO_HELP"             "false"
   set_env "DO_DRYRUN"           "false"
@@ -666,7 +668,7 @@ set_osx_default () {
 set_env () {
   PARAM="$1"
   VALUE="$2"
-  if [ "${(P)PARAM}" = "" ]; then
+  if [ ! "${PARAM}" = "" ]; then
     verbose_message "Environment parameter \"${PARAM}\" to \"${VALUE}\"" "set"
     eval "export ${PARAM}=\"${VALUE}\""
   fi
@@ -1652,10 +1654,12 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       cd "${INIT_DIR}"
     fi
   fi
+fi
+
+# Set prompt
+
+if [ "${MY_USERID}" = "0" ]; then
+  export PS1="%n@%m %1#:"
 else
-  if [ "${MY_USERID}" = "0" ]; then
-    export PS1="%n@%m %1#:"
-  else
-    export PS1="%n@%m %1~:"
-  fi
+  export PS1="%n@%m %1~:"
 fi
