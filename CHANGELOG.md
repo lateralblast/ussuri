@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.6] - 2026-09-30
+
+### Changed
+
+- Set the user's cargo path in the environment
+
+### Fixed
+
+- set_env now actually sets an environment variable
+
 ## [1.1.5] - 2026-09-29
 
 ### Fixed
