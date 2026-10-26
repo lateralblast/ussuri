@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.4.7
+Current Version: 1.4.8
 
 License
 -------
@@ -218,6 +218,16 @@ is none), so it can be used in a check:
       autohide-delay                           (not set) -> 0.2
 
     2 of 105 settings differ from what ussuri would apply. Run --defaults to apply them.
+
+Transmission blocklist
+----------------------
+
+On OS X the script sets Transmission's blocklist to Bluetack's Level 1 list as served by iblocklist.com
+over HTTPS (the list Transmission itself used to ship, refreshed daily), with auto-update on. Set
+TRANSMISSION_BLOCKLIST_URL (for example in the config) to use another one. The URL is checked before it
+is written, and an unreachable one is reported and not written, so it never replaces a working setting.
+Neither list nor service is endorsed by the Transmission developers, and Level 1 blocks the address
+ranges of organisations known for anti-filesharing activity, so decide for yourself that you want it.
 
 Language managers
 -----------------
