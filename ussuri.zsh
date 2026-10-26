@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.4.7
+# Version: 1.4.8
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -499,10 +499,25 @@ set_osx_screencapture_defaults () {
   set_osx_default     "com.apple.screencapture"           "location"                                    "string"  "${SCREENSHOT_LOCATION}"
 }
 
+# Can a URL be fetched? Used before a blocklist URL is written into Transmission's settings, so a
+# dead host can't quietly replace a working one (the previous default, john.bitsurge.net, went away
+# and Transmission was left with a blocklist it had never been able to download)
+
+url_reachable () {
+  if (( $+commands[curl] )); then
+    curl -fsSIL -m 15 -o /dev/null "$1" 2> /dev/null
+  elif (( $+commands[wget] )); then
+    wget -q --spider -T 15 "$1" 2> /dev/null
+  fi
+}
+
 # Set OSX transmission defaults
 
 set_osx_transmission_defaults () {
   set_env "TORRENT_DIR" "${HOME_DIR}/Downloads/transmission"
+  # Bluetack's Level 1 list as served by iblocklist.com (what Transmission used to ship), over HTTPS.
+  # It redirects to a storage host. Not endorsed by the Transmission developers, see the README
+  set_env "TRANSMISSION_BLOCKLIST_URL" "https://list.iblocklist.com/?list=bt_level1&fileformat=p2p&archiveformat=gz"
   check_dir_exists    "${TORRENT_DIR}"
   set_osx_default     "org.m0k.transmission"              "DownloadAsk"                                 "bool"    "false"
   set_osx_default     "org.m0k.transmission"              "MagnetOpenAsk"                               "bool"    "false"
@@ -514,7 +529,17 @@ set_osx_transmission_defaults () {
   set_osx_default     "org.m0k.transmission"              "WarningDonate"                               "bool"    "false"
   set_osx_default     "org.m0k.transmission"              "WarningLegal"                                "bool"    "false"
   set_osx_default     "org.m0k.transmission"              "BlocklistNew"                                "bool"    "true"
-  set_osx_default     "org.m0k.transmission"              "BlocklistURL"                                "string"  "http://john.bitsurge.net/public/biglist.p2p.gz"
+  TRANSMISSION_WRITE_URL="true"
+  if [ ! "${DO_DRIFT}" = "true" ]; then
+    TRANSMISSION_CURRENT=$( defaults read org.m0k.transmission BlocklistURL 2> /dev/null )
+    if [ ! "${TRANSMISSION_CURRENT}" = "${TRANSMISSION_BLOCKLIST_URL}" ] && (( $+commands[curl] || $+commands[wget] )) && ! url_reachable "${TRANSMISSION_BLOCKLIST_URL}"; then
+      echo "Warning:        ${TRANSMISSION_BLOCKLIST_URL} is not reachable, leaving the Transmission blocklist URL as it is (${TRANSMISSION_CURRENT:-not set})"
+      TRANSMISSION_WRITE_URL="false"
+    fi
+  fi
+  if [ "${TRANSMISSION_WRITE_URL}" = "true" ]; then
+    set_osx_default     "org.m0k.transmission"              "BlocklistURL"                                "string"  "${TRANSMISSION_BLOCKLIST_URL}"
+  fi
   set_osx_default     "org.m0k.transmission"              "BlocklistAutoUpdate"                         "bool"    "true"
   set_osx_default     "org.m0k.transmission"              "RandomPort"                                  "bool"    "true"
 }
@@ -2185,6 +2210,7 @@ print_config_template () {
 #GO_HOME=~/go               # GOPATH
 #ZSH_THEME=robbyrussell
 #SHARE_HISTORY=true
+#TRANSMISSION_BLOCKLIST_URL=https://example.com/list.p2p.gz   # a .p2p (or .gz) blocklist for Transmission (OS X)
 
 # Components (true or false)
 #INSTALL_ZINIT=true

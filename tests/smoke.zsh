@@ -817,7 +817,9 @@ test_install_backups_are_unique () {
 test_drift () {
   new_home
   local out rc total
-  total=$( grep -c '^  set_osx_default ' "${SRC}" )
+  # The settings at the top level of their functions, plus the Transmission blocklist URL which
+  # sits inside an if (and not the one for old OS X versions, which doesn't apply here)
+  total=$(( $( grep -c '^  set_osx_default ' "${SRC}" ) + 1 ))
   # Nothing applied yet: every setting differs
   local before after
   before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
@@ -1138,6 +1140,42 @@ test_doctor_tools () {
   rm "${H}/.ussuri/config"
   out=$( run --doctor 2>&1 )
   check "and says nothing about tools you have not asked for" "$( print -r -- "${out}" | grep -c -E 'fnm|rustup|mise|uv ' )" "0"
+}
+
+test_transmission_blocklist () {
+  check "the default blocklist is HTTPS" "$( grep -c -E 'set_env +"TRANSMISSION_BLOCKLIST_URL" +"https://' "${SRC}" )" "1"
+  check "and the dead bitsurge.net list is no longer used as a URL" "$( grep -c 'bitsurge.net/public' "${SRC}" )" "0"
+  new_home; use_stateful_defaults
+  gzip -c < /dev/null > "${TMP}/blocklist.gz"
+  local db="${DEFAULTS_DB}" out
+  EXTRA_ENV=( TRANSMISSION_BLOCKLIST_URL="file://${TMP}/blocklist.gz" )
+  run --defaults > /dev/null 2>&1
+  check "a reachable blocklist URL is written" "$( grep -c "^org.m0k.transmission|BlocklistURL|file://${TMP}/blocklist.gz$" "${db}" )" "1"
+  # A dead URL must not replace what is there, and must be reported
+  new_home; use_stateful_defaults
+  print -r -- "org.m0k.transmission|BlocklistURL|https://still.working/list.gz" >> "${db}"
+  EXTRA_ENV=( TRANSMISSION_BLOCKLIST_URL="file://${TMP}/does-not-exist.gz" )
+  out=$( run --defaults 2>&1 )
+  check "an unreachable one is not written over the existing setting" "$( grep -c 'BlocklistURL|https://still.working/list.gz$' "${db}" )" "1"
+  check "and it is reported without needing --verbose" "$( print -r -- "${out}" | grep -c 'not reachable' )" "1"
+  check "the other Transmission settings are still applied" "$( grep -c '^org.m0k.transmission|BlocklistNew|1$' "${db}" )" "1"
+  # Already set: no need to go to the network at all
+  new_home; use_stateful_defaults
+  print -r -- "org.m0k.transmission|BlocklistURL|file://${TMP}/does-not-exist.gz" >> "${db}"
+  out=$( run --defaults 2>&1 )
+  check "a setting that already matches is not checked" "$( print -r -- "${out}" | grep -c 'not reachable' )" "0"
+  EXTRA_ENV=()
+  # It can be set in the config
+  new_home; use_stateful_defaults
+  print -r -- "TRANSMISSION_BLOCKLIST_URL=file://${TMP}/blocklist.gz" > "${H}/.ussuri/config"
+  run --defaults > /dev/null 2>&1
+  check "TRANSMISSION_BLOCKLIST_URL can come from the config" "$( grep -c "BlocklistURL|file://${TMP}/blocklist.gz$" "${db}" )" "1"
+  # Drift shows the old dead URL as drift to the new one
+  new_home; use_stateful_defaults
+  print -r -- "org.m0k.transmission|BlocklistURL|http://john.bitsurge.net/public/biglist.p2p.gz" >> "${db}"
+  out=$( run --drift 2>&1 )
+  check "--drift shows the old URL moving to the new one" "$( print -r -- "${out}" | grep -c -E 'BlocklistURL +http://john.bitsurge.net.* -> https://list.iblocklist.com' )" "1"
+  use_plain_defaults
 }
 
 test_init_cache () {

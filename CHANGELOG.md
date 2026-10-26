@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.8] - 2026-10-27
+
+### Changed
+
+- The Transmission blocklist is now Bluetack's Level 1 list from iblocklist.com over HTTPS. The previous default, http://john.bitsurge.net/public/biglist.p2p.gz, no longer answers (and was plain HTTP), so Transmission had never been able to load a blocklist
+- It is a setting, TRANSMISSION_BLOCKLIST_URL (for example in the config)
+
+### Added
+
+- url_reachable: the blocklist URL is checked before it is written. An unreachable one is reported (without needing --verbose) and not written, so it can't replace a working setting. A setting that already matches isn't checked, so there is no network access once it is set
+- --drift shows the old URL as moving to the new one
+
 ## [1.4.7] - 2026-10-27
 
 ### Added
