@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.1.6
+Current Version: 1.4.7
 
 License
 -------
@@ -108,6 +108,7 @@ Usage
 
   When run manually with switches:
 
+    -G|--drift        Report settings that differ from the defaults (read only)
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
@@ -115,11 +116,15 @@ Usage
     -i|--inline       Set inline defaults when not runing inline mode
     -I|--install      Installs ussuri as: /Users/spindler/.zshrc
     -b|--build        Build sources       (default: false)
+    -B|--backups      List .zshrc backups
     -c|--confirm      Confirm commands    (default: false)
     -C|--check.       Check for updates   (default: false)
     -d|--debug        Enable debug        (default: false)
     -D|--default(s)   Set defaults        (default: false)
     -f|--font(s)      Install font(s)     (default: false)
+    -k|--config       Create config file  (~/.ussuri/config)
+    -L|--dotfiles     Link dotfiles       (default: false)
+    -M|--profile      Dotfiles profile    (default: none)
     -m|--manager      Plugin manager      (default: zinit)
     -n|--notheme      No zsh theme        (default: true)
     -N|--noenv        Ignore environment  (default: true)
@@ -128,11 +133,16 @@ Usage
     -p|--pyenv        Do pyenv check      (default: false)
     -P|--package(s)   Do packages check   (default: false)
     -r|--rbenv        Do rbenv check      (default: false)
+    -R|--rollback [N] Restore a backup    (default: newest)
     -s|--startdir     Set start dir       (default: none)
     -t|--dryrun       Dry run mode        (default: false)
     -T|--p10k         Do p10k config      (default: false)
-    -U|--update       Check for updates   (default: false)
+    -u|--unlink       Unlink dotfiles
+    -U|--update       Update the script   (default: false)
     -v|--verbose      Verbose output      (default: false)
+    -W|--tool NAME    Install a tool      (fnm, rustup, uv or mise)
+    -X|--uninstall    Restore the .zshrc from before ussuri
+    -x|--doctor       Check environment   (read only)
     -z|--zinit        Do zinit check      (default: false)
     -Z|--zshtheme     Set zsh theme       (default: robbyrussell)
 
@@ -160,7 +170,168 @@ Usage
 Defaults
 --------
 
-Some defaults can be overridden by declaring them at the top of the script, e.g. DO_VERBOSE.
+Some defaults can be overridden by declaring them at the top of the script, e.g. DO_VERBOSE,
+but it is better to use a config file so the script itself stays untouched and updatable.
+
+Config file
+-----------
+
+./ussuri.zsh --config
+
+Creates ~/.ussuri/config (or the file named by USSURI_CONFIG) with every setting commented out,
+and tells you where it is. It is sourced as zsh before any defaults are set, so a line such as
+
+    DO_VERBOSE=true
+    ZINIT_TURBO=false
+    START_DIR=~/code
+
+changes the default for every shell. The order of precedence is: built in defaults, then the
+environment, then the config file, then command line switches. It is executed, so keep it writable
+only by you (--doctor warns if it is not, and if it has a syntax error). It is never overwritten.
+
+Startup
+-------
+
+The script runs on every new shell, so the normal path avoids starting other processes.
+Work that only needs doing occasionally is tracked in ~/.ussuri:
+
+- OS X defaults are applied when asked for (-D), when the script has changed, or every
+  DEFAULTS_MAX_AGE days (default 7), tracked by defaults.stamp
+- Output of rbenv init, pyenv init and brew shellenv is cached in ~/.ussuri/cache and rebuilt
+  when the tool changes (set DO_CACHE_INIT=false to turn this off)
+- The package list is only processed when it has changed, or when asked for (-P)
+- zinit plugins load in turbo mode (files/zinit/zinit-turbo.zsh): the prompt appears first and the
+  other plugins load just after it, about 75ms sooner. Set ZINIT_TURBO=false for the original list
+  (files/zinit/zinit.zsh) that loads everything before the prompt
+
+Drift report
+------------
+
+./ussuri.zsh --drift
+
+Reads every OS X (or, on Linux, GNOME) setting ussuri would apply and prints the ones that differ, as actual -> expected and
+grouped by domain, then a summary. It never writes anything, and exits 1 if there is drift (0 if there
+is none), so it can be used in a check:
+
+    com.apple.dock
+      tilesize                                 48 -> 32
+      autohide-delay                           (not set) -> 0.2
+
+    2 of 105 settings differ from what ussuri would apply. Run --defaults to apply them.
+
+Language managers
+-----------------
+
+Besides rbenv (--rbenv) and pyenv (--pyenv), four more can be installed and set up. They are off unless
+you ask for them, either once with --tool NAME or permanently with INSTALL_<NAME>=true in the config
+(on login they are then installed if missing and set up, and no versions are installed):
+
+    fnm     Node          FNM_NODE=lts-latest                installed to ~/.local/share/fnm
+    rustup  Rust          RUSTUP_TOOLCHAIN_WANTED=stable     installed to ~/.cargo
+    uv      Python        UV_PYTHON=3.13                     installed to ~/.local/bin
+    mise    many, and a   MISE_TOOLS="node@lts python@3.13"  installed to ~/.local/bin
+            replacement for the others (it also reads asdf's .tool-versions)
+
+The version settings are only acted on when building (--tool or --build), never on an ordinary login.
+Installers are downloaded then run like the others, and can be verified with FNM_INSTALL_SHA256,
+RUSTUP_INSTALL_SHA256, UV_INSTALL_SHA256 or MISE_INSTALL_SHA256. They are told not to edit your shell
+files. mise's activation is cached like rbenv's; fnm's can't be, as it points at a directory made for
+each shell. fnm is offered rather than nvm because nvm's init costs hundreds of milliseconds per shell.
+
+Linux package managers
+----------------------
+
+The package manager is chosen from the distribution's os-release ID and ID_LIKE, so derivatives work:
+
+    apt     Ubuntu, Debian, Mint, Pop!_OS...     files/packages/ubuntu.apt
+    pacman  Arch, EndeavourOS, Manjaro...        files/packages/arch.pacman (endeavouros.pacman)
+    dnf     Fedora, RHEL, Rocky, Alma...         files/packages/fedora.dnf
+    apk     Alpine                               files/packages/alpine.apk
+    nix     NixOS                                files/packages/nix.nix
+
+Set PKG_MANAGER (for example in the config) to override it, such as nix on Ubuntu. Root is obtained with
+sudo, or doas if there is no sudo, or not at all if you are root, and nix is never run as root. Each
+package is installed on its own, so one that doesn't exist in your distribution's repositories only fails
+that package. The dnf, apk and nix lists are a conservative subset of the apt one, edit them to taste.
+The nix installed-package list is read from nix profile list, which changed format in Nix 2.20, so
+both are handled on a best effort basis.
+
+Linux defaults (GNOME)
+----------------------
+
+On Linux, --defaults applies a short list of GNOME settings through gsettings (keyboard repeat, show
+hidden files and directories first in file choosers, list view in Files, button layout, privacy
+clean-up and so on), and --drift reports where they differ. A setting that doesn't exist on your
+desktop is skipped, and nothing is done without gsettings and a desktop session (without a session bus
+gsettings only writes to a throwaway store). Unlike on OS X these are not applied on every login unless
+you set DO_GNOME_DEFAULTS=true (for example in the config). The list is apply_linux_defaults in the script.
+
+Backups, rollback and uninstall
+-------------------------------
+
+./ussuri.zsh --backups
+./ussuri.zsh --rollback [N]
+./ussuri.zsh --uninstall
+
+--install saves your current ~/.zshrc in ~/.ussuri before replacing it. --backups lists them, newest
+first, with the version of each and whether it is ussuri or a .zshrc of your own. --rollback puts one
+back (N is the number from --backups, a file name, or nothing for the newest). --uninstall goes back
+to the .zshrc you had before ussuri: the newest backup that isn't ussuri itself, or, if you had
+none, it moves ussuri's aside. Either way the .zshrc being replaced is saved first, so a rollback
+can itself be undone. Installed components and the backups in ~/.ussuri are left alone, and
+--unlink removes dotfile links. All of them honour --dryrun.
+
+Dotfiles
+--------
+
+./ussuri.zsh --dotfiles [--profile work]
+
+Links dotfiles from ~/.ussuri/dotfiles into your home directory, in layers so one set can differ
+per machine. Later layers win for the same path:
+
+    ~/.ussuri/dotfiles/common/.gitconfig               every machine
+    ~/.ussuri/dotfiles/profiles/work/.gitconfig        machines using the "work" profile
+    ~/.ussuri/dotfiles/hosts/mybox/.gitconfig          only the machine whose short hostname is mybox
+
+A file at <layer>/.config/app/conf is linked as ~/.config/app/conf. The profile comes from
+--profile or DOTFILES_PROFILE, the host from DOTFILES_HOST (default is the short hostname), and the
+directory from DOTFILES_DIR.
+
+Nothing is ever deleted: a real file (or a link pointing somewhere else) that is in the way is moved
+to ~/.ussuri/dotfile-backups/<date>/ first. Running it again changes nothing, --dryrun --verbose
+shows what it would do, and --unlink removes only the links that point into the dotfiles directory
+(backups are left for you to restore by hand). It runs only when asked, unless you set
+DO_DOTFILES_CHECK=true in the config to keep the links in place on every login. --doctor reports
+dotfiles that are not linked yet and real files standing in the way.
+
+Doctor
+------
+
+./ussuri.zsh --doctor
+
+Checks the shell, tools, install, lock, components, fonts, backups and state, and prints ok, warn
+or FAIL for each. A warning is something that will probably fix itself on the next login or is
+worth a look, a failure is something that will not. It exits non-zero if there are any failures,
+and it never changes anything (a missing directory is reported, not recreated).
+
+Pinning installs
+----------------
+
+Installers are downloaded to a file and then run, rather than piped into a shell. To verify them,
+set the expected SHA-256 before the script runs, e.g. BREW_INSTALL_SHA256 or POSH_INSTALL_SHA256
+(a mismatch is refused). Without one they still run, with a notice.
+
+Git installs follow the latest by default. To pin the first clone to a branch, tag or commit set
+ZINIT_REF, RBENV_REF, RUBY_BUILD_REF, PYENV_REF, NERD_FONTS_REF, ZOSH_REF or P10K_REF.
+An existing install is never changed.
+
+Testing
+-------
+
+zsh tests/smoke.zsh [name-filter]
+
+The tests run against a copy of the script in a throwaway home directory with the system commands
+(defaults, brew, sudo, rbenv, pyenv...) stubbed, so they do not touch the real system.
 
 License
 -------

@@ -4,6 +4,292 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.7] - 2026-10-27
+
+### Added
+
+- Language managers fnm (Node), rustup (Rust), uv (Python) and mise (many languages, a replacement for the others). Off unless INSTALL_<NAME>=true (e.g. in the config) or -W|--tool NAME. Each is installed if missing (from FNM_INSTALL_URL etc, verifiable with FNM_INSTALL_SHA256 etc, told not to edit your shell files) and set up; versions (FNM_NODE, RUSTUP_TOOLCHAIN_WANTED, UV_PYTHON, MISE_TOOLS) are only installed when building, never on a login
+- mise's activation goes through the init cache. fnm's env points at a per-shell directory so it can't be cached
+- --doctor reports tools that are wanted but not installed, and says nothing about the ones that aren't
+
+## [1.4.6] - 2026-10-27
+
+### Added
+
+- Package managers: dnf (Fedora, RHEL, Rocky, Alma...), apk (Alpine) and nix (NixOS, or anywhere with PKG_MANAGER=nix), with package lists files/packages/fedora.dnf, alpine.apk and nix.nix. Debian and Arch derivatives (Mint, Pop!_OS, Manjaro...) are now supported too
+- The distro is mapped from os-release ID and ID_LIKE to PKG_MANAGER, which can be set beforehand to override it
+- doas is used if there is no sudo, and neither if you are root. nix is never run through sudo
+
+### Changed
+
+- Everything that differs between package managers is in one place (set_pkg_manager: tool, list, installed-list command, index refresh, install command) instead of LSB_ID checks spread over seven functions. LSB_ID is now just a name for messages
+- --doctor checks the distro's own package manager and says how to choose one on an unsupported distro
+
+## [1.4.5] - 2026-10-27
+
+### Added
+
+- Linux defaults: check_linux_defaults is no longer a stub. apply_linux_defaults sets a short list of GNOME settings through gsettings (set_linux_default), skipping any schema or key that doesn't exist on the desktop, and doing nothing without gsettings and a desktop session (without a session bus gsettings writes to a throwaway store). Applied by --defaults, or on login if DO_GNOME_DEFAULTS=true (off by default, unlike OS X), with the same stamp as OS X so it is not repeated
+- --drift works on Linux for the same settings
+- --doctor checks for gsettings and a desktop session on Linux
+- USSURI_OS (darwin or linux) overrides the detected OS, so the Linux code can be exercised anywhere
+
+### Changed
+
+- The "is it time to apply the defaults" test is shared between OS X and Linux (defaults_due)
+
+## [1.4.4] - 2026-10-27
+
+### Added
+
+- -G|--drift reports every OS X setting that differs from what ussuri would apply, as "actual -> expected" grouped by domain (booleans as true/false, missing ones as "(not set)"), with a summary and exit status 1 if there is any drift. It reads only. It reuses the settings lists, so there is no second copy to keep in step
+- is_read_only, used by --doctor and --drift, so a read only mode never creates directories or copies files
+
+## [1.4.3] - 2026-10-27
+
+### Added
+
+- -B|--backups lists the .zshrc backups made by --install, newest first, with the version of each and whether it is ussuri or another .zshrc
+- -R|--rollback [N] restores a backup (a number from --backups, a file name, or the newest if none is given)
+- -X|--uninstall goes back to the .zshrc from before ussuri (the newest backup that isn't ussuri), or moves ussuri's aside if there is none. Installed components and backups are left alone
+- The .zshrc being replaced is saved first, so a rollback can be undone. All three honour --dryrun and --confirm
+
+### Fixed
+
+- Two installs in the same second no longer overwrite each other's backup (backup_zshrc picks a unique name)
+
+## [1.4.2] - 2026-10-26
+
+### Added
+
+- Dotfile linking with machine profiles. -L|--dotfiles symlinks files from ~/.ussuri/dotfiles into the home directory in layers (common, then profiles/<name> from -M|--profile or DOTFILES_PROFILE, then hosts/<short hostname> from DOTFILES_HOST), later layers winning for the same path. A real file or a link to somewhere else that is in the way is moved to ~/.ussuri/dotfile-backups/<date>/ first, never deleted. It is idempotent, honours --dryrun and --confirm, treats odd file names as plain text, ignores .DS_Store and .gitkeep, and only runs when asked unless DO_DOTFILES_CHECK=true is set (for example in the config)
+- -u|--unlink removes only the links that point into the dotfiles directory
+- --doctor reports dotfiles that are not linked yet and real files standing in their way
+- The config template lists the dotfile settings
+
+## [1.4.1] - 2026-10-26
+
+### Added
+
+- ~/.ussuri/config (or the file named by USSURI_CONFIG): an optional zsh file sourced before any defaults are set, so settings can be changed for every shell without editing the script. Precedence is the built in defaults, then the environment, then the config, then command line switches
+- -k|--config creates the config with every setting commented out (never overwrites an existing one, honours --dryrun) and says where it is
+- --doctor checks the config for a syntax error and for being writable by others (it is executed)
+
+### Changed
+
+- GO_HOME and START_DIR can now be set before the script assigns them, so they work in the config too
+
+## [1.4.0] - 2026-10-26
+
+### Added
+
+- -x|--doctor: read only checks of the shell, tools, install (~/.zshrc version, support files), lock, components, fonts, backups and state, printing ok/warn/FAIL for each with a summary and a non-zero exit status if anything failed. It never changes anything: check_dir_exists and the support file copies skip themselves in doctor mode
+- read_file_version reads the version header from any file
+
+## [1.3.9] - 2026-10-26
+
+### Added
+
+- Turbo mode zinit plugin list (files/zinit/zinit-turbo.zsh), now the default: powerlevel10k loads straight away and the other plugins and snippets load just after the first prompt, with compinit once at the end so every completion is still registered. Same plugins in the same order as zinit.zsh. Measured about 140ms to 65ms to first prompt. ZINIT_TURBO=false uses zinit.zsh
+
+### Changed
+
+- An install from before turbo mode has no turbo plugin list: it is copied from next to the script if possible (just that file, nothing is overwritten), otherwise the original list is used instead of loading no plugins. Run --install again to add it
+- The cached pyenv init leaves out the line that forks bash to remove duplicates from PATH (typeset -U path already does that)
+- Lazy-loading wrappers for rbenv and pyenv were not added: with the init output cached, rbenv init costs about 0.1ms and pyenv's remaining cost was that bash fork
+
+## [1.3.8] - 2026-10-26
+
+### Added
+
+- tests/smoke.zsh, a sandboxed smoke test suite (throwaway home directory, stubbed system commands, a copy of the script pointed at a stub brew)
+- have_lock, is_osx and is_linux guards, and copy_support_files
+
+### Changed
+
+- The HOLD_LOCK and OS_NAME checks use the guards, and the deepest nests (package checks, check_osx_defaults, do_install) are flattened with early returns
+- The support file copy, which was pasted in three places, is one function that also checks the work directory exists before copying
+
+## [1.3.7] - 2026-10-26
+
+### Added
+
+- Installers (Homebrew, oh-my-posh) are downloaded to a file, checked against BREW_INSTALL_SHA256 / POSH_INSTALL_SHA256 when set (a mismatch is refused), and only then run, instead of being piped into a shell. The URLs can be overridden with BREW_INSTALL_URL / POSH_INSTALL_URL. Without a checksum they still run, with a notice
+- Git installs (zinit, rbenv, ruby-build, pyenv, nerd-fonts, oh-my-zsh, powerlevel10k) can be pinned to a branch, tag or commit with ZINIT_REF, RBENV_REF, RUBY_BUILD_REF, PYENV_REF, NERD_FONTS_REF, ZOSH_REF and P10K_REF. Unset keeps the current behaviour (latest), and a pin only applies to the first clone
+
+## [1.3.6] - 2026-10-26
+
+### Changed
+
+- Short switches can now be bundled (for example -vt)
+- Command line switches are parsed with zparseopts (long switches are translated to short ones first), so unknown switches and switches missing their value are rejected up front with the usage text and a non-zero exit status, and a value that looks like a switch is treated as a value
+
+### Fixed
+
+- A switch that takes a value (-g, -l, -m, -S, -Z) given without one no longer loops forever
+
+## [1.3.5] - 2026-10-26
+
+### Fixed
+
+- Paths, names and versions interpolated into commands run through execute_command are now quoted (${(q)var}), so spaces, quotes or a command substitution in a path (for example a home directory name) are treated as plain text instead of being re-evaluated or breaking the command
+
+## [1.3.4] - 2026-10-26
+
+### Changed
+
+- PATH is kept free of duplicates with typeset -U path, and exp_env adds to the path array instead of splitting strings
+- Command lookups use $commands (no subshell) instead of command -v
+
+## [1.3.3] - 2026-10-26
+
+### Fixed
+
+- --confirm now shows the command in the prompt (it was only shown with --verbose, so you were asked to confirm something you couldn't see)
+- --confirm uses read instead of vared, and says so (instead of silently skipping) when there is no terminal to confirm on
+
+## [1.3.2] - 2026-10-26
+
+### Changed
+
+- The per-shell bootstrap no longer forks: id, whoami, hostname, date, pwd, uname, dirname, cut, grep and awk are replaced by zsh builtins and parameter expansion (OS_NAME comes from OSTYPE; uname -r is only run when applying OS X defaults)
+- The Linux distribution is read from /etc/os-release instead of running lsb_release (which is slow and often not installed); lsb_release is still used as a fallback. OS_RELEASE_FILE can override the path
+- The script version is read in the shell instead of with grep and awk
+- The lock uses zsh/files mkdir and rm builtins and a glob qualifier for the stale check instead of find, mkdir and rm (falls back to the commands if the module isn't available)
+- Installed package lookups use an array loaded once instead of forking grep per package, and the package list is only read when it is processed rather than on every shell
+- find_brew uses :h instead of dirname
+
+## [1.3.1] - 2026-10-26
+
+### Added
+
+- cached_eval caches the output of rbenv init, pyenv init and brew shellenv (about 250ms each) in ~/.ussuri/cache, and rebuilds it when the tool's binary is newer than the cache. The rehash line is left out of the cache as it forks the tool on every shell. DO_CACHE_INIT=false turns this off
+
+## [1.3.0] - 2026-10-26
+
+### Changed
+
+- OS X defaults are only applied when asked (-D, -A or --force), when the script is newer than the last run, or after DEFAULTS_MAX_AGE days (default 7), tracked by ~/.ussuri/defaults.stamp. Previously every new shell ran defaults read about a hundred times (around 1.3 seconds)
+
+## [1.2.9] - 2026-10-26
+
+### Fixed
+
+- The files/ copy no longer unpacks into the current directory when the work directory does not exist yet (cd ... ; tar became cd ... && tar)
+
+## [1.2.8] - 2026-10-26
+
+### Added
+
+- --update now actually updates the script: it downloads the new version, checks it parses and is the expected version, backs up the current script and replaces it (honours --dryrun and --confirm)
+
+### Changed
+
+- exp_env matches whole entries instead of substrings and no longer uses eval
+- LD_LIBRARY_PATH is no longer set on macOS
+- The version check uses curl -fsSL, validates the remote version and shares code with the updater
+- The "Instantiated by" banner is only shown with --verbose
+- Switch pre-scans (-F, -I, -v) match whole arguments instead of substrings
+
+### Fixed
+
+- A failed remote version lookup no longer causes an integer comparison error
+- Removed duplicate Finder defaults
+
+## [1.2.7] - 2026-10-26
+
+### Added
+
+- notice_message prints a message even when not verbose, used before slow or interactive installs so the shell doesn't look hung
+- "show" option for execute_command to keep command output visible when not verbose (installers, sudo, builds)
+
+## [1.2.6] - 2026-10-26
+
+### Changed
+
+- The sudoers check is off by default for manual runs (it was on, so any manual run could modify sudoers)
+- Sudoers entries are validated with visudo and installed with mode 0440 instead of appended with tee, and the check no longer prompts for a password unless a change is needed
+
+## [1.2.5] - 2026-10-26
+
+### Added
+
+- Package list changes are detected with a checksum stamp; -P and -A always process the list
+
+### Fixed
+
+- Package matching uses fixed strings (no regex surprises with g++), ignores tap prefixes, and no longer errors when the installed list is missing
+- pacman now uses -S --needed instead of -Sy, and apt-get update runs once before installs
+- Failed package installs are retried rather than marked done
+- The installed package list code is no longer duplicated
+
+## [1.2.4] - 2026-10-26
+
+### Fixed
+
+- The Homebrew installer is no longer downloaded during --dryrun
+- Homebrew discovery is shared in find_brew (and also checks /usr/local/bin/brew); PATH is no longer set from an empty prefix
+
+## [1.2.3] - 2026-10-26
+
+### Changed
+
+- rbenv/pyenv only look up the latest version when building, pick it with sort -V (stable releases only), and only set an installed version as global
+
+### Fixed
+
+- pyenv ran "global" for local version messages and printed the ruby version
+- rbenv local wrote .ruby-version into the current directory (neither tool now uses local)
+
+## [1.2.2] - 2026-10-26
+
+### Fixed
+
+- Removed the nonexistent files/defaults/macos.defaults check that copied files/ on every shell start
+- A missing package list no longer causes an error when it is read (blank lines and comments are also ignored)
+
+## [1.2.1] - 2026-10-26
+
+### Changed
+
+- The lock is now an atomic directory (mkdir) and is released on every exit path
+
+### Fixed
+
+- --force now removes the lock file (it never did, as dryrun state was unset at that point)
+- The lock is no longer left behind by --help, --version, --install, --update, --changelog, --dryrun or X11 shells
+
+## [1.2.0] - 2026-10-26
+
+### Fixed
+
+- oh-my-posh init and brew shellenv output is now evaluated instead of discarded
+
+## [1.1.9] - 2026-10-26
+
+### Fixed
+
+- set_env only exports GOPATH, so a login shell no longer leaks its DO_* flags into manual runs and nested shells
+
+## [1.1.8] - 2026-10-26
+
+### Changed
+
+- set_env no longer overrides a variable that is already set (pass "force" as a third argument, or set SET_ENV_FORCE=true, to override), so switches and top-of-script overrides take precedence over defaults
+- set_env uses typeset instead of eval
+
+## [1.1.7] - 2026-10-26
+
+### Changed
+
+- Command line arguments are now parsed before set_defaults runs
+- OS X defaults are now applied by check_osx_defaults (under the lock, when defaults check is enabled) rather than during set_defaults
+
+### Fixed
+
+- --dryrun and --confirm are now honoured for OS X defaults, directory creation and chflags
+- --help and --version no longer write OS X defaults
+
 ## [1.1.6] - 2026-09-30
 
 ### Changed
