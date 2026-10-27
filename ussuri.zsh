@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.5.7
+# Version: 1.6.2
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -132,6 +132,17 @@ is_linux () {
   [[ "${OS_NAME}" == *Linux* ]]
 }
 
+# A profile or machine name becomes part of a file path (profiles/<name>/...), so one that could point
+# somewhere else (a slash, or starting with a dot as in ..) is refused rather than used
+
+check_layer_name () {
+  local value="${(P)1}"
+  if [[ "${value}" == */* || "${value}" == .* ]]; then
+    echo "Warning:        Ignoring ${1}='${value}': a profile or machine name can't contain / or start with a dot"
+    typeset -g "${1}="
+  fi
+}
+
 # The prompt engine: which of powerlevel10k (p10k), oh-my-posh (posh) or neither (none) is installed,
 # set up and loaded. Two engines at once both hook every prompt and fight over it, and oh-my-posh's
 # init alone costs a few hundred milliseconds on every login, so there is only ever one.
@@ -254,7 +265,7 @@ report_drift () {
   printf '  %-40s %s -> %s\n' "$2" "$3" "$4"
 }
 
-run_drift () {
+run_settings_drift () {
   DRIFT_COUNT=0
   DRIFT_TOTAL=0
   DRIFT_LAST_GROUP=""
@@ -327,6 +338,165 @@ apply_linux_defaults () {
   set_linux_default "org.gtk.Settings.FileChooser"           "sort-directories-first"    "true"
   set_linux_default "org.gtk.gtk4.Settings.FileChooser"      "show-hidden"               "true"
   set_linux_default "org.gtk.gtk4.Settings.FileChooser"      "sort-directories-first"    "true"
+}
+
+# Print names wrapped to about 100 columns, indented
+
+print_wrapped_names () {
+  local out="    " name
+  for name in "$@"; do
+    if (( ${#out} + ${#name} + 1 > 100 )); then
+      print -r -- "${out}"
+      out="    "
+    fi
+    out+="${name} "
+  done
+  print -r -- "${out}"
+}
+
+# One group of the package report. $1 is what the things are called (formulae, casks, taps, packages),
+# $2 and $3 the words for the two states (not installed / installed, or not added / added), and
+# REQUIRED, INSTALLED and EXPLICIT (arrays set by the caller) the names in your lists, what is
+# there, and which of what is there you chose yourself rather than as a dependency. ALSO_LISTED is
+# names that count as listed when looking for extras (a cask named in the formula list is not an extra
+# cask). Names are compared without a tap prefix, and in lower case for taps.
+# Adds to PKGDRIFT_MISSING and PKGDRIFT_EXTRA
+
+package_drift_group () {
+  local label="$1" absent="$2" present="$3" name
+  local missing=() extra=() required_short=( ${(@)REQUIRED:t} ${(@)ALSO_LISTED:t} ) installed_short=( ${(@)INSTALLED:t} )
+  if [ "${PKGDRIFT_LOWER}" = "true" ]; then
+    required_short=( ${(@L)required_short} )
+    installed_short=( ${(@L)installed_short} )
+  fi
+  for name in "${REQUIRED[@]}"; do
+    if (( ! ${installed_short[(Ie)${${name:t}:l}]} )) && [ "${PKGDRIFT_LOWER}" = "true" ]; then
+      missing+=( "${name}" )
+    elif (( ! ${installed_short[(Ie)${name:t}]} )) && [ ! "${PKGDRIFT_LOWER}" = "true" ]; then
+      missing+=( "${name}" )
+    fi
+  done
+  for name in "${EXPLICIT[@]}"; do
+    if [ "${PKGDRIFT_LOWER}" = "true" ]; then
+      (( ${required_short[(Ie)${name:t:l}]} )) || extra+=( "${name}" )
+    else
+      (( ${required_short[(Ie)${name:t}]} )) || extra+=( "${name}" )
+    fi
+  done
+  if (( ${#missing} )); then
+    print -r -- "  ${label} ${absent} (${#missing}):"
+    print_wrapped_names "${(@o)missing}"
+  fi
+  if (( ${#extra} )); then
+    print -r -- "  ${label} ${present} but not in your lists (${#extra}):"
+    print_wrapped_names "${(@o)extra}"
+  fi
+  PKGDRIFT_MISSING=$(( PKGDRIFT_MISSING + ${#missing} ))
+  PKGDRIFT_EXTRA=$(( PKGDRIFT_EXTRA + ${#extra} ))
+}
+
+# Compare what is installed with your package lists (all their layers): read only, from live queries to
+# the package manager, never the cached lists. What is in a list but not installed is drift (-P would install
+# it). What is installed because you chose it (brew leaves and casks, apt-mark showmanual, pacman -Qe...) but is
+# in no list is only shown, as that is what you would add to a local list to keep it. Returns 1 for drift,
+# 2 if there is nothing to compare with
+
+run_package_drift () {
+  PKGDRIFT_MISSING=0
+  PKGDRIFT_EXTRA=0
+  PKGDRIFT_LOWER="false"
+  local brew_cmd=""
+  if is_osx; then
+    brew_cmd="${commands[brew]}"
+    if [ -z "${brew_cmd}" ]; then
+      find_brew
+      brew_cmd="${BREW_BIN}"
+    fi
+    if [ -z "${brew_cmd}" ]; then
+      print -r -- "Package drift isn't available: Homebrew is not installed, so there is nothing to compare"
+      return 2
+    fi
+    print -r -- "Packages (brew)"
+    local REQUIRED INSTALLED EXPLICIT ALSO_LISTED formula_list cask_list everything
+    read_required_list "${REQUIRED_FILE}"
+    formula_list=( "${REQUIRED_LIST[@]}" )
+    read_required_list "${REQUIRED_FILE:r}.cask"
+    cask_list=( "${REQUIRED_LIST[@]}" )
+    # brew install falls back to a cask for a name that is not a formula, and -P counts either as installed,
+    # so a name in the formula list that is installed as a cask is neither missing nor an extra cask
+    everything=( ${(f)"$( "${brew_cmd}" list 2> /dev/null )"} )
+    read_required_list "${REQUIRED_FILE:r}.tap"
+    REQUIRED=( "${REQUIRED_LIST[@]}" )
+    INSTALLED=( ${(f)"$( "${brew_cmd}" tap 2> /dev/null )"} )
+    EXPLICIT=( "${INSTALLED[@]}" )
+    ALSO_LISTED=()
+    PKGDRIFT_LOWER="true"
+    package_drift_group "taps" "not added" "added"
+    PKGDRIFT_LOWER="false"
+    REQUIRED=( "${formula_list[@]}" )
+    INSTALLED=( "${everything[@]}" )
+    EXPLICIT=( ${(f)"$( "${brew_cmd}" leaves 2> /dev/null )"} )
+    ALSO_LISTED=( "${cask_list[@]}" )
+    package_drift_group "formulae" "not installed" "installed"
+    REQUIRED=( "${cask_list[@]}" )
+    EXPLICIT=( ${(f)"$( "${brew_cmd}" list --cask 2> /dev/null )"} )
+    ALSO_LISTED=( "${formula_list[@]}" )
+    package_drift_group "casks" "not installed" "installed"
+  elif is_linux; then
+    if [ -z "${PKG_MANAGER}" ]; then
+      print -r -- "Package drift isn't available: Linux distribution '${LSB_ID:-unknown}' has no supported package manager"
+      return 2
+    fi
+    if (( ! $+commands[${PKG_TOOL}] )); then
+      print -r -- "Package drift isn't available: ${PKG_TOOL} is not installed"
+      return 2
+    fi
+    print -r -- "Packages (${PKG_MANAGER})"
+    local REQUIRED INSTALLED EXPLICIT ALSO_LISTED
+    ALSO_LISTED=()
+    read_required_list "${REQUIRED_FILE}"
+    REQUIRED=( "${REQUIRED_LIST[@]}" )
+    INSTALLED=( ${(f)"$( eval "${PKG_LIST_CMD}" 2> /dev/null )"} )
+    EXPLICIT=( ${(f)"$( eval "${PKG_MANUAL_CMD:-${PKG_LIST_CMD}}" 2> /dev/null )"} )
+    package_drift_group "packages" "not installed" "installed"
+  else
+    print -r -- "Package drift isn't available on ${OS_NAME}"
+    return 2
+  fi
+  print
+  if (( PKGDRIFT_MISSING )); then
+    print -r -- "${PKGDRIFT_MISSING} packages from your lists are not installed (-P installs them)${${PKGDRIFT_EXTRA#0}:+; ${PKGDRIFT_EXTRA} installed ones are not in your lists (shown for information)}"
+    return 1
+  fi
+  print -r -- "Everything in your lists is installed${${PKGDRIFT_EXTRA#0}:+; ${PKGDRIFT_EXTRA} installed ones are not in your lists (shown for information)}"
+}
+
+# --drift [settings|packages|all]: what differs from what ussuri would apply or install. Exit status 1 if
+# either differs, 0 if neither does, 2 if there was nothing to compare
+
+run_drift () {
+  local what="${1:-all}" settings_rc=2 packages_rc=2
+  case "${what}" in
+    all|settings|packages)
+      ;;
+    *)
+      print -r -- "Unknown drift '${what}': choose settings, packages or all"
+      return 2
+      ;;
+  esac
+  if [ "${what}" = "all" ] || [ "${what}" = "settings" ]; then
+    [ "${what}" = "all" ] && print -r -- "Settings"
+    run_settings_drift
+    settings_rc=$?
+  fi
+  if [ "${what}" = "all" ] || [ "${what}" = "packages" ]; then
+    [ "${what}" = "all" ] && print
+    run_package_drift
+    packages_rc=$?
+  fi
+  (( settings_rc == 1 || packages_rc == 1 )) && return 1
+  (( settings_rc == 0 || packages_rc == 0 )) && return 0
+  return 2
 }
 
 # Notice message (always printed, for slow or interactive actions so the shell doesn't look hung)
@@ -630,7 +800,11 @@ set_osx_app_defaults () {
   set_osx_default     "com.apple.DiskUtility"             "advanced-image-options"                      "bool"    "true"
   set_osx_default     "com.apple.addressbook"             "ABShowDebugMenu"                             "bool"    "true"
   set_osx_default     "com.apple.print.PrintingPrefs"     "Quit When Finished"                          "bool"    "true"
-  OS_REL=$( uname -r )
+  # USSURI_OS_REL overrides the kernel release, so the tests behave the same on any host
+  OS_REL="${USSURI_OS_REL}"
+  if [ -z "${OS_REL}" ]; then
+    OS_REL=$( uname -r )
+  fi
   OS_REL_MAJ="${OS_REL%%.*}"
   if [ "${OS_REL_MAJ}" -lt 25 ]; then
     set_osx_default     "com.apple.systempreferences"       "NSQuitAlwaysKeepsWindows"                    "bool"    "false"
@@ -698,6 +872,7 @@ set_osx_defaults () {
   set_env "RESTART_FINDER"    "false"
   set_env "RESTART_UISERVER"  "false"
   set_env "INSTALLED_FILE"    "${WORK_DIR}/brew.list"
+  set_env "TAPS_FILE"         "${WORK_DIR}/brew.taps"
   set_env "REQUIRED_FILE"     "${WORK_DIR}/files/packages/macos.brew"
   if [ "${DO_INSTALL}" = "false" ]; then
     if [ ! -f "${REQUIRED_FILE}" ]; then
@@ -709,16 +884,63 @@ set_osx_defaults () {
 # Read the required package list (one package per line, ignoring blank lines and comments)
 # Only called when the list is processed, not on every shell
 
+# Your own additions to a list or plugin file, in layers that updates and --install never overwrite, in the
+# directory of the file it adds to. For files/packages/macos.brew (extension brew) and files/zinit (zsh):
+#
+#   local.<ext>                               every machine
+#   profiles/<PROFILE>/local.<ext>            machines using that profile (-M, or PROFILE)
+#   hosts/<MACHINE>/local.<ext>               just that machine (MACHINE, the short hostname by default)
+#
+# Later layers win. Sets LOCAL_LAYERS to the ones that exist. A profile or machine that is not set has no layer
+
+local_layer_files () {
+  LOCAL_LAYERS=()
+  local candidates=( "$1/local.$2" ) f
+  if [ -n "${PROFILE}" ]; then
+    candidates+=( "$1/profiles/${PROFILE}/local.$2" )
+  fi
+  if [ -n "${MACHINE}" ]; then
+    candidates+=( "$1/hosts/${MACHINE}/local.$2" )
+  fi
+  for f in "${candidates[@]}"; do
+    if [ -f "${f}" ]; then
+      LOCAL_LAYERS+=( "${f}" )
+    fi
+  done
+}
+
+# The files that make up a package list, in order: the shipped one, then the local layers on top of it.
+# Sets PACKAGE_LAYERS to the ones that exist
+
+package_layer_files () {
+  PACKAGE_LAYERS=()
+  if [ -f "$1" ]; then
+    PACKAGE_LAYERS+=( "$1" )
+  fi
+  local_layer_files "${1:h}" "${1:e}"
+  PACKAGE_LAYERS+=( "${LOCAL_LAYERS[@]}" )
+}
+
+# Read a package list (default: this system's) into REQUIRED_LIST: one package per line, ignoring blank
+# lines and comments, layer by layer, without repeats. A line !name takes a package out of what the
+# earlier layers added (matched exactly, not as a pattern), and a later layer can put it back
+
 read_required_list () {
   setopt localoptions extendedglob
   REQUIRED_LIST=()
-  # Your own additions are in files/packages/local.<extension> (local.brew, local.apt...), which
-  # updates and --install never overwrite
-  PACKAGE_LOCAL="${REQUIRED_FILE:h}/local.${REQUIRED_FILE:e}"
-  for PACKAGE_LIST_FILE in "${REQUIRED_FILE}" "${PACKAGE_LOCAL}"; do
-    if [ -f "${PACKAGE_LIST_FILE}" ]; then
-      REQUIRED_LIST+=( ${${(f)"$(<${PACKAGE_LIST_FILE})"}:#(\#*|[[:space:]]#)} )
-    fi
+  package_layer_files "${1:-${REQUIRED_FILE}}"
+  local file line name i
+  for file in "${PACKAGE_LAYERS[@]}"; do
+    for line in ${${(f)"$(<${file})"}:#(\#*|[[:space:]]#)}; do
+      if [[ "${line}" == '!'* ]]; then
+        name="${line#!}"
+        while (( i = ${REQUIRED_LIST[(Ie)${name}]} )); do
+          REQUIRED_LIST[i]=()
+        done
+      else
+        REQUIRED_LIST+=( "${line}" )
+      fi
+    done
   done
   REQUIRED_LIST=( ${(u)REQUIRED_LIST} )
 }
@@ -841,6 +1063,7 @@ set_pkg_manager () {
       PKG_TOOL="apt-get"
       PKG_LIST_NAME="ubuntu.apt"
       PKG_LIST_CMD="dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:[a-z0-9]*\$//'"
+      PKG_MANUAL_CMD="apt-mark showmanual"
       PKG_PREPARE="apt-get update"
       PKG_INSTALL="apt install -y"
       # -y answers apt's own questions, but not debconf's dialogs (configuring a package), which
@@ -856,6 +1079,7 @@ set_pkg_manager () {
         PKG_LIST_NAME="endeavouros.pacman"
       fi
       PKG_LIST_CMD="pacman -Q | awk '{ print \$1 }'"
+      PKG_MANUAL_CMD="pacman -Qqe"
       # Not -Sy: syncing the database without upgrading is an unsupported partial upgrade on Arch
       PKG_INSTALL="pacman --noconfirm --needed -S"
       ;;
@@ -863,12 +1087,15 @@ set_pkg_manager () {
       PKG_TOOL="dnf"
       PKG_LIST_NAME="fedora.dnf"
       PKG_LIST_CMD="rpm -qa --qf '%{NAME}\\n'"
+      PKG_MANUAL_CMD="dnf repoquery --userinstalled --queryformat '%{name}\\n'"
       PKG_INSTALL="dnf install -y"
       ;;
     apk)
       PKG_TOOL="apk"
       PKG_LIST_NAME="alpine.apk"
       PKG_LIST_CMD="apk info"
+      # What you asked for is in the world file, with any version constraint (curl=8.0, foo>1)
+      PKG_MANUAL_CMD="sed 's/[=<>~].*//' \"\${APK_WORLD_FILE:-/etc/apk/world}\""
       PKG_PREPARE="apk update"
       PKG_INSTALL="apk add"
       ;;
@@ -990,7 +1217,16 @@ set_all_defaults () {
   set_env "DO_ROLLBACK"         "false"
   set_env "DO_UNINSTALL"        "false"
   set_env "DOTFILES_DIR"        "${WORK_DIR}/dotfiles"
-  set_env "DOTFILES_HOST"       "${HOST%%.*}"
+  # One profile and machine name for dotfiles, packages and plugins. DOTFILES_PROFILE and DOTFILES_HOST
+  # (the older names) still override them for dotfiles alone
+  set_env "PROFILE"             ""
+  set_env "MACHINE"             "${HOST%%.*}"
+  check_layer_name "PROFILE"
+  check_layer_name "MACHINE"
+  set_env "DOTFILES_PROFILE"    "${PROFILE}"
+  set_env "DOTFILES_HOST"       "${MACHINE}"
+  check_layer_name "DOTFILES_PROFILE"
+  check_layer_name "DOTFILES_HOST"
   set_env "DOCTOR_MAX_BACKUPS"  "10"
   set_env "BREW_INSTALL_URL"    "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
   set_env "POSH_INSTALL_URL"    "https://ohmyposh.dev/install.sh"
@@ -1003,6 +1239,8 @@ set_all_defaults () {
   set_env "PLUGIN_MANAGER"      "zinit"
   set_env "SHARE_HISTORY"       "true"
   set_env "ASSUME_YES"          "false"
+  set_env "UPDATE_HINT"         "false"
+  set_env "SCRIPT_URL"          "https://raw.githubusercontent.com/lateralblast/ussuri/refs/heads/main/ussuri.zsh"
   set_env "DO_HISTORY"          "true"
   set_env "HISTORY_SIZE"        "50000"
   set_env "SUDOERS_ENTRY"       "ALL=(ALL) NOPASSWD:ALL"
@@ -1106,8 +1344,10 @@ check_dir_exists () {
 # Verbose message
 
 verbose_message () {
-  MESSAGE="$1"
-  TYPE="$2"
+  # Local: these used to be globals, so every message overwrote the TYPE a caller had set (which
+  # made check_osx_package install casks, the Nerd Font included, as plain formulae)
+  local MESSAGE="$1"
+  local TYPE="$2"
   if [ "${DO_VERBOSE}" = "true" ]; then
     if [ "${TYPE}" = "" ]; then
       handle_output "${MESSAGE}" "info"
@@ -1159,7 +1399,7 @@ print_help () {
     -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
     -F|--force        Force action        (default: ${DO_FORCE})
     -g|--gopath       Set GOPATH          (default: ${GO_HOME})
-    -G|--drift        Report settings that differ from the defaults (read only)
+    -G|--drift [settings|packages|all]  Report what differs from the defaults and the package lists (read only)
     -k|--config       Create config file  (${CONFIG_FILE})
     -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -l|--location     Set start dir       (default: ${START_DIR})
@@ -1167,7 +1407,7 @@ print_help () {
     -R|--rollback [N] Restore a backup    (default: newest)
     -X|--uninstall    Restore the .zshrc from before ussuri
     -L|--dotfiles     Link dotfiles       (default: ${DO_DOTFILES_CHECK})
-    -M|--profile      Dotfiles profile    (default: ${DOTFILES_PROFILE:-none}, host: ${DOTFILES_HOST})
+    -M|--profile NAME Profile for dotfiles, packages and plugins (default: ${PROFILE:-none}, machine: ${MACHINE})
     -u|--unlink       Unlink dotfiles
     -m|--manager      Plugin manager      (default: ${PLUGIN_MANAGER})
     -n|--notheme      No zsh theme        (default: ${DO_ZSH_THEME})
@@ -1262,7 +1502,13 @@ set_osx_file_state () {
   if [ "${STATE}" = "nohidden" ]; then
     CHECK="-"
   fi
-  CURRENT=$( ls -aOl "${FILE}" | sed -n 2p | awk '{print $5}' )
+  CURRENT=$( ls -aOl "${FILE}" 2> /dev/null | sed -n 2p | awk '{print $5}' )
+  # ls -O (the file flags) is BSD only. Where it can't be read there is nothing to compare, which is
+  # not a setting that differs
+  if [ -z "${CURRENT}" ]; then
+    verbose_message "The flags of ${FILE} can't be read here, skipping" "warn"
+    return
+  fi
   if [ "${DO_DRIFT}" = "true" ]; then
     DRIFT_TOTAL=$(( DRIFT_TOTAL + 1 ))
     if [ ! "${CURRENT}" = "${CHECK}" ]; then
@@ -1597,14 +1843,14 @@ check_zinit_config () {
       if [ -f "${ZINIT_FILE}" ]; then
         execute_from_file "${ZINIT_FILE}"
       fi
-      # Your own plugins: files/zinit/local.zsh, same format, run after the shipped list and never
-      # overwritten by updates or --install. (It runs after the shipped list's completions step,
+      # Your own plugins: files/zinit/local.zsh (and the profile and machine layers), same format, run after
+      # the shipped list and never overwritten by updates or --install. (It runs after the shipped list's completions step,
       # so a plugin that only ships completion files may need a restart to pick them up)
-      ZINIT_LOCAL="${WORK_DIR}/files/zinit/local.zsh"
-      if [ -f "${ZINIT_LOCAL}" ]; then
+      local_layer_files "${WORK_DIR}/files/zinit" "zsh"
+      for ZINIT_LOCAL in "${LOCAL_LAYERS[@]}"; do
         verbose_message "Loading your plugins from ${ZINIT_LOCAL}"
         execute_from_file "${ZINIT_LOCAL}"
-      fi
+      done
     fi
   fi
 }
@@ -1931,6 +2177,7 @@ set_linux_defaults () {
 write_installed_list () {
   if is_osx; then
     execute_command "brew list 2> /dev/null | sort > ${(q)INSTALLED_FILE}"
+    execute_command "brew tap 2> /dev/null | sort > ${(q)TAPS_FILE}"
   else
     if is_linux && [ -n "${PKG_LIST_CMD}" ]; then
       execute_command "${PKG_LIST_CMD} > ${(q)INSTALLED_FILE}"
@@ -1943,10 +2190,22 @@ write_installed_list () {
 
 load_installed_list () {
   INSTALLED_LIST=()
+  TAPS_LIST=()
   if [ -f "${INSTALLED_FILE}" ]; then
     INSTALLED_LIST=( ${(f)"$(<${INSTALLED_FILE})"} )
   fi
+  # Taps are shown by brew in lower case
+  if [ -n "${TAPS_FILE}" ] && [ -f "${TAPS_FILE}" ]; then
+    TAPS_LIST=( ${(L)${(f)"$(<${TAPS_FILE})"}} )
+  fi
   INSTALLED_LOADED="true"
+}
+
+tap_installed () {
+  if [ ! "${INSTALLED_LOADED}" = "true" ]; then
+    load_installed_list
+  fi
+  (( ${TAPS_LIST[(Ie)${(L)1}]} ))
 }
 
 # Compares the short name, as brew list doesn't include the tap prefix
@@ -1966,6 +2225,10 @@ update_package_list () {
       write_installed_list
       DO_UPDATE_LIST="false"
       INSTALLED_LOADED="false"
+    elif is_osx && [ ! -f "${TAPS_FILE}" ]; then
+      # An install from before taps were checked has no list of them yet: write just that
+      execute_command "brew tap 2> /dev/null | sort > ${(q)TAPS_FILE}"
+      INSTALLED_LOADED="false"
     fi
   fi
 }
@@ -1975,10 +2238,12 @@ update_package_list () {
 # (a checksum is used rather than file age so a copied file with an old mtime isn't missed)
 
 package_list_changed () {
-  PACKAGE_STAMP="${WORK_DIR}/${REQUIRED_FILE:t}.sum"
-  # Both lists are in the checksum, so adding a package to your local list is noticed
-  PACKAGE_LOCAL="${REQUIRED_FILE:h}/local.${REQUIRED_FILE:e}"
-  PACKAGE_SUM=$( cat "${REQUIRED_FILE}" "${PACKAGE_LOCAL}" 2> /dev/null | cksum )
+  PACKAGE_STAMP="${WORK_DIR}/${1:t}.sum"
+  package_layer_files "$1"
+  (( ${#PACKAGE_LAYERS} )) || return 1
+  # Every layer is in the checksum, so adding a package to your own list is noticed, and so is switching
+  # to a profile (added only when there is one, so the checksums of existing installs don't change)
+  PACKAGE_SUM=$( { cat "${PACKAGE_LAYERS[@]}" 2> /dev/null; [ -n "${PROFILE}" ] && print -r -- "profile:${PROFILE}"; } | cksum )
   PACKAGE_OLD=""
   if [ -f "${PACKAGE_STAMP}" ]; then
     PACKAGE_OLD=$(<"${PACKAGE_STAMP}")
@@ -1991,7 +2256,7 @@ package_list_changed () {
 
 all_packages_installed () {
   for PACKAGE in "${REQUIRED_LIST[@]}"; do
-    package_installed "${PACKAGE}" || return 1
+    ${1:-package_installed} "${PACKAGE}" || return 1
   done
   return 0
 }
@@ -1999,18 +2264,23 @@ all_packages_installed () {
 # Process the required package list using the given per package check function
 # The stamp is only saved once everything is installed so failed installs are retried
 
+# Process one package list: PROCESS_FUNCTION is run for each package, LIST_FILE is the shipped list
+# (default: this system's) and LOOKUP says whether something is already there (default: package_installed).
+# The stamp is only saved once everything is there, so failed installs are retried
+
 process_package_list () {
   CHECK_FUNCTION="$1"
-  if [ -f "${REQUIRED_FILE}" ] && package_list_changed; then
-    read_required_list
-    update_package_list
-    for PACKAGE in "${REQUIRED_LIST[@]}"; do
-      ${CHECK_FUNCTION} "${PACKAGE}" ""
-    done
-    update_package_list
-    if all_packages_installed; then
-      execute_command "echo ${(q)PACKAGE_SUM} > ${(q)PACKAGE_STAMP}"
-    fi
+  PROCESS_FILE="${2:-${REQUIRED_FILE}}"
+  PROCESS_LOOKUP="${3:-package_installed}"
+  package_list_changed "${PROCESS_FILE}" || return 0
+  read_required_list "${PROCESS_FILE}"
+  update_package_list
+  for PACKAGE in "${REQUIRED_LIST[@]}"; do
+    ${CHECK_FUNCTION} "${PACKAGE}" ""
+  done
+  update_package_list
+  if all_packages_installed "${PROCESS_LOOKUP}"; then
+    execute_command "echo ${(q)PACKAGE_SUM} > ${(q)PACKAGE_STAMP}"
   fi
 }
 
@@ -2099,7 +2369,7 @@ check_linux_package () {
 
 check_osx_package () {
   PACKAGE="$1"
-  TYPE="$2"
+  local PACKAGE_TYPE="$2"
   have_lock || return
   verbose_message "Configuring OS X package \"${PACKAGE}\""
   [ "${INSTALL_BREW}" = "true" ] || return
@@ -2108,12 +2378,34 @@ check_osx_package () {
   fi
   package_installed "${PACKAGE}" && return
   notice_message "Installing package ${PACKAGE}"
-  if [ "${TYPE}" = "cask" ]; then
+  if [ "${PACKAGE_TYPE}" = "cask" ]; then
     execute_command "brew install --cask ${(q)PACKAGE}" "show"
   else
     execute_command "brew install ${(q)PACKAGE}" "show"
   fi
   DO_UPDATE_LIST="true"
+}
+
+# Check OSX tap (a brew tap, added before the formulae and casks so a formula from one can be found)
+
+check_osx_tap () {
+  PACKAGE="$1"
+  have_lock || return
+  verbose_message "Configuring brew tap \"${PACKAGE}\""
+  [ "${INSTALL_BREW}" = "true" ] || return
+  if [ ! -f "${TAPS_FILE}" ]; then
+    update_package_list
+  fi
+  tap_installed "${PACKAGE}" && return
+  notice_message "Adding tap ${PACKAGE}"
+  execute_command "brew tap ${(q)PACKAGE}" "show"
+  DO_UPDATE_LIST="true"
+}
+
+# Check OSX cask (an application or font, installed with brew install --cask)
+
+check_osx_cask () {
+  check_osx_package "$1" "cask"
 }
 
 # Check Linux Applications
@@ -2175,7 +2467,11 @@ check_osx_packages () {
         execute_command "cached_eval ${(q)BREW_TEST} \"${(q)BREW_TEST} shellenv\""
       fi
     fi
-    process_package_list "check_osx_package"
+    # Taps first, then formulae, then casks. Each list has its own stamp, and the lists are
+    # macos.tap, macos.brew and macos.cask (plus your local.tap, local.brew and local.cask)
+    process_package_list "check_osx_tap" "${REQUIRED_FILE:r}.tap" "tap_installed"
+    process_package_list "check_osx_package" "${REQUIRED_FILE}"
+    process_package_list "check_osx_cask" "${REQUIRED_FILE:r}.cask"
   else
     setup_brew_env
   fi
@@ -2353,7 +2649,10 @@ dotfiles_layers () {
   if [ -n "${DOTFILES_PROFILE}" ]; then
     DOT_LAYERS+=( "${DOTFILES_DIR}/profiles/${DOTFILES_PROFILE}" )
   fi
-  DOT_LAYERS+=( "${DOTFILES_DIR}/hosts/${DOTFILES_HOST}" )
+  # Without a host name this would be the hosts directory itself, and so every machine's files
+  if [ -n "${DOTFILES_HOST}" ]; then
+    DOT_LAYERS+=( "${DOTFILES_DIR}/hosts/${DOTFILES_HOST}" )
+  fi
 }
 
 # Build DOT_MAP: path relative to the home directory -> the file it should link to
@@ -2600,6 +2899,7 @@ print_config_template () {
 #GO_HOME=~/go               # GOPATH
 #ZSH_THEME=robbyrussell
 #SHARE_HISTORY=true
+#UPDATE_HINT=true           # once a day, in the background, check GitHub for a newer version and say so at the next prompt
 #PROMPT_ENGINE=p10k         # p10k (powerlevel10k), posh (oh-my-posh) or none: only one is installed and loaded
 #ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
@@ -2642,8 +2942,8 @@ print_config_template () {
 
 # Dotfiles (see --dotfiles): layers in ~/.ussuri/dotfiles/{common,profiles/<name>,hosts/<host>}
 #DO_DOTFILES_CHECK=true     # link them on every login, not just with --dotfiles
-#DOTFILES_PROFILE=work      # use profiles/work on top of common
-#DOTFILES_HOST=mybox        # default is the short hostname
+#PROFILE=work               # profile: adds profiles/work/ on top of common, for dotfiles, packages and plugins
+#MACHINE=mybox              # machine name for hosts/mybox/ (default is the short hostname)
 
 # Your own plugins and packages go in files, not in the shipped lists (updates and --install replace those):
 #   ~/.ussuri/files/zinit/local.zsh        zinit lines, same format as zinit.zsh, run after it
@@ -2805,15 +3105,19 @@ doctor_install () {
     fi
   fi
   setopt localoptions extendedglob
-  DOCTOR_LOCAL_ZINIT="${WORK_DIR}/files/zinit/local.zsh"
-  if [ -f "${DOCTOR_LOCAL_ZINIT}" ]; then
-    DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_LOCAL_ZINIT})"}:#(\#*|[[:space:]]#)} )
-    doctor_ok "local plugin list ${DOCTOR_LOCAL_ZINIT}: ${#DOCTOR_LINES} lines"
-  fi
-  DOCTOR_LOCAL_PACKAGES="${REQUIRED_FILE:h}/local.${REQUIRED_FILE:e}"
-  if [ -n "${REQUIRED_FILE}" ] && [ -f "${DOCTOR_LOCAL_PACKAGES}" ]; then
-    DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_LOCAL_PACKAGES})"}:#(\#*|[[:space:]]#)} )
-    doctor_ok "local package list ${DOCTOR_LOCAL_PACKAGES}: ${#DOCTOR_LINES} lines"
+  doctor_ok "profile: ${PROFILE:-none}"
+  doctor_ok "machine: ${MACHINE}"
+  local_layer_files "${WORK_DIR}/files/zinit" "zsh"
+  for DOCTOR_FILE in "${LOCAL_LAYERS[@]}"; do
+    DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_FILE})"}:#(\#*|[[:space:]]#)} )
+    doctor_ok "local plugin list ${DOCTOR_FILE#${WORK_DIR}/files/}: ${#DOCTOR_LINES} lines"
+  done
+  if [ -n "${REQUIRED_FILE}" ]; then
+    local_layer_files "${REQUIRED_FILE:h}" "${REQUIRED_FILE:e}"
+    for DOCTOR_FILE in "${LOCAL_LAYERS[@]}"; do
+      DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_FILE})"}:#(\#*|[[:space:]]#)} )
+      doctor_ok "local package list ${DOCTOR_FILE#${WORK_DIR}/files/}: ${#DOCTOR_LINES} lines"
+    done
   fi
   if [ "${INSTALL_ZINIT}" = "true" ] && [ "${PLUGIN_MANAGER}" = "zinit" ]; then
     if [ -f "${ZINIT_FILE}" ]; then
@@ -3001,6 +3305,19 @@ doctor_state () {
     else
       doctor_warn "OS X defaults have not been applied yet (they are on the next login, or run --defaults)"
     fi
+    if [ "${UPDATE_HINT}" = "true" ]; then
+      DOCTOR_LATEST=""
+      if [ -f "${WORK_DIR}/update.latest" ]; then
+        DOCTOR_LATEST=$(<"${WORK_DIR}/update.latest")
+      fi
+      if [[ "${DOCTOR_LATEST}" == [0-9].[0-9].[0-9] ]] && (( ${DOCTOR_LATEST//./} > ${SCRIPT_VERSION//./} )); then
+        doctor_warn "${DOCTOR_LATEST} is available (this is ${SCRIPT_VERSION}): run ${SCRIPT_NAME}.zsh --update"
+      elif [ -f "${WORK_DIR}/update.check" ]; then
+        doctor_ok "update hint is on, the latest known version is ${DOCTOR_LATEST:-not known yet}"
+      else
+        doctor_ok "update hint is on, not checked yet (the next login does it)"
+      fi
+    fi
     if read_journal && (( ${#JOURNAL_ACTIVE} )); then
       DOCTOR_RUN_WORD="runs"
       (( ${#JOURNAL_ACTIVE} == 1 )) && DOCTOR_RUN_WORD="run"
@@ -3042,6 +3359,57 @@ run_doctor () {
   print
   print -r -- "${DOCTOR_OK} ok, ${DOCTOR_WARN} warnings, ${DOCTOR_FAIL} failures"
   (( DOCTOR_FAIL == 0 ))
+}
+
+# The update hint (UPDATE_HINT=true, off by default as it contacts GitHub from your shell). At most once a
+# day a check runs in the background (a disowned job with its output detached, so a login never waits for
+# it) and records the latest version in ~/.ussuri/update.latest. When that is newer than this script a one
+# line hint is shown, at most once a day, at the first prompt rather than during startup (output during
+# startup upsets powerlevel10k's instant prompt). The stamp is touched before the check starts, so several
+# shells opened together start one check. On a normal login this is two glob qualifiers on the stamp files
+# and one small file read: no forks and no waiting
+
+show_update_hint () {
+  print -r -- "${UPDATE_HINT_TEXT}"
+  precmd_functions=( ${precmd_functions:#show_update_hint} )
+}
+
+# Runs in the background: ask for the latest version and keep it only if it looks like one
+
+update_hint_fetch () {
+  local remote
+  if (( $+commands[curl] )); then
+    remote=$( curl -fsS -m 15 "${SCRIPT_URL}" 2> /dev/null | grep -m1 '^# Version:' )
+  elif (( $+commands[wget] )); then
+    remote=$( wget -qO- -T 15 "${SCRIPT_URL}" 2> /dev/null | grep -m1 '^# Version:' )
+  fi
+  remote="${remote#\# Version: }"
+  [[ "${remote}" == [0-9].[0-9].[0-9] ]] || return 1
+  print -r -- "${remote}" >| "${WORK_DIR}/update.latest.$$" && mv -f "${WORK_DIR}/update.latest.$$" "${WORK_DIR}/update.latest"
+}
+
+check_update_hint () {
+  [ "${UPDATE_HINT}" = "true" ] || return 0
+  (( ${#ARGS} )) && return 0
+  [[ -o interactive ]] || return 0
+  local latest="" recent
+  if [ -f "${WORK_DIR}/update.latest" ]; then
+    latest=$(<"${WORK_DIR}/update.latest")
+  fi
+  # Versions are compared with the dots removed, as everywhere else (each part is a single digit)
+  if [[ "${latest}" == [0-9].[0-9].[0-9] ]] && (( ${latest//./} > ${SCRIPT_VERSION//./} )); then
+    recent=( ${WORK_DIR}/update.hinted(Nmh-24) )
+    if (( ! ${#recent} )); then
+      UPDATE_HINT_TEXT="${SCRIPT_NAME} ${latest} is available (this is ${SCRIPT_VERSION}): run ${SCRIPT_NAME}.zsh --update  (UPDATE_HINT=false turns this off)"
+      precmd_functions+=( show_update_hint )
+      : >| "${WORK_DIR}/update.hinted"
+    fi
+  fi
+  recent=( ${WORK_DIR}/update.check(Nmh-24) )
+  if (( ! ${#recent} )); then
+    : >| "${WORK_DIR}/update.check"
+    ( update_hint_fetch ) < /dev/null > /dev/null 2>&1 &!
+  fi
 }
 
 # Set defaults
@@ -3193,6 +3561,14 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
         -g|-l|-m|-M|-S|-W|-E|-Z)
           SWITCH_VALUE="true"
           ;;
+        -G)
+          # What to report on is optional, no value means everything
+          if [[ -z "${@[ARG_INDEX+1]}" || "${@[ARG_INDEX+1]}" == -* ]]; then
+            SWITCHES+=( all )
+          else
+            SWITCH_VALUE="true"
+          fi
+          ;;
         -R|-J)
           # Which backup (or run of defaults) is optional, no value means the newest
           if [[ -z "${@[ARG_INDEX+1]}" || "${@[ARG_INDEX+1]}" == -* ]]; then
@@ -3204,7 +3580,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- A b B c C d D e E: f F g: G h i I J: k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X y z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- A b B c C d D e E: f F g: G: h i I J: k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X y z Z: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -3287,7 +3663,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           shift OPTS
           ;;
         -M)
-          DOTFILES_PROFILE="${OPTS[2]}"
+          PROFILE="${OPTS[2]}"
           shift 2 OPTS
           ;;
         -u)
@@ -3316,7 +3692,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
         -G)
           DO_DRIFT="true"
-          shift OPTS
+          DRIFT_WHAT="${OPTS[2]}"
+          shift 2 OPTS
           ;;
         -B)
           DO_BACKUPS="true"
@@ -3504,7 +3881,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Do the drift report (read only)
 
   if [ "${DO_DRIFT}" = "true" ]; then
-    run_drift
+    run_drift "${DRIFT_WHAT}"
     DRIFT_STATUS=$?
     release_lock
     exit ${DRIFT_STATUS}
@@ -3700,6 +4077,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   if [ "${DO_CPPFLAGS_CHECK}" = "true" ]; then
     check_cppflags_config
   fi
+
+  # Say if there is a newer version (off unless UPDATE_HINT=true)
+
+  check_update_hint
 
   # Change to start directory
 
