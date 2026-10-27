@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.7] - 2026-10-27
+
+### Added
+
+- Undo for OS X defaults. Each setting the script changes is journalled in ~/.ussuri/defaults.journal (run, domain, key, previous type and value or "not set", value set), quoted with ${(q)} and read back with ${(Q)} so any value is safe and nothing is eval'd. An entry is written only after a read back shows the write took effect, so declined (--confirm), refused or ignored writes (e.g. a domain that doesn't take) are not recorded and --dryrun records nothing
+- -J|--defaults-undo [N|list]: list the runs, or put back the newest (or Nth newest) run, each setting with its previous type and value, or deleted if it was not set. A setting changed since by you is left alone and reported, as is one whose previous value was an array or dictionary. The Dock and Finder are restarted as needed (restart_osx_services, now shared with applying), the run is then marked undone so the next undo goes back one run, and --dryrun and --confirm are honoured. --doctor says how many runs can be undone. Checked against the real defaults binary on a scratch plist: types, an awkward string (quote and tab) and a new key all came back exactly. Only changes made from this version on are recorded; Linux GNOME settings are not covered
+
+## [1.5.6] - 2026-10-27
+
+### Added
+
+- --update now fetches the release archive (UPDATE_URL, default GitHub's main tarball) and updates the supporting files as well as the script. New files are added, changed ones replaced after the old copy is saved in ~/.ussuri/files.bak/<date>/, nothing is deleted, and local.* files are never touched. Before, --update replaced only ussuri.zsh, so new plugin and package lists never arrived. The archive is refused if its script doesn't parse or isn't the expected version, if any path in it is absolute or contains .. (nothing is written outside the temporary directory), or if UPDATE_SHA256 is set and doesn't match; if it can't be fetched the script alone is updated, with a warning. Checked against GitHub's real archive layout
+- Your own plugins and packages in files that updates and --install never overwrite: ~/.ussuri/files/zinit/local.zsh (run after the shipped list, same format) and ~/.ussuri/files/packages/local.<ext> (local.brew, local.apt, local.pacman, local.dnf, local.apk, local.nix). Both lists are in the package checksum, so a package added to the local list is noticed. --doctor reports them
+
+### Fixed
+
+- A release that fails validation is now always reported (the warning was only shown with --verbose)
+
+## [1.5.5] - 2026-10-27
+
+### Changed
+
+- One prompt engine instead of two. PROMPT_ENGINE is p10k (default), posh or none, and decides which of powerlevel10k and oh-my-posh is installed, set up on login, and loaded by the zinit plugin lists (the powerlevel10k plugin is now `if prompt_engine_is p10k`). Before, both were set up on every login and both hooked every prompt (checked in a real terminal: _omp_precmd and _p9k_precmd side by side), which also cost time: with the real script and oh-my-posh a login went from about 167 to 129 ms. An unknown value warns and falls back to p10k
+- -o selects oh-my-posh and -T powerlevel10k for that run, -E|--prompt|--engine NAME selects either, and -A (do all) now follows the engine instead of doing both. The last one given wins
+- --doctor reports the engine, only looks for the engine's own tool, and warns if DO_POSH_CHECK or DO_P10K_CHECK is on for the other engine. Existing installs need --install to refresh their copy of the plugin lists, otherwise their lists load powerlevel10k whatever the engine is
+
 ## [1.5.4] - 2026-10-27
 
 ### Added

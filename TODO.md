@@ -80,12 +80,23 @@ Plugins to add (all checked as maintained on 2026-10-27, none tested in a shell 
 
 - [x] **T1. `zsh-users/zsh-history-substring-search`** (1.5.1, 2026-10-27) Verified in a pty with the real plugin: Up after typing `echo a` recalls `echo alpha` rather than the previous command, for both `^[[A` and `^[OA`. The offline tests check list placement and the bindings. (last push 2026-09). Up/Down searches history for the typed text. Must load after zsh-syntax-highlighting; needs key bindings.
 - [x] **T2. `wfxr/forgit`** (1.5.2, 2026-10-27) 16 of its 29 aliases clashed with the OMZ git snippet (ga, gd, gco, gcb, gss, glo...), so they are renamed `fg*`. Verified in a pty that the git aliases keep their meaning. `tests/forgit-aliases.zsh` re-checks against upstream. (2026-10). Interactive git commands driven by fzf (fzf is already in the package list).
-- [x] **T3. `zoxide`** (1.5.3, 2026-10-27) In every package list; set up on login only when installed, cached. Not run against the real binary (see below): its init template was read from the source and its compdef guard emulated with a stub in a pty, which found that turbo mode needed `register_zoxide_completion` after compinit. Re-verify with the real binary once zoxide is installed. (2026-10). A tool, not a plugin: smarter `cd`. Add to the package lists and set it up through `cached_eval`. Not in `macos.brew` or installed today.
+- [x] **T3. `zoxide`** (1.5.3, 2026-10-27) In every package list; set up on login only when installed, cached. Verified against the real zoxide 0.10.0 on 2026-10-27, running the actual 1.5.4 script as `~/.zshrc` in a pty with a sandbox home: z and zi defined, completion registered, `chpwd` hook installed, `z beta`/`z alpha`/fuzzy `z alp` jump correctly, the cache is written once and reused (its content equals the current `zoxide init zsh`). A/B: without `register_zoxide_completion` in the turbo list `z` has no completion; with it, it does.
 - [ ] **T4. `MichaelAquilina/zsh-you-should-use`** (2026-05, optional). Reminds you of aliases you did not use.
 - [ ] **T5. `atuin`** (2026-10, optional). Searchable, optionally synced history database replacing Ctrl-R. Opinionated and heavier.
 - [ ] **T6. `jeffreytse/zsh-vi-mode`** (2026-07, optional). Only if you use vi bindings.
 
 Decided against: fast-syntax-highlighting (alternative to the one already loaded), zsh-autocomplete (conflicts with fzf-tab), zsh-z (zoxide is better), zsh-defer (zinit `wait` does it, stale since 2024), zsh-autopair (stale since 2024).
+
+## Recommendations from the review of 2026-10-27
+
+- [x] **R1. One prompt engine** (1.5.5, 2026-10-27) `PROMPT_ENGINE` (p10k default, posh, none). Verified in a real terminal that 1.5.4 hooked both engines into every prompt and that 1.5.5 hooks only powerlevel10k. Measured saving is about 38 ms per login (167 to 129 ms), not the ~250 ms first estimated from timing `oh-my-posh init` on its own. Not verified: which engine drew the prompt when both were active.
+- [x] **R2. `--update` refreshes `files/`, and local override files** (1.5.6, 2026-10-27) Archive-based update with backups of replaced files, safe-path and optional checksum checks, script-only fallback; `zinit/local.zsh` and `packages/local.<ext>`. Checked against the real GitHub archive layout. Not exercised end to end against GitHub itself because the remote (1.5.4) is older than the local script, so `-U` correctly reports "newer".
+- [x] **R3. Undo for macOS defaults** (1.5.7, 2026-10-27) `defaults.journal` + `--defaults-undo [N|list]`. Verified with the real `defaults` binary on a scratch plist (read-type names, types, awkward string, new key). Not covered: Linux GNOME settings, the Library hidden flag, anything applied before 1.5.7, and previous values that were arrays or dictionaries.
+- [ ] **R4. CI** (GitHub Actions: smoke tests on macOS and Ubuntu, container jobs for Fedora, Arch, Alpine and Debian running `--doctor` and a package dry-run).
+- [ ] **R5. Package drift** (`--drift` for packages: listed but not installed, installed but not listed).
+- [ ] **R6. Casks and taps on macOS.**
+- [ ] **R7. Profiles for packages and plugins** (work, personal, per host), reusing the dotfiles layering.
+- [ ] **R8. Daily non-blocking "update available" hint.**
 
 ## Housekeeping when a fix ships
 

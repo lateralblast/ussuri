@@ -22,4 +22,4 @@ zinit snippet OMZP::command-not-found
 # Load completions
 autoload -Uz compinit && compinit
 zinit cdreplay -q
-zinit ice depth=1; zinit light romkatv/powerlevel10k
+if prompt_engine_is p10k; then zinit ice depth=1; zinit light romkatv/powerlevel10k; fi
