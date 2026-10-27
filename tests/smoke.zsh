@@ -351,6 +351,16 @@ EOF
   TOOL_ENV=( FNM_INSTALL_URL="file://${d}/fnm.sh" RUSTUP_INSTALL_URL="file://${d}/rustup.sh" UV_INSTALL_URL="file://${d}/uv.sh" MISE_INSTALL_URL="file://${d}/mise.sh" )
 }
 
+# Source the script as a login shell would and print the history state it leaves behind
+# (options only exist in the shell that sets them, so they have to be read back from inside it)
+
+history_state () {
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${EXTRA_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "size=${HISTSIZE} save=${SAVEHIST} file=${HISTFILE} dups=${options[histignoredups]} space=${options[histignorespace]} find=${options[histfindnodups]} blanks=${options[histreducebLanks]:-${options[histreduceblanks]}} share=${options[sharehistory]}"' zsh "${SCRIPT}"
+}
+
 # Tests
 
 test_syntax () {
@@ -1176,6 +1186,72 @@ test_transmission_blocklist () {
   out=$( run --drift 2>&1 )
   check "--drift shows the old URL moving to the new one" "$( print -r -- "${out}" | grep -c -E 'BlocklistURL +http://john.bitsurge.net.* -> https://list.iblocklist.com' )" "1"
   use_plain_defaults
+}
+
+test_conditional_snippets () {
+  new_home
+  # A zinit that records what it is asked to load
+  print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"
+  local turbo row osid like want
+  for turbo in true false; do
+    # OS release (ID|ID_LIKE|expected) on Linux, and macOS with no override
+    for row in 'arch||yes' 'endeavouros|arch|yes' 'manjaro|arch|yes' 'ubuntu||no' 'fedora||no' 'debian||no'; do
+      osid="${row%%|*}"; want="${row##*|}"; like="${${row#*|}%%|*}"
+      print -r -- "ID=${osid}" > "${TMP}/os-release"
+      [[ -n "${like}" ]] && print -r -- "ID_LIKE=\"${like}\"" >> "${TMP}/os-release"
+      : > "${LOG}"
+      EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ZINIT_TURBO="${turbo}" )
+      run --zinit > /dev/null 2>&1
+      check "turbo=${turbo}: archlinux snippet on ${osid}${like:+ (like ${like})}" "$( grep -c 'snippet OMZP::archlinux' "${LOG}" | awk '{print ($1 > 0) ? "yes" : "no"}' )" "${want}"
+    done
+    : > "${LOG}"
+    EXTRA_ENV=( ZINIT_TURBO="${turbo}" )
+    run --zinit > /dev/null 2>&1
+    check "turbo=${turbo}: not loaded on macOS" "$( grep -c 'OMZP::archlinux' "${LOG}" )" "0"
+    check "turbo=${turbo}: the other snippets still load on macOS" "$( grep -c -E 'snippet OMZP::(git|sudo|aws|kubectl|kubectx|command-not-found)$' "${LOG}" )" "6"
+  done
+  EXTRA_ENV=()
+  check "an unconditional archlinux line is gone from both lists" "$( grep -c -E '^zinit( ice[^;]*;)? *zinit snippet OMZP::archlinux|^zinit snippet OMZP::archlinux' "${ROOT}"/files/zinit/zinit.zsh "${ROOT}"/files/zinit/zinit-turbo.zsh | grep -v ':0' | wc -l | tr -d ' ' )" "0"
+}
+
+test_os_is_like () {
+  load_function os_is_like
+  OS_ID="arch"; OS_LIKE=""; os_is_like arch && ok "arch is arch" || bad "arch is arch"
+  OS_ID="manjaro"; OS_LIKE="arch"; os_is_like arch && ok "manjaro is like arch" || bad "manjaro is like arch"
+  OS_ID="linuxmint"; OS_LIKE="ubuntu debian"; os_is_like debian && ok "mint is like debian" || bad "mint is like debian"
+  OS_ID="ubuntu"; OS_LIKE="debian"; os_is_like arch && bad "ubuntu is not arch" || ok "ubuntu is not arch"
+  OS_ID=""; OS_LIKE=""; os_is_like arch && bad "no OS_ID is not arch" || ok "no OS_ID (macOS) is not arch"
+  OS_ID="archery"; OS_LIKE="archive"; os_is_like arch && bad "a name containing arch is not arch" || ok "a name containing arch is not arch"
+  unset OS_ID OS_LIKE
+}
+
+test_history () {
+  new_home
+  local state
+  state=$( history_state )
+  check "the history size is raised from the system default" "$( print -r -- "${state}" | sed -E 's/.*size=([0-9]+).*/\1/' )" "50000"
+  check "and so is the number saved" "$( print -r -- "${state}" | sed -E 's/.*save=([0-9]+).*/\1/' )" "50000"
+  check "consecutive duplicates are not recorded" "$( print -r -- "${state}" | grep -c 'dups=on' )" "1"
+  check "commands with a leading space are not recorded" "$( print -r -- "${state}" | grep -c 'space=on' )" "1"
+  check "searching skips duplicates" "$( print -r -- "${state}" | grep -c 'find=on' )" "1"
+  check "extra blanks are removed" "$( print -r -- "${state}" | grep -c 'blanks=on' )" "1"
+  check "history is still shared between shells" "$( print -r -- "${state}" | grep -c 'share=on' )" "1"
+  check "a history file is chosen, as without one nothing is saved" "$( print -r -- "${state}" | grep -c "file=${H}/.zsh_history" )" "1"
+  EXTRA_ENV=( HISTFILE=/somewhere/else/hist )
+  check "an existing HISTFILE is respected" "$( history_state | grep -c 'file=/somewhere/else/hist' )" "1"
+  EXTRA_ENV=()
+  print -r -- "HISTORY_SIZE=1234" > "${H}/.ussuri/config"
+  state=$( history_state )
+  check "HISTORY_SIZE in the config sets both" "$( print -r -- "${state}" | grep -c 'size=1234 save=1234' )" "1"
+  print -r -- "DO_HISTORY=false" > "${H}/.ussuri/config"
+  state=$( history_state )
+  check "DO_HISTORY=false leaves the system settings alone" "$( print -r -- "${state}" | grep -c -E 'size=50000|dups=on|space=on' )" "0"
+  print -r -- "SHARE_HISTORY=false" > "${H}/.ussuri/config"
+  state=$( history_state )
+  check "SHARE_HISTORY=false still turns sharing off" "$( print -r -- "${state}" | grep -c 'share=on' )" "0"
+  check "and the other history settings still apply" "$( print -r -- "${state}" | grep -c 'dups=on' )" "1"
+  rm -f "${H}/.ussuri/config"
+  check "the history settings are not applied by --help or --version" "$( run --version 2>&1 | wc -l | tr -d ' ' )" "1"
 }
 
 test_init_cache () {

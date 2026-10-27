@@ -68,6 +68,25 @@ Follow-up from B1/B2 (done, 1.1.9, 2026-10-26): `set_env` now only exports `GOPA
 - [x] **C9.** (1.4.1, 2026-10-26) `~/.ussuri/config` plus `--config`; precedence is defaults, environment, config, switches. Original item: `~/.ussuri/config` for overrides.
 - [x] **C10.** (1.4.2, 2026-10-26) `--dotfiles`/`--unlink`/`--profile`, layered common/profile/host, with backups. Original item: Dotfile linking (chezmoi/stow style) and machine-specific profiles.
 
+## Plugins and shell setup (from the review of 2026-10-27)
+
+Housekeeping on what is already loaded:
+
+- [x] **H1. Conditional snippets.** (1.4.9, 2026-10-27) `os_is_like arch` guard in both lists; tested for arch, endeavouros and manjaro (load) and ubuntu, fedora, debian, macOS (do not). Existing installs need `--install` to refresh their copy of the lists. `OMZP::archlinux` is loaded on every OS but only adds Arch/pacman aliases. Load it only on Arch and derivatives. Existing installs keep their copy of the list until it is replaced (see the note in the changelog when this ships).
+- [x] **H2. `OMZP::command-not-found` on macOS.** (checked 2026-10-27, no change needed) The snippet is cross-platform: on macOS it sources Homebrew's own built-in handler (`/opt/homebrew/Library/Homebrew/command-not-found/handler.sh`, present here) and a fresh interactive shell has `command_not_found_handler` defined. Not triggered for real, as it can download Homebrew's database. Unchecked whether it does anything there. Verify, then keep it, make it conditional, or drop it.
+- [x] **H3. History settings.** (1.5.0, 2026-10-27) `HISTORY_SIZE` (50000), `DO_HISTORY`, `HISTFILE` default, four hist_* options. Read back from a sourced shell in the tests. The script sets only `inc_append_history` and `share_history`: no size, no dedupe. macOS `/etc/zshrc` gives `HISTSIZE=2000`. Add sensible, overridable defaults (size, ignore duplicates and leading-space commands). Do this before T1, which is most useful with a long history.
+
+Plugins to add (all checked as maintained on 2026-10-27, none tested in a shell yet; add to both `zinit-turbo.zsh` and `zinit.zsh` in the same order):
+
+- [ ] **T1. `zsh-users/zsh-history-substring-search`** (last push 2026-09). Up/Down searches history for the typed text. Must load after zsh-syntax-highlighting; needs key bindings.
+- [ ] **T2. `wfxr/forgit`** (2026-10). Interactive git commands driven by fzf (fzf is already in the package list).
+- [ ] **T3. `zoxide`** (2026-10). A tool, not a plugin: smarter `cd`. Add to the package lists and set it up through `cached_eval`. Not in `macos.brew` or installed today.
+- [ ] **T4. `MichaelAquilina/zsh-you-should-use`** (2026-05, optional). Reminds you of aliases you did not use.
+- [ ] **T5. `atuin`** (2026-10, optional). Searchable, optionally synced history database replacing Ctrl-R. Opinionated and heavier.
+- [ ] **T6. `jeffreytse/zsh-vi-mode`** (2026-07, optional). Only if you use vi bindings.
+
+Decided against: fast-syntax-highlighting (alternative to the one already loaded), zsh-autocomplete (conflicts with fzf-tab), zsh-z (zoxide is better), zsh-defer (zinit `wait` does it, stale since 2024), zsh-autopair (stale since 2024).
+
 ## Housekeeping when a fix ships
 
 Bump `# Version:` in `ussuri.zsh`, `Current Version` in `README.md`, and add a `CHANGELOG.md` entry (single digits per component, per CLAUDE.md).

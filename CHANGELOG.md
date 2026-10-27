@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.0] - 2026-10-27
+
+### Added
+
+- History settings: HISTSIZE and SAVEHIST are raised to HISTORY_SIZE (default 50000, from the system's 2000 on macOS or zsh's 30), HISTFILE is set to ~/.zsh_history if nothing has set it (without one nothing is saved), and repeated commands, commands with a leading space and extra blanks are left out (hist_ignore_dups, hist_ignore_space, hist_find_no_dups, hist_reduce_blanks). DO_HISTORY=false leaves it all to the system. Sharing between shells is unchanged and still controlled by SHARE_HISTORY
+
+## [1.4.9] - 2026-10-27
+
+### Changed
+
+- The Oh My Zsh archlinux snippet (Arch and pacman aliases) is loaded only on Arch and its derivatives (Manjaro, EndeavourOS...), not on every system. It is a one line `if os_is_like arch; then ...; fi` in both plugin lists. The copies in ~/.ussuri/files are not updated automatically: run --install again to refresh them (this replaces them)
+
+### Added
+
+- os_is_like: whether this Linux distribution is, or is derived from, the given one (os-release ID or a word in ID_LIKE)
+
+### Fixed
+
+- Found while writing os_is_like: subscripting a nested `${${=VAR}[(Ie)word]}` in zsh searches inside one string, so "arch" would have matched a word that merely contains it. It goes through an array instead
+
 ## [1.4.8] - 2026-10-27
 
 ### Changed

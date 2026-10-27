@@ -10,10 +10,10 @@ zinit ice wait lucid; zinit light zsh-users/zsh-syntax-highlighting
 zinit ice wait lucid; zinit light zsh-users/zsh-completions
 zinit ice wait lucid; zinit light zsh-users/zsh-autosuggestions
 zinit ice wait lucid; zinit light Aloxaf/fzf-tab
-# Add in snippets
+# Add in snippets (one line each: they are run one line at a time)
 zinit ice wait lucid; zinit snippet OMZP::git
 zinit ice wait lucid; zinit snippet OMZP::sudo
-zinit ice wait lucid; zinit snippet OMZP::archlinux
+if os_is_like arch; then zinit ice wait lucid; zinit snippet OMZP::archlinux; fi
 zinit ice wait lucid; zinit snippet OMZP::aws
 zinit ice wait lucid; zinit snippet OMZP::kubectl
 zinit ice wait lucid; zinit snippet OMZP::kubectx

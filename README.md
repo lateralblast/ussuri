@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.4.8
+Current Version: 1.5.0
 
 License
 -------
@@ -189,6 +189,15 @@ changes the default for every shell. The order of precedence is: built in defaul
 environment, then the config file, then command line switches. It is executed, so keep it writable
 only by you (--doctor warns if it is not, and if it has a syntax error). It is never overwritten.
 
+History
+-------
+
+A login shell keeps 50000 lines of history (macOS defaults to 2000, a bare zsh to 30) in the history file
+(~/.zsh_history unless HISTFILE is already set), shared between shells, and leaves out repeated commands,
+commands typed with a leading space (a way to keep one out of history) and extra blanks. Set HISTORY_SIZE to
+change the size, or DO_HISTORY=false to leave all of this to the system (SHARE_HISTORY=false turns sharing
+off separately), for example in the config.
+
 Startup
 -------
 
@@ -203,6 +212,10 @@ Work that only needs doing occasionally is tracked in ~/.ussuri:
 - zinit plugins load in turbo mode (files/zinit/zinit-turbo.zsh): the prompt appears first and the
   other plugins load just after it, about 75ms sooner. Set ZINIT_TURBO=false for the original list
   (files/zinit/zinit.zsh) that loads everything before the prompt
+- Plugin lists are run one line at a time, so a snippet that only applies to some systems is written as
+  a one line `if os_is_like arch; then ...; fi` (the Arch aliases load only on Arch and its derivatives).
+  The lists are copied to ~/.ussuri/files when installed, so a changed list reaches an existing install
+  when you run --install again (which replaces the copies there)
 
 Drift report
 ------------
