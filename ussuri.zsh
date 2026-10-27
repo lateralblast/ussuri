@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.4.8
+# Version: 1.5.0
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -130,6 +130,18 @@ is_osx () {
 
 is_linux () {
   [[ "${OS_NAME}" == *Linux* ]]
+}
+
+# Is this Linux distribution the given one, or derived from it? (os-release ID, or one of the
+# words in ID_LIKE: Manjaro and EndeavourOS are "arch", Mint and Pop!_OS are "debian"/"ubuntu".)
+# Used by the plugin lists in files/zinit to load a snippet only where it applies
+
+os_is_like () {
+  [[ "${OS_ID}" == "$1" ]] && return 0
+  # Via an array: subscripting ${${=OS_LIKE}[...]} directly searches inside one string, so "arch"
+  # would match a word that merely contains it
+  local like_words=( ${=OS_LIKE} )
+  (( ${like_words[(Ie)$1]} ))
 }
 
 # Handle output
@@ -919,6 +931,8 @@ set_all_defaults () {
   set_env "ZSH_THEME"           "robbyrussell"
   set_env "PLUGIN_MANAGER"      "zinit"
   set_env "SHARE_HISTORY"       "true"
+  set_env "DO_HISTORY"          "true"
+  set_env "HISTORY_SIZE"        "50000"
   set_env "SUDOERS_ENTRY"       "ALL=(ALL) NOPASSWD:ALL"
   check_dir_exists              "${WORK_DIR}/files"
 }
@@ -2210,6 +2224,8 @@ print_config_template () {
 #GO_HOME=~/go               # GOPATH
 #ZSH_THEME=robbyrussell
 #SHARE_HISTORY=true
+#DO_HISTORY=false           # leave history settings to the system
+#HISTORY_SIZE=50000         # lines kept in memory and in the history file
 #TRANSMISSION_BLOCKLIST_URL=https://example.com/list.p2p.gz   # a .p2p (or .gz) blocklist for Transmission (OS X)
 
 # Components (true or false)
@@ -2998,6 +3014,20 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Incrementally append and hare history between sessions
 
+  # History: keep a lot more than the system default (macOS gives 2000, a bare zsh 30) and leave out
+  # the noise: repeats, commands typed with a leading space (a way to keep one out of history),
+  # and stray blanks. HISTFILE is chosen if nothing has, as without one nothing is saved.
+  # DO_HISTORY=false leaves all of this to the system, HISTORY_SIZE changes the size
+
+  if [ "${DO_HISTORY}" = "true" ]; then
+    HISTSIZE="${HISTORY_SIZE}"
+    SAVEHIST="${HISTORY_SIZE}"
+    HISTFILE="${HISTFILE:-${ZDOTDIR:-${HOME_DIR}}/.zsh_history}"
+    setopt hist_ignore_dups
+    setopt hist_ignore_space
+    setopt hist_find_no_dups
+    setopt hist_reduce_blanks
+  fi
   if [ "${SHARE_HISTORY}" = "true" ]; then
     setopt inc_append_history
     setopt share_history
