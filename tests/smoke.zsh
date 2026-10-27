@@ -89,6 +89,8 @@ export PYENV_SHELL=zsh
 command pyenv rehash 2>/dev/null || true
 EOF
   stub pyenv    "echo \"pyenv \$*\" >> ${LOG}; [ \"\$1\" = init ] && cat ${TMP}/pyenv.init; exit 0"
+  # zoxide init prints the same text every time; this one sets a variable so a test can see it was used
+  stub zoxide "echo \"zoxide \$*\" >> ${LOG}; [ \"\$1\" = init ] && printf 'export ZOXIDE_INIT_RAN=1\\n__zoxide_z () { :; }\\n'; exit 0"
   stub oh-my-posh "echo \"oh-my-posh \$*\" >> ${LOG}; exit 0"
   cp "${TMP}/stubs/brew" "${TMP}/brew/bin/brew"
   # Point the copy of the script at the stub brew. If the pattern goes missing the real brew
@@ -1252,6 +1254,117 @@ test_history () {
   check "and the other history settings still apply" "$( print -r -- "${state}" | grep -c 'dups=on' )" "1"
   rm -f "${H}/.ussuri/config"
   check "the history settings are not applied by --help or --version" "$( run --version 2>&1 | wc -l | tr -d ' ' )" "1"
+}
+
+test_history_substring_search () {
+  local list name
+  for name in zinit.zsh zinit-turbo.zsh; do
+    list="${ROOT}/files/zinit/${name}"
+    check "${name}: loads zsh-history-substring-search" "$( grep -c 'zinit light zsh-users/zsh-history-substring-search' "${list}" )" "1"
+    check "${name}: after zsh-syntax-highlighting, as its README requires" "$( grep -o 'zinit \(light\|snippet\) [^ ;]*' "${list}" | grep -n -E 'zsh-syntax-highlighting|zsh-history-substring-search' | cut -d: -f2 | awk '{print $3}' | tr '\n' ' ' )" "zsh-users/zsh-syntax-highlighting zsh-users/zsh-history-substring-search "
+    check "${name}: binds the keys" "$( grep -c 'bind_history_search' "${list}" )" "1"
+  done
+  check "turbo: binds the keys once the plugin has loaded, not before (the widgets don't exist until then)" "$( grep -c -E 'ice wait lucid atload"bind_history_search"; zinit light zsh-users/zsh-history-substring-search' "${ROOT}/files/zinit/zinit-turbo.zsh" )" "1"
+  check "eager: binds on the line after the plugin" "$( grep -A1 'zinit light zsh-users/zsh-history-substring-search' "${ROOT}/files/zinit/zinit.zsh" | tail -1 )" "bind_history_search"
+}
+
+test_bind_history_search () {
+  zle -N history-substring-search-up true 2> /dev/null
+  zle -N history-substring-search-down true 2> /dev/null
+  load_function bind_history_search
+  bind_history_search
+  local bound
+  bound=$( bindkey | grep history-substring-search )
+  check "Up is bound in both keypad modes" "$( print -r -- "${bound}" | grep -c -E '"\^\[(\[|O)A" history-substring-search-up' )" "2"
+  check "and Down" "$( print -r -- "${bound}" | grep -c -E '"\^\[(\[|O)B" history-substring-search-down' )" "2"
+  check "duplicates in history are skipped, to match hist_find_no_dups" "${HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE}" "1"
+  check "it succeeds even if a widget is missing (plugin did not load)" "$( zsh -c 'eval "$(sed -n "/^bind_history_search () {/,/^}/p" "$1")"; bind_history_search 2> /dev/null; echo $?' zsh "${SRC}" )" "0"
+  unset HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE
+}
+
+test_forgit () {
+  local list name rename names=( ga gbd gbl gcb gcf gclean gco gcp gd glo grb grh grs gss gsw gwt )
+  for name in zinit.zsh zinit-turbo.zsh; do
+    list="${ROOT}/files/zinit/${name}"
+    check "${name}: loads wfxr/forgit" "$( grep -c 'zinit light wfxr/forgit' "${list}" )" "1"
+    check "${name}: renames its clashing aliases first (forgit reads the variables as it loads)" "$( grep -n -E '^export forgit_|zinit light wfxr/forgit' "${list}" | cut -d: -f1 | paste -sd' ' - | awk '{print ($1 < $2) ? "before" : "after"}' )" "before"
+    rename=$( grep -E '^export forgit_' "${list}" )
+    check "${name}: renames all 16 aliases that clash with the git snippet" "$( print -r -- "${rename}" | grep -o 'forgit_[a-z_]*=' | wc -l | tr -d ' ' )" "16"
+    check "${name}: every new name starts with fg, which no git snippet alias does" "$( print -r -- "${rename}" | grep -o 'forgit_[a-z_]*=[a-z]*' | grep -v -c -E '=fg[a-z]+$' )" "0"
+    check "${name}: git snippet is loaded as before" "$( grep -c 'snippet OMZP::git' "${list}" )" "1"
+  done
+  # The aliases that clash, from the git snippet, and what they are renamed to
+  local a
+  for a in ${names}; do
+    check "turbo: forgit's ${a} is renamed to f${a}" "$( grep -c -E "^export .*=f${a}( |\$)" "${ROOT}/files/zinit/zinit-turbo.zsh" )" "1"
+  done
+  check "both lists rename them the same way" "$( grep -E '^export forgit_' "${ROOT}/files/zinit/zinit.zsh" )" "$( grep -E '^export forgit_' "${ROOT}/files/zinit/zinit-turbo.zsh" )"
+  check "turbo: the last line is still the one that runs compinit after everything else" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit' )" "1"
+}
+
+test_zoxide () {
+  new_home
+  local f state
+  for f in macos.brew ubuntu.apt arch.pacman endeavouros.pacman fedora.dnf alpine.apk nix.nix; do
+    check "zoxide is in files/packages/${f}" "$( grep -c '^zoxide$' "${ROOT}/files/packages/${f}" )" "1"
+  done
+  run > /dev/null 2>&1
+  check "a login runs zoxide init once to build the cache" "$( calls 'zoxide init zsh' )" "1"
+  check "the cache holds its output" "$( cat "${H}"/.ussuri/cache/*zoxide* 2> /dev/null | grep -c 'ZOXIDE_INIT_RAN' )" "1"
+  : > "${LOG}"
+  run > /dev/null 2>&1
+  check "later logins do not run zoxide at all" "$( calls 'zoxide' )" "0"
+  state=$( env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm PATH="${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "ran=${ZOXIDE_INIT_RAN:-no} fn=${+functions[__zoxide_z]}"' zsh "${SCRIPT}" )
+  check "and a login shell ends up with what init defines (from the cache)" "${state}" "ran=1 fn=1"
+  EXTRA_ENV=( INSTALL_ZOXIDE=false ); : > "${LOG}"
+  run > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "INSTALL_ZOXIDE=false skips it" "$( calls 'zoxide' )" "0"
+  EXTRA_ENV=( DO_CACHE_INIT=false ); : > "${LOG}"
+  run > /dev/null 2>&1; run > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "DO_CACHE_INIT=false runs init every time" "$( calls 'zoxide init zsh' )" "2"
+  check "a manual run (-N, no environment setup) does not touch it" "$( : > "${LOG}"; run -N > /dev/null 2>&1; calls 'zoxide' )" "0"
+}
+
+test_zoxide_missing () {
+  new_home
+  rm "${STUBS}/zoxide"
+  local out
+  out=$( run 2>&1 ); local rc=$?
+  check "without zoxide a login is silent and succeeds" "${rc}:${#out}" "0:0"
+  check "and builds no cache" "$( nfiles "${H}/.ussuri/cache/*zoxide*" )" "0"
+  out=$( run --doctor 2>&1 )
+  check "doctor says it is missing and how to get it" "$( print -r -- "${out}" | grep -c 'warn.*zoxide.*not installed' )" "1"
+  stub zoxide "echo \"zoxide \$*\" >> ${LOG}; [ \"\$1\" = init ] && printf 'export ZOXIDE_INIT_RAN=1\\n__zoxide_z () { :; }\\n'; exit 0"
+  out=$( run --doctor 2>&1 )
+  check "and is happy once it is there" "$( print -r -- "${out}" | grep -c 'ok.*zoxide' )" "1"
+  EXTRA_ENV=( INSTALL_ZOXIDE=false )
+  out=$( run --doctor 2>&1 )
+  EXTRA_ENV=()
+  check "doctor says nothing when you have turned it off" "$( print -r -- "${out}" | grep -c zoxide )" "0"
+}
+
+test_zoxide_completion () {
+  load_function register_zoxide_completion
+  local calls=()
+  compdef () { calls+=( "$*" ) }
+  # Both zoxide's completion function and compdef exist: registered for z
+  __zoxide_z_complete () { :; }
+  register_zoxide_completion
+  check "registers zoxide's completion for z once compdef exists" "${calls[*]}" "__zoxide_z_complete z"
+  # zoxide not set up: nothing, and no error
+  unfunction __zoxide_z_complete
+  calls=()
+  register_zoxide_completion; local rc=$?
+  check "does nothing without zoxide, and succeeds" "${#calls}:${rc}" "0:0"
+  # compdef not there yet (compinit has not run): nothing, and no error
+  unfunction compdef
+  __zoxide_z_complete () { :; }
+  register_zoxide_completion; rc=$?
+  check "does nothing before compinit, and succeeds" "${rc}" "0"
+  unfunction __zoxide_z_complete
+  check "turbo: the completion is registered right after compinit, in the same step" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit.*zinit cdreplay -q; register_zoxide_completion"' )" "1"
 }
 
 test_init_cache () {

@@ -33,4 +33,5 @@ tree
 wget
 xorriso
 yamllint
+zoxide
 zsh

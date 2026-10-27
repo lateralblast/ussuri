@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.3] - 2026-10-27
+
+### Added
+
+- zoxide (a smarter cd: z and zi) in every package list (macos.brew, ubuntu.apt, arch.pacman, endeavouros.pacman, fedora.dnf, alpine.apk, nix.nix), and check_zoxide_config, which sets it up on login only if it is installed (a login never downloads anything), through the init cache since its init output is the same every time. INSTALL_ZOXIDE=false turns it off. --doctor says if it isn't installed
+- register_zoxide_completion: zoxide registers its completion only if compdef exists when it is set up, and in turbo mode that is before compinit has run, so z would have had no completion. The turbo plugin list now registers it right after compinit. Checked in a real terminal (pty) using zoxide's documented guard: registered in turbo mode, and nothing breaks without zoxide. The eager list is unaffected, as compinit has run by then
+
+## [1.5.2] - 2026-10-27
+
+### Added
+
+- forgit (wfxr/forgit) in both plugin lists: interactive git commands driven by fzf, which is in every package list. 16 of its default aliases (ga, gbd, gbl, gcb, gcf, gclean, gco, gcp, gd, glo, grb, grh, grs, gss, gsw, gwt) have the same name as aliases in the Oh My Zsh git snippet, so they are renamed with an f in front (fga, fgd, fgcb...) before it loads, to leave the git aliases' meanings alone. Checked in a real terminal session (pty): gcb is still git checkout -b, fgcb is forgit's, gi and gat (no clash) keep their names
+- tests/forgit-aliases.zsh (needs the network): checks the renames against the current forgit and git snippet and fails if one clashes without being renamed, is renamed without clashing, or the new name clashes itself. Tried against a deliberately broken copy to confirm it fails
+
+## [1.5.1] - 2026-10-27
+
+### Added
+
+- zsh-history-substring-search in both plugin lists, after zsh-syntax-highlighting as its README requires: type part of a command and press Up or Down to step through the history entries containing it. Checked in a real terminal session (pty) with both arrow key sequences. bind_history_search binds Up/Down for the usual escape sequences and terminfo's, and skips duplicates (to match hist_find_no_dups). In turbo mode the keys are bound once the plugin has loaded, as its widgets don't exist before. (The plugin README's suggested _history_substring_search_config function no longer exists, so it isn't used.) Existing installs need --install to refresh their copy of the lists
+
 ## [1.5.0] - 2026-10-27
 
 ### Added
