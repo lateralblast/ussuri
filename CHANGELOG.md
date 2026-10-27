@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.4] - 2026-10-27
+
+### Changed
+
+- README rewritten and reorganised by what you are trying to do (quick start, how it works, usage, configuration with a settings reference, prompt, plugins, packages, languages and tools, system settings, dotfiles, maintenance, security notes, testing and CI, files and directories), with a generated table of contents. It had grown section by section and had two License sections, a 2024 install transcript and an out of date usage block. The usage block and install transcript are now the script's own output from a clean environment, and a check confirms every link resolves, every command line switch's long name appears, and every user facing setting in the script is documented (the rest are listed as internal). Features that were never documented are included: sudoers, --force and the lock, PATH and the build flags, GOPATH, the start directory, oh-my-zsh, fonts, rbenv and pyenv building, the alternative long switch names, and exit statuses
+- Examples no longer use real user names, host names or third party names: the prompt example is alice@laptop, paths are ~/..., and the tap in the drift example, and in two tests, is example/tap
+
 ## [1.6.3] - 2026-10-27
 
 ### Added
