@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.5.4
+# Version: 1.5.7
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -130,6 +130,41 @@ is_osx () {
 
 is_linux () {
   [[ "${OS_NAME}" == *Linux* ]]
+}
+
+# The prompt engine: which of powerlevel10k (p10k), oh-my-posh (posh) or neither (none) is installed,
+# set up and loaded. Two engines at once both hook every prompt and fight over it, and oh-my-posh's
+# init alone costs a few hundred milliseconds on every login, so there is only ever one.
+# Set PROMPT_ENGINE (for example in the config), or use -E for one run
+
+prompt_engine_is () {
+  [ "${PROMPT_ENGINE}" = "$1" ]
+}
+
+resolve_prompt_engine () {
+  PROMPT_ENGINE="${PROMPT_ENGINE:-p10k}"
+  case "${PROMPT_ENGINE}" in
+    p10k|posh|none)
+      ;;
+    *)
+      echo "Warning:        Unknown prompt engine '${PROMPT_ENGINE}' (choose p10k, posh or none), using p10k"
+      PROMPT_ENGINE="p10k"
+      ;;
+  esac
+  # What each engine's install and login setup default to (no forking: this runs on every login)
+  PROMPT_WANT_POSH="false"
+  PROMPT_WANT_P10K="false"
+  if [ "${PROMPT_ENGINE}" = "posh" ]; then
+    PROMPT_WANT_POSH="true"
+  fi
+  if [ "${PROMPT_ENGINE}" = "p10k" ]; then
+    PROMPT_WANT_P10K="true"
+  fi
+  # -A, -o, -T and -E ask for the engine's setup to be done this run, whichever engine it is
+  if [ "${DO_PROMPT_CHECK}" = "true" ]; then
+    DO_POSH_CHECK="${PROMPT_WANT_POSH}"
+    DO_P10K_CHECK="${PROMPT_WANT_P10K}"
+  fi
 }
 
 # Key bindings for zsh-history-substring-search (called from the plugin lists in files/zinit):
@@ -677,9 +712,15 @@ set_osx_defaults () {
 read_required_list () {
   setopt localoptions extendedglob
   REQUIRED_LIST=()
-  if [ -f "${REQUIRED_FILE}" ]; then
-    REQUIRED_LIST=( ${${(f)"$(<${REQUIRED_FILE})"}:#(\#*|[[:space:]]#)} )
-  fi
+  # Your own additions are in files/packages/local.<extension> (local.brew, local.apt...), which
+  # updates and --install never overwrite
+  PACKAGE_LOCAL="${REQUIRED_FILE:h}/local.${REQUIRED_FILE:e}"
+  for PACKAGE_LIST_FILE in "${REQUIRED_FILE}" "${PACKAGE_LOCAL}"; do
+    if [ -f "${PACKAGE_LIST_FILE}" ]; then
+      REQUIRED_LIST+=( ${${(f)"$(<${PACKAGE_LIST_FILE})"}:#(\#*|[[:space:]]#)} )
+    fi
+  done
+  REQUIRED_LIST=( ${(u)REQUIRED_LIST} )
 }
 
 # Apply OSX defaults (writes settings, so only called from check_osx_defaults
@@ -894,10 +935,12 @@ set_all_defaults () {
   set_env "INSTALL_ZINIT"       "true"
   set_env "INSTALL_RBENV"       "true"
   set_env "INSTALL_PYENV"       "true"
-  set_env "INSTALL_POSH"        "true"
+  resolve_prompt_engine
+  set_env "PROMPT_ENGINE"       "${PROMPT_ENGINE}"
+  set_env "INSTALL_POSH"        "${PROMPT_WANT_POSH}"
   set_env "INSTALL_OZSH"        "false"
   set_env "INSTALL_FONTS"       "true"
-  set_env "INSTALL_P10K"        "true"
+  set_env "INSTALL_P10K"        "${PROMPT_WANT_P10K}"
   set_env "ZINIT_HOME"          "${HOME_DIR}/.zinit"
   set_env "RBENV_HOME"          "${HOME_DIR}/.rbenv"
   set_env "PYENV_HOME"          "${HOME_DIR}/.pyenv"
@@ -926,6 +969,8 @@ set_all_defaults () {
   set_env "DO_DOTFILES_CHECK"   "false"
   set_env "DO_UNLINK"           "false"
   set_env "DO_BACKUPS"          "false"
+  set_env "DO_DEFAULTS_UNDO"    "false"
+  set_env "JOURNAL_FILE"        "${WORK_DIR}/defaults.journal"
   set_env "DO_DRIFT"            "false"
   set_env "DO_GNOME_DEFAULTS"   "false"
   set_env "DO_TOOLS_CHECK"      "false"
@@ -990,10 +1035,11 @@ set_inline_defaults () {
   set_env "INSTALL_ZINIT"       "true"
   set_env "INSTALL_RBENV"       "true"
   set_env "INSTALL_PYENV"       "true"
-  set_env "INSTALL_POSH"        "true"
+  resolve_prompt_engine
+  set_env "INSTALL_POSH"        "${PROMPT_WANT_POSH}"
   set_env "INSTALL_OZSH"        "false"
   set_env "INSTALL_FONTS"       "true"
-  set_env "INSTALL_P10K"        "true"
+  set_env "INSTALL_P10K"        "${PROMPT_WANT_P10K}"
   set_env "DO_DEFAULTS_CHECK"   "true"
   set_env "DO_PACKAGE_CHECK"    "false"
   set_env "DO_ZINIT_CHECK"      "true"
@@ -1002,9 +1048,9 @@ set_inline_defaults () {
   set_env "DO_TOOLS_CHECK"      "true"
   set_env "DO_ZOXIDE_CHECK"     "true"
   set_env "DO_FONTS_CHECK"      "true"
-  set_env "DO_POSH_CHECK"       "true"
+  set_env "DO_POSH_CHECK"       "${PROMPT_WANT_POSH}"
   set_env "DO_ZOSH_CHECK"       "false"
-  set_env "DO_P10K_CHECK"       "true"
+  set_env "DO_P10K_CHECK"       "${PROMPT_WANT_P10K}"
   set_env "DO_ZSH_THEME"        "true"
   set_env "DO_VERBOSE"          "false"
   set_env "DO_DRYRUN"           "false"
@@ -1109,11 +1155,13 @@ print_help () {
     -C|--check        Check for updates   (default: ${DO_VERSION_CHECK})
     -d|--debug        Enable debug        (default: ${DO_DEBUG})
     -D|--default(s)   Set defaults        (default: ${DO_DEFAULTS_CHECK})
+    -E|--prompt NAME  Prompt engine       (default: ${PROMPT_ENGINE}: p10k, posh or none)
     -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
     -F|--force        Force action        (default: ${DO_FORCE})
     -g|--gopath       Set GOPATH          (default: ${GO_HOME})
     -G|--drift        Report settings that differ from the defaults (read only)
     -k|--config       Create config file  (${CONFIG_FILE})
+    -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -l|--location     Set start dir       (default: ${START_DIR})
     -B|--backups      List .zshrc backups
     -R|--rollback [N] Restore a backup    (default: newest)
@@ -1228,6 +1276,172 @@ set_osx_file_state () {
   fi
 }
 
+# The defaults journal: ~/.ussuri/defaults.journal. Every setting the script changes is recorded as one
+# tab separated line (run, domain, key, previous type, previous value, value set), each field quoted
+# with ${(q)} so any value is stored on one line and read back with ${(Q)}, never with eval. A run
+# is one apply. Entries are only written once a read back shows the write took effect, so a write
+# that was declined (--confirm), refused or ignored by the system leaves nothing to undo.
+# --defaults-undo reverts a run: UNDONE lines mark the runs already reverted.
+
+journal_field () {
+  print -r -- "${(q)1}"
+}
+
+journal_unfield () {
+  print -r -- "${(Q)1}"
+}
+
+journal_default () {
+  [ "${DO_DRYRUN}" = "true" ] && return 0
+  JOURNAL_NOW=$( defaults read "$1" "$2" 2> /dev/null ) || return 0
+  [ "${JOURNAL_NOW}" = "$5" ] || return 0
+  check_dir_exists "${JOURNAL_FILE:h}"
+  print -r -- "${DATE_SUFFIX}"$'\t'"${(q)1}"$'\t'"${(q)2}"$'\t'"${(q)3}"$'\t'"${(q)4}"$'\t'"${(q)5}" >> "${JOURNAL_FILE}"
+}
+
+# Read the journal into JOURNAL_ENTRIES (lines), JOURNAL_ORDER (run ids, oldest first), JOURNAL_COUNT
+# (settings per run) and JOURNAL_ACTIVE (the runs not yet undone). Fails if there are no runs
+
+read_journal () {
+  JOURNAL_ORDER=()
+  JOURNAL_ACTIVE=()
+  JOURNAL_ENTRIES=()
+  typeset -gA JOURNAL_COUNT JOURNAL_DONE
+  JOURNAL_COUNT=()
+  JOURNAL_DONE=()
+  [ -f "${JOURNAL_FILE}" ] || return 1
+  local line fields run
+  for line in ${(f)"$(<${JOURNAL_FILE})"}; do
+    [[ "${line}" == \#* ]] && continue
+    fields=( "${(@ps:\t:)line}" )
+    if [ "${fields[1]}" = "UNDONE" ]; then
+      JOURNAL_DONE[${fields[2]}]=1
+      continue
+    fi
+    run="${fields[1]}"
+    if (( ! ${+JOURNAL_COUNT[${run}]} )); then
+      JOURNAL_ORDER+=( "${run}" )
+      JOURNAL_COUNT[${run}]=0
+    fi
+    JOURNAL_COUNT[${run}]=$(( JOURNAL_COUNT[${run}] + 1 ))
+    JOURNAL_ENTRIES+=( "${line}" )
+  done
+  for run in "${JOURNAL_ORDER[@]}"; do
+    (( ${+JOURNAL_DONE[${run}]} )) || JOURNAL_ACTIVE+=( "${run}" )
+  done
+  (( ${#JOURNAL_ORDER} ))
+}
+
+# A run id is the date the apply started, as dd_mm_yyyy_HH_MM_SS
+
+journal_when () {
+  print -r -- "${1[7,10]}-${1[4,5]}-${1[1,2]} ${1[12,13]}:${1[15,16]}:${1[18,19]}"
+}
+
+print_journal_runs () {
+  local i n=1
+  if ! read_journal || (( ! ${#JOURNAL_ACTIVE} )); then
+    print -r -- "Nothing to undo: no settings have been changed by ${SCRIPT_NAME} (since the journal was added in 1.5.7), or they have all been undone"
+    return 1
+  fi
+  print -r -- "  #  Saved                Changed"
+  for (( i = ${#JOURNAL_ACTIVE}; i >= 1; i-- )); do
+    printf '%3d  %s  %d settings\n' "${n}" "$( journal_when "${JOURNAL_ACTIVE[i]}" )" "${JOURNAL_COUNT[${JOURNAL_ACTIVE[i]}]}"
+    n=$(( n + 1 ))
+  done
+  print -r -- "Undo one with --defaults-undo N (1 is the newest). --dryrun shows what it would do."
+}
+
+# Revert a run of the journal (the newest by default, or the Nth newest). A setting is only reverted if
+# it still has the value the script gave it: one you changed yourself since is left alone and reported
+
+do_defaults_undo () {
+  local target="${1:-1}" run i line fields dom key otype oval nval cur when restore_word="Restored"
+  if ! is_osx; then
+    print -r -- "Undoing defaults is only available on OS X (the journal is of defaults writes)"
+    return 2
+  fi
+  if [ "${target}" = "list" ]; then
+    print_journal_runs
+    return
+  fi
+  if ! read_journal || (( ! ${#JOURNAL_ACTIVE} )); then
+    print_journal_runs
+    return 1
+  fi
+  if [[ "${target}" != <-> ]] || (( target < 1 || target > ${#JOURNAL_ACTIVE} )); then
+    print -r -- "There is no run '${target}' to undo (see --defaults-undo list)"
+    return 1
+  fi
+  run="${JOURNAL_ACTIVE[-target]}"
+  when=$( journal_when "${run}" )
+  [ "${DO_DRYRUN}" = "true" ] && restore_word="Would restore"
+  UNDO_TOTAL=0
+  UNDO_DONE=0
+  UNDO_SKIPPED=0
+  for (( i = ${#JOURNAL_ENTRIES}; i >= 1; i-- )); do
+    line="${JOURNAL_ENTRIES[i]}"
+    fields=( "${(@ps:\t:)line}" )
+    [ "${fields[1]}" = "${run}" ] || continue
+    dom="${(Q)fields[2]}"
+    key="${(Q)fields[3]}"
+    otype="${(Q)fields[4]}"
+    oval="${(Q)fields[5]}"
+    nval="${(Q)fields[6]}"
+    UNDO_TOTAL=$(( UNDO_TOTAL + 1 ))
+    cur=$( defaults read "${dom}" "${key}" 2> /dev/null )
+    if (( $? )); then
+      if [ "${otype}" = "__unset__" ]; then
+        UNDO_DONE=$(( UNDO_DONE + 1 ))
+      else
+        print -r -- "  skipped ${dom} ${key}: no longer set (it was set to ${nval})"
+        UNDO_SKIPPED=$(( UNDO_SKIPPED + 1 ))
+      fi
+      continue
+    fi
+    if [ ! "${cur}" = "${nval}" ]; then
+      print -r -- "  skipped ${dom} ${key}: changed since (now ${cur}, it was set to ${nval})"
+      UNDO_SKIPPED=$(( UNDO_SKIPPED + 1 ))
+      continue
+    fi
+    case "${otype}" in
+      __unset__)
+        execute_command "defaults delete ${(q)dom} ${(q)key}"
+        ;;
+      boolean)
+        if [ "${oval}" = "1" ]; then
+          execute_command "defaults write ${(q)dom} ${(q)key} -bool true"
+        else
+          execute_command "defaults write ${(q)dom} ${(q)key} -bool false"
+        fi
+        ;;
+      integer)
+        execute_command "defaults write ${(q)dom} ${(q)key} -int ${(q)oval}"
+        ;;
+      float)
+        execute_command "defaults write ${(q)dom} ${(q)key} -float ${(q)oval}"
+        ;;
+      string)
+        execute_command "defaults write ${(q)dom} ${(q)key} -string ${(q)oval}"
+        ;;
+      *)
+        print -r -- "  skipped ${dom} ${key}: its previous value was of type ${otype}, which can't be restored here (it is now ${cur})"
+        UNDO_SKIPPED=$(( UNDO_SKIPPED + 1 ))
+        continue
+        ;;
+    esac
+    UNDO_DONE=$(( UNDO_DONE + 1 ))
+    [[ "${dom}" =~ "finder" ]] && set_env "RESTART_FINDER" "true" "force"
+    [[ "${dom}" =~ "dock" ]] && set_env "RESTART_DOCK" "true" "force"
+  done
+  print -r -- "${restore_word} ${UNDO_DONE} of ${UNDO_TOTAL} settings from the run of ${when}${${UNDO_SKIPPED#0}:+; ${UNDO_SKIPPED} skipped}"
+  # With --confirm some may have been declined, so the run is left to be undone again
+  if [ ! "${DO_DRYRUN}" = "true" ] && [ ! "${DO_CONFIRM}" = "true" ]; then
+    print -r -- "UNDONE"$'\t'"${run}" >> "${JOURNAL_FILE}"
+  fi
+  restart_osx_services
+}
+
 # Set OS X defaults
 
 set_osx_default () {
@@ -1266,7 +1480,14 @@ set_osx_default () {
       set_env "RESTART_DOCK" "true" "force"
     fi 
     verbose_message "Defaults domain \"${D_DOMAIN}\" parameter \"${D_PARAM}\" to \"${D_VALUE}\"" "set"
+    # What it was (type and value, or not set) is kept so --defaults-undo can put it back
+    D_OLD_TYPE="__unset__"
+    if (( ! D_STATUS )); then
+      D_OLD_TYPE=$( defaults read-type "${D_DOMAIN}" "${D_PARAM}" 2> /dev/null )
+      D_OLD_TYPE="${${D_OLD_TYPE#Type is }:-unknown}"
+    fi
     execute_command "defaults write ${(q)D_DOMAIN} ${(q)D_PARAM} -${D_TYPE} ${(q)D_VALUE}"
+    journal_default "${D_DOMAIN}" "${D_PARAM}" "${D_OLD_TYPE}" "${D_CURRENT}" "${D_CHECK}"
   fi
 }
 
@@ -1375,6 +1596,14 @@ check_zinit_config () {
       fi
       if [ -f "${ZINIT_FILE}" ]; then
         execute_from_file "${ZINIT_FILE}"
+      fi
+      # Your own plugins: files/zinit/local.zsh, same format, run after the shipped list and never
+      # overwritten by updates or --install. (It runs after the shipped list's completions step,
+      # so a plugin that only ships completion files may need a restart to pick them up)
+      ZINIT_LOCAL="${WORK_DIR}/files/zinit/local.zsh"
+      if [ -f "${ZINIT_LOCAL}" ]; then
+        verbose_message "Loading your plugins from ${ZINIT_LOCAL}"
+        execute_from_file "${ZINIT_LOCAL}"
       fi
     fi
   fi
@@ -1747,7 +1976,9 @@ update_package_list () {
 
 package_list_changed () {
   PACKAGE_STAMP="${WORK_DIR}/${REQUIRED_FILE:t}.sum"
-  PACKAGE_SUM=$( cksum < "${REQUIRED_FILE}" 2> /dev/null )
+  # Both lists are in the checksum, so adding a package to your local list is noticed
+  PACKAGE_LOCAL="${REQUIRED_FILE:h}/local.${REQUIRED_FILE:e}"
+  PACKAGE_SUM=$( cat "${REQUIRED_FILE}" "${PACKAGE_LOCAL}" 2> /dev/null | cksum )
   PACKAGE_OLD=""
   if [ -f "${PACKAGE_STAMP}" ]; then
     PACKAGE_OLD=$(<"${PACKAGE_STAMP}")
@@ -1806,6 +2037,23 @@ check_linux_defaults () {
 
 # Check OS Defaults
 
+# Restart what a settings change needs restarting to show (flags are set as settings change)
+
+restart_osx_services () {
+  if [ "${RESTART_FINDER}" = "true" ]; then
+    verbose_message "Finder" "restart"
+    execute_command "killall Finder"
+  fi
+  if [ "${RESTART_UISERVER}" = "true" ]; then
+    verbose_message "SystemUIServer" "restart"
+    execute_command "killall SystemUIServer"
+  fi
+  if [ "${RESTART_DOCK}" = "true" ]; then
+    verbose_message "Dock" "restart"
+    execute_command "killall Dock"
+  fi
+}
+
 defaults_due () {
   DEFAULTS_STAMP="${WORK_DIR}/defaults.stamp"
   DEFAULTS_OLD=( ${DEFAULTS_STAMP}(Nm+${DEFAULTS_MAX_AGE}) )
@@ -1824,18 +2072,7 @@ check_osx_defaults () {
   else
     verbose_message "OS X defaults are up to date (use --defaults to reapply)"
   fi
-  if [ "${RESTART_FINDER}" = "true" ]; then
-    verbose_message "Finder" "restart"
-    execute_command "killall Finder"
-  fi
-  if [ "${RESTART_UISERVER}" = "true" ]; then
-    verbose_message "SystemUIServer" "restart"
-    execute_command "killall SystemUIServer"
-  fi
-  if [ "${RESTART_DOCK}" = "true" ]; then
-    verbose_message "Dock" "restart"
-    execute_command "killall Dock"
-  fi
+  restart_osx_services
 }
 
 # Check Linux Package
@@ -2000,29 +2237,105 @@ check_for_update () {
   fi
 }
 
-# Update script
-# Downloads the new version, checks it parses and is the version expected, backs up the
-# current script and then replaces it (the replace goes through execute_command so
-# --dryrun and --confirm are honoured)
+# Download the release archive into DIR and unpack it there, refusing one that could write
+# outside it. Sets UPDATE_SRC to the unpacked top directory.
+# Returns 0 on success, 1 if it can't be fetched or unpacked (the script alone can still be
+# updated), 2 if it must be refused (a checksum that doesn't match, unsafe paths)
 
-update_script () {
-  if have_lock; then
-    verbose_message "Checking for updates"
-    set_env "SCRIPT_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/refs/heads/main/ussuri.zsh"
-    compare_versions "${SCRIPT_URL}" "^# Version"
-    if [ "${VERSION_STATE}" = "older" ]; then
-      UPDATE_TMP=$( mktemp )
-      fetch_url "${SCRIPT_URL}" > "${UPDATE_TMP}"
-      if zsh -n "${UPDATE_TMP}" 2> /dev/null && grep -q "^# Version: ${REMOTE_VERSION}$" "${UPDATE_TMP}"; then
-        verbose_message "${SCRIPT_FILE} to version ${REMOTE_VERSION}" "replace"
-        check_dir_exists "${WORK_DIR}"
-        execute_command "cp ${(q)SCRIPT_FILE} ${(q)WORK_DIR}/${SCRIPT_NAME}.zsh.${DATE_SUFFIX} && cp ${(q)UPDATE_TMP} ${(q)SCRIPT_FILE}.new && mv ${(q)SCRIPT_FILE}.new ${(q)SCRIPT_FILE}"
-      else
-        handle_output "Downloaded script failed validation, not updating" "warn"
-      fi
-      rm -f "${UPDATE_TMP}"
+fetch_update_archive () {
+  UPDATE_SRC=""
+  UPDATE_ARCHIVE="$1/release.tgz"
+  fetch_url "${UPDATE_URL}" > "${UPDATE_ARCHIVE}" || return 1
+  [ -s "${UPDATE_ARCHIVE}" ] || return 1
+  if [ -n "${UPDATE_SHA256}" ]; then
+    UPDATE_SUM=$( sha256_of "${UPDATE_ARCHIVE}" )
+    if [ ! "${UPDATE_SUM}" = "${(L)UPDATE_SHA256}" ]; then
+      echo "Warning:        Checksum mismatch for ${UPDATE_URL} (expected ${UPDATE_SHA256}, got ${UPDATE_SUM}), not updating"
+      return 2
     fi
   fi
+  if tar -tzf "${UPDATE_ARCHIVE}" 2> /dev/null | grep -q -E '^/|(^|/)\.\.(/|$)'; then
+    echo "Warning:        ${UPDATE_URL} has unsafe paths in it, not updating"
+    return 2
+  fi
+  mkdir "$1/src" && tar -xzf "${UPDATE_ARCHIVE}" -C "$1/src" 2> /dev/null || return 1
+  UPDATE_TOPS=( $1/src/*(/N) )
+  (( ${#UPDATE_TOPS} == 1 )) && [ -f "${UPDATE_TOPS[1]}/ussuri.zsh" ] || return 1
+  UPDATE_SRC="${UPDATE_TOPS[1]}"
+}
+
+# Bring ~/.ussuri/files up to date with the release's files/. New files are added, changed ones
+# replaced, and a file that is replaced is first copied to ~/.ussuri/files.bak/<date>/ so an edit
+# of yours is never lost. Files only you have (local.*) are never touched, nothing is deleted
+
+sync_support_files () {
+  setopt localoptions nullglob
+  SYNC_SRC="$1"
+  SYNC_BACKUP="${WORK_DIR}/files.bak/${DATE_SUFFIX}"
+  SYNC_NEW=0
+  SYNC_CHANGED=0
+  for SYNC_FILE in ${SYNC_SRC}/**/*(D.N); do
+    SYNC_REL="${SYNC_FILE#${SYNC_SRC}/}"
+    SYNC_TARGET="${WORK_DIR}/files/${SYNC_REL}"
+    if [ -f "${SYNC_TARGET}" ]; then
+      cmp -s "${SYNC_FILE}" "${SYNC_TARGET}" && continue
+      [[ "${SYNC_FILE:t}" == local.* ]] && continue
+      check_dir_exists "${SYNC_BACKUP}/${SYNC_REL:h}"
+      execute_command "cp -p ${(q)SYNC_TARGET} ${(q)SYNC_BACKUP}/${(q)SYNC_REL}"
+      SYNC_CHANGED=$(( SYNC_CHANGED + 1 ))
+    else
+      SYNC_NEW=$(( SYNC_NEW + 1 ))
+    fi
+    check_dir_exists "${SYNC_TARGET:h}"
+    execute_command "cp ${(q)SYNC_FILE} ${(q)SYNC_TARGET}"
+  done
+  if (( SYNC_NEW + SYNC_CHANGED )) && [ ! "${DO_DRYRUN}" = "true" ]; then
+    notice_message "Updated $(( SYNC_NEW + SYNC_CHANGED )) supporting files (${SYNC_NEW} new, ${SYNC_CHANGED} replaced${${SYNC_CHANGED#0}:+, the old copies are in ${SYNC_BACKUP}})"
+  fi
+}
+
+# Update script
+# Downloads the release (the script and its files/), checks the script parses and is the version
+# expected, backs up the current script, replaces it and then brings the supporting files up to
+# date. If the archive can't be fetched the script alone is updated. Everything goes through
+# execute_command so --dryrun and --confirm are honoured. UPDATE_URL points somewhere else, and
+# UPDATE_SHA256 pins the archive's checksum (a mismatch refuses the update)
+
+update_script () {
+  have_lock || return
+  verbose_message "Checking for updates"
+  set_env "SCRIPT_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/refs/heads/main/ussuri.zsh"
+  set_env "UPDATE_URL" "https://github.com/lateralblast/ussuri/archive/refs/heads/main.tar.gz"
+  compare_versions "${SCRIPT_URL}" "^# Version"
+  [ "${VERSION_STATE}" = "older" ] || return 0
+  UPDATE_DIR=$( mktemp -d ) || return 1
+  UPDATE_NEW="${UPDATE_DIR}/ussuri.zsh"
+  fetch_update_archive "${UPDATE_DIR}"
+  case $? in
+    0)
+      UPDATE_NEW="${UPDATE_SRC}/ussuri.zsh"
+      ;;
+    2)
+      rm -rf "${UPDATE_DIR:?}"
+      return 1
+      ;;
+    *)
+      echo "Warning:        Could not fetch ${UPDATE_URL}: the script alone will be updated, the supporting files were not updated"
+      UPDATE_SRC=""
+      fetch_url "${SCRIPT_URL}" > "${UPDATE_NEW}"
+      ;;
+  esac
+  if zsh -n "${UPDATE_NEW}" 2> /dev/null && grep -q "^# Version: ${REMOTE_VERSION}$" "${UPDATE_NEW}"; then
+    verbose_message "${SCRIPT_FILE} to version ${REMOTE_VERSION}" "replace"
+    check_dir_exists "${WORK_DIR}"
+    execute_command "cp ${(q)SCRIPT_FILE} ${(q)WORK_DIR}/${SCRIPT_NAME}.zsh.${DATE_SUFFIX} && cp ${(q)UPDATE_NEW} ${(q)SCRIPT_FILE}.new && mv ${(q)SCRIPT_FILE}.new ${(q)SCRIPT_FILE}"
+    if [ -n "${UPDATE_SRC}" ] && [ -d "${UPDATE_SRC}/files" ]; then
+      sync_support_files "${UPDATE_SRC}/files"
+    fi
+  else
+    echo "Warning:        Downloaded script failed validation (it does not parse, or is not version ${REMOTE_VERSION}), not updating"
+  fi
+  rm -rf "${UPDATE_DIR:?}"
 }
 
 # Dotfiles: symlinks from the home directory into ~/.ussuri/dotfiles, in layers so one set of
@@ -2287,6 +2600,7 @@ print_config_template () {
 #GO_HOME=~/go               # GOPATH
 #ZSH_THEME=robbyrussell
 #SHARE_HISTORY=true
+#PROMPT_ENGINE=p10k         # p10k (powerlevel10k), posh (oh-my-posh) or none: only one is installed and loaded
 #ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
 #HISTORY_SIZE=50000         # lines kept in memory and in the history file
@@ -2330,6 +2644,12 @@ print_config_template () {
 #DO_DOTFILES_CHECK=true     # link them on every login, not just with --dotfiles
 #DOTFILES_PROFILE=work      # use profiles/work on top of common
 #DOTFILES_HOST=mybox        # default is the short hostname
+
+# Your own plugins and packages go in files, not in the shipped lists (updates and --install replace those):
+#   ~/.ussuri/files/zinit/local.zsh        zinit lines, same format as zinit.zsh, run after it
+#   ~/.ussuri/files/packages/local.brew    one package per line (local.apt, local.pacman, local.dnf, local.apk, local.nix)
+# --update checks the release against UPDATE_SHA256 if you set it, and fetches it from UPDATE_URL
+#UPDATE_SHA256=
 
 # Pin installs (a branch, tag or commit for the first clone, a SHA-256 for installers)
 #ZINIT_REF=
@@ -2484,6 +2804,17 @@ doctor_install () {
       doctor_warn "package list ${REQUIRED_FILE} is missing, no packages will be installed"
     fi
   fi
+  setopt localoptions extendedglob
+  DOCTOR_LOCAL_ZINIT="${WORK_DIR}/files/zinit/local.zsh"
+  if [ -f "${DOCTOR_LOCAL_ZINIT}" ]; then
+    DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_LOCAL_ZINIT})"}:#(\#*|[[:space:]]#)} )
+    doctor_ok "local plugin list ${DOCTOR_LOCAL_ZINIT}: ${#DOCTOR_LINES} lines"
+  fi
+  DOCTOR_LOCAL_PACKAGES="${REQUIRED_FILE:h}/local.${REQUIRED_FILE:e}"
+  if [ -n "${REQUIRED_FILE}" ] && [ -f "${DOCTOR_LOCAL_PACKAGES}" ]; then
+    DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_LOCAL_PACKAGES})"}:#(\#*|[[:space:]]#)} )
+    doctor_ok "local package list ${DOCTOR_LOCAL_PACKAGES}: ${#DOCTOR_LINES} lines"
+  fi
   if [ "${INSTALL_ZINIT}" = "true" ] && [ "${PLUGIN_MANAGER}" = "zinit" ]; then
     if [ -f "${ZINIT_FILE}" ]; then
       doctor_ok "plugin list ${ZINIT_FILE:t}"
@@ -2577,6 +2908,10 @@ doctor_components () {
   if [ "${INSTALL_PYENV}" = "true" ]; then
     if [ -d "${PYENV_HOME}" ]; then doctor_ok "pyenv"; else doctor_warn "pyenv is not installed (${PYENV_HOME})"; fi
   fi
+  doctor_ok "prompt engine: ${PROMPT_ENGINE}"
+  if { [ "${DO_POSH_CHECK}" = "true" ] && [ ! "${PROMPT_ENGINE}" = "posh" ]; } || { [ "${DO_P10K_CHECK}" = "true" ] && [ ! "${PROMPT_ENGINE}" = "p10k" ]; }; then
+    doctor_warn "two prompt engines are switched on (the engine is ${PROMPT_ENGINE}, but DO_POSH_CHECK or DO_P10K_CHECK is set for the other): both hook every prompt and fight over it"
+  fi
   if [ "${INSTALL_POSH}" = "true" ]; then
     if [ -x "${POSH_HOME}/oh-my-posh" ] || (( $+commands[oh-my-posh] )); then
       doctor_ok "oh-my-posh"
@@ -2665,6 +3000,11 @@ doctor_state () {
       doctor_ok "OS X defaults were last applied $(( (EPOCHSECONDS - DOCTOR_TIMES[1]) / 86400 )) days ago"
     else
       doctor_warn "OS X defaults have not been applied yet (they are on the next login, or run --defaults)"
+    fi
+    if read_journal && (( ${#JOURNAL_ACTIVE} )); then
+      DOCTOR_RUN_WORD="runs"
+      (( ${#JOURNAL_ACTIVE} == 1 )) && DOCTOR_RUN_WORD="run"
+      doctor_ok "${#JOURNAL_ACTIVE} ${DOCTOR_RUN_WORD} of OS X defaults can be undone (--defaults-undo list)"
     fi
   fi
   DOCTOR_CACHE=( ${WORK_DIR}/cache/*(N) )
@@ -2835,6 +3175,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --unlink -u       --profile -M       --backups -B
       --rollback -R     --uninstall -X     --drift -G
       --tool -W         --yes -y           --assume-yes -y
+      --prompt -E       --engine -E        --defaults-undo -J
       --assumeyes -y
     )
     SWITCHES=()
@@ -2849,11 +3190,11 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       ARG="${LONG_SWITCHES[${ARG}]:-${ARG}}"
       SWITCHES+=( "${ARG}" )
       case "${ARG}" in
-        -g|-l|-m|-M|-S|-W|-Z)
+        -g|-l|-m|-M|-S|-W|-E|-Z)
           SWITCH_VALUE="true"
           ;;
-        -R)
-          # Which backup to roll back to is optional, no value means the newest
+        -R|-J)
+          # Which backup (or run of defaults) is optional, no value means the newest
           if [[ -z "${@[ARG_INDEX+1]}" || "${@[ARG_INDEX+1]}" == -* ]]; then
             SWITCHES+=( 1 )
           else
@@ -2863,7 +3204,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- A b B c C d D e f F g: G h i I k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X y z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- A b B c C d D e E: f F g: G h i I J: k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X y z Z: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -2877,13 +3218,12 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           DO_FONTS_CHECK="true"
           DO_ZSH_THEME="true"
           DO_ZINIT_CHECK="true"
-          DO_P10K_CHECK="true"
+          DO_PROMPT_CHECK="true"
           DO_RBENV_CHECK="true"
           DO_PYENV_CHECK="true"
           DO_PACKAGE_CHECK="true"
           PACKAGE_EXPLICIT="true"
           DO_FONTS_CHECK="true"
-          DO_POSH_CHECK="true"
           DO_ENV_SETUP="true"
           shift OPTS
           ;;
@@ -2982,6 +3322,11 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           DO_BACKUPS="true"
           shift OPTS
           ;;
+        -J)
+          DO_DEFAULTS_UNDO="true"
+          DEFAULTS_UNDO_TARGET="${OPTS[2]}"
+          shift 2 OPTS
+          ;;
         -R)
           DO_ROLLBACK="true"
           ROLLBACK_TARGET="${OPTS[2]}"
@@ -3009,7 +3354,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
         -o)
           DO_FONTS_CHECK="true"
-          DO_POSH_CHECK="true"
+          PROMPT_ENGINE="posh"
+          DO_PROMPT_CHECK="true"
           shift OPTS
           ;;
         -O)
@@ -3049,8 +3395,14 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           shift OPTS
           ;;
         -T)
-          DO_P10K_CHECK="true"
+          PROMPT_ENGINE="p10k"
+          DO_PROMPT_CHECK="true"
           shift OPTS
+          ;;
+        -E)
+          PROMPT_ENGINE="${OPTS[2]}"
+          DO_PROMPT_CHECK="true"
+          shift 2 OPTS
           ;;
         -U)
           DO_UPDATE_CHECK="true"
@@ -3209,6 +3561,15 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     fi
     release_lock
     exit ${BACKUP_STATUS}
+  fi
+
+  # Do list or undo of the defaults the script has changed
+
+  if [ "${DO_DEFAULTS_UNDO}" = "true" ]; then
+    do_defaults_undo "${DEFAULTS_UNDO_TARGET}"
+    UNDO_STATUS=$?
+    release_lock
+    exit ${UNDO_STATUS}
   fi
 
   # Do dotfiles

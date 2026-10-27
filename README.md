@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.5.4
+Current Version: 1.5.7
 
 License
 -------
@@ -29,8 +29,8 @@ It is coppied to .zshrc and runs inline, i.e. when you login or
 execute a new shell it will check the current environment and
 install components/configurations if they are not present.
 
-By default this script uses zinit as the zsh plugin manager,
-oh-my-posh, and powerlevel10k as the theme, e.g.
+By default this script uses zinit as the zsh plugin manager
+and powerlevel10k as the prompt (oh-my-posh is available instead, see Prompt), e.g.
 
 ![Config example](https://raw.githubusercontent.com/lateralblast/ussuri/master/ussuri.png)
 
@@ -121,10 +121,12 @@ Usage
     -C|--check.       Check for updates   (default: false)
     -d|--debug        Enable debug        (default: false)
     -D|--default(s)   Set defaults        (default: false)
+    -E|--prompt NAME  Prompt engine       (default: p10k: p10k, posh or none)
     -f|--font(s)      Install font(s)     (default: false)
     -k|--config       Create config file  (~/.ussuri/config)
     -L|--dotfiles     Link dotfiles       (default: false)
     -M|--profile      Dotfiles profile    (default: none)
+    -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -m|--manager      Plugin manager      (default: zinit)
     -n|--notheme      No zsh theme        (default: true)
     -N|--noenv        Ignore environment  (default: true)
@@ -199,6 +201,41 @@ commands typed with a leading space (a way to keep one out of history) and extra
 change the size, or DO_HISTORY=false to leave all of this to the system (SHARE_HISTORY=false turns sharing
 off separately), for example in the config.
 
+Updating, and your own plugins and packages
+-------------------------------------------
+
+./ussuri.zsh --update
+
+Downloads the release archive from GitHub (one request, the script and its files/), checks the script parses and
+is the version expected, saves the current script in ~/.ussuri, replaces it, and then brings ~/.ussuri/files up to
+date: new files are added and changed ones replaced, with the copy that is replaced first saved in
+~/.ussuri/files.bak/<date>/, so an edit of yours is never lost. Nothing is deleted. It refuses an archive that
+fails the checks (a script that doesn't parse, paths that would escape the target, or a checksum that doesn't match
+UPDATE_SHA256 if you set one), and if the archive can't be fetched it updates the script alone and says the supporting
+files were not updated. UPDATE_URL points it somewhere else. It updates the script you ran: run it from
+~/.zshrc, or run --install after updating a checkout.
+
+The shipped lists are replaced by updates and --install, so don't edit them. Your own additions go in files
+that are never touched:
+
+    ~/.ussuri/files/zinit/local.zsh        zinit lines, same format as zinit.zsh, run after it
+    ~/.ussuri/files/packages/local.brew    one package per line (local.apt, local.pacman, local.dnf, local.apk, local.nix)
+
+A plugin added to local.zsh loads after the shipped list's completions step, so one that only ships completion files
+may need a restart to be picked up. Packages in the local list are installed with the shipped ones, and adding one is
+noticed on the next login. `--doctor` shows how many lines each has.
+
+Prompt
+------
+
+Only one prompt engine is installed and loaded: powerlevel10k (`p10k`, the default), oh-my-posh (`posh`) or
+neither (`none`). Earlier versions set both up on every login, and the two hook every prompt and fight over it.
+Set PROMPT_ENGINE (for example in the config) to choose, or use `-E posh` for one run. The setting decides what
+is installed, what is set up on login and whether the zinit plugin lists load the powerlevel10k plugin. `-o` and
+`-T` select oh-my-posh and powerlevel10k for that run, `-A` follows the setting (it used to do both), and if
+several are given the last wins. `--doctor` shows the engine and warns if the other one has been switched on.
+Measured with the real script and oh-my-posh, dropping the second engine took a login from about 167 to 129 ms.
+
 Plugins
 -------
 
@@ -241,6 +278,25 @@ Work that only needs doing occasionally is tracked in ~/.ussuri:
   a one line `if os_is_like arch; then ...; fi` (the Arch aliases load only on Arch and its derivatives).
   The lists are copied to ~/.ussuri/files when installed, so a changed list reaches an existing install
   when you run --install again (which replaces the copies there)
+
+Undoing defaults changes
+------------------------
+
+./ussuri.zsh --defaults-undo list
+./ussuri.zsh --defaults-undo [N]
+
+Every OS X setting the script changes is recorded in ~/.ussuri/defaults.journal, with what it was before (its
+value and type, or that it was not set) and what it was set to. A run is one apply. `--defaults-undo list` shows
+the runs, and `--defaults-undo` puts back the newest (or the Nth newest, 1 being the newest), each setting exactly
+as it was, with the same type, or deleted if it was not set. A setting you changed yourself since is left alone
+and reported, as is one whose previous value was an array or dictionary (those can't be put back from the
+journal). The Dock and Finder are restarted if they need it. A run that has been undone is marked, so the next
+undo goes back one run. `--dryrun` shows what would be put back, and `--confirm` is honoured (and, as some may be
+declined, leaves the run to be undone again).
+
+Only changes made from 1.5.7 on are recorded, so it can't undo what earlier versions applied. A write that didn't
+take effect (declined with --confirm, refused or ignored by the system) isn't recorded, as it changed nothing.
+It covers OS X defaults, not the Linux GNOME settings or the Library folder's hidden flag.
 
 Drift report
 ------------

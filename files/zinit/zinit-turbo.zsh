@@ -4,7 +4,7 @@
 # a prompt sooner. compinit runs once at the end of the deferred batch, as in zinit.zsh, so every
 # plugin's completions are registered. Set ZINIT_TURBO=false to use zinit.zsh instead, which
 # loads everything before the prompt.
-zinit ice depth=1; zinit light romkatv/powerlevel10k
+if prompt_engine_is p10k; then zinit ice depth=1; zinit light romkatv/powerlevel10k; fi
 # Add in zsh plugins
 zinit ice wait lucid; zinit light zsh-users/zsh-syntax-highlighting
 zinit ice wait lucid; zinit light zsh-users/zsh-completions

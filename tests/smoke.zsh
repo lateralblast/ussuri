@@ -372,6 +372,103 @@ history_state () {
 print -r -- "size=${HISTSIZE} save=${SAVEHIST} file=${HISTFILE} dups=${options[histignoredups]} space=${options[histignorespace]} find=${options[histfindnodups]} blanks=${options[histreducebLanks]:-${options[histreduceblanks]}} share=${options[sharehistory]}"' zsh "${SCRIPT}"
 }
 
+# Source the script as a login shell and say which prompt engine's setup ran (the sandbox p10k config
+# sets a variable when it is sourced, and the oh-my-posh stub logs its init)
+
+prompt_state () {
+  print -r -- 'export P10K_SOURCED=1' > "${H}/.p10k.zsh"
+  : > "${LOG}"
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${EXTRA_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "p10k=${P10K_SOURCED:-no} engine=${PROMPT_ENGINE:-unset}"' zsh "${SCRIPT}" > "${TMP}/prompt.out"
+  print -r -- "$( cat "${TMP}/prompt.out" ) posh=$( calls 'oh-my-posh init zsh' )"
+}
+
+# A release the way GitHub serves one: a tarball with one top directory holding the script and files/.
+# files/zinit/brandnew.zsh is new, files/packages/macos.brew is changed, files/packages/ubuntu.apt is not
+
+make_release () {
+  local version="$1" d="${TMP}/rel/ussuri-main"
+  rm -rf "${TMP}/rel"
+  mkdir -p "${d}/files/zinit" "${d}/files/packages"
+  sed "s/^# Version: .*/# Version: ${version}/" "${SCRIPT}" > "${d}/ussuri.zsh"
+  print -r -- "# a list that did not exist before" > "${d}/files/zinit/brandnew.zsh"
+  cp "${ROOT}/files/packages/macos.brew" "${d}/files/packages/macos.brew"
+  print -r -- "a-new-package" >> "${d}/files/packages/macos.brew"
+  cp "${ROOT}/files/packages/ubuntu.apt" "${d}/files/packages/ubuntu.apt"
+  tar -czf "${TMP}/rel.tgz" -C "${TMP}/rel" ussuri-main
+  RELEASE_ENV=( SCRIPT_URL="file://${d}/ussuri.zsh" UPDATE_URL="file://${TMP}/rel.tgz" )
+}
+
+# Run -U against the copy of the script in ${TMP}/live (so the real one is not replaced)
+
+run_update () {
+  mkdir -p "${TMP}/live"
+  cp "${SCRIPT}" "${TMP}/live/ussuri.zsh"
+  ( SCRIPT="${TMP}/live/ussuri.zsh"; EXTRA_ENV=( "${RELEASE_ENV[@]}" "${UPDATE_ENV[@]}" ); run -U "$@" 2>&1 )
+}
+
+# A defaults stub that remembers types as well as values, and supports read-type and delete, like the
+# real one. State lines are domain|key|type|value (type: boolean, integer, float, string, array...).
+# Writes to com.apple.addressbook are accepted and silently ignored, as they are on a real Mac where that
+# domain doesn't take (an apply must not claim to have changed it)
+
+use_typed_defaults () {
+  DEFAULTS_DB="${TMP}/defaults.db"
+  : > "${DEFAULTS_DB}"
+  cat > "${STUBS}/defaults" << 'EOF'
+#!/bin/sh
+echo "defaults $*" >> __LOG__
+db=__DB__
+case "$1" in
+  read)
+    v=$(grep -F "$2|$3|" "$db" | tail -1)
+    [ -z "$v" ] && exit 1
+    rest=${v#"$2|$3|"}
+    printf '%s\n' "${rest#*|}"; exit 0 ;;
+  read-type)
+    v=$(grep -F "$2|$3|" "$db" | tail -1)
+    [ -z "$v" ] && exit 1
+    rest=${v#"$2|$3|"}
+    echo "Type is ${rest%%|*}"; exit 0 ;;
+  write)
+    [ "$2" = com.apple.addressbook ] && exit 0
+    val=$5
+    case "$4" in
+      -bool) tn=boolean; [ "$val" = true ] && val=1; [ "$val" = false ] && val=0 ;;
+      -int) tn=integer ;;
+      -float) tn=float ;;
+      *) tn=string ;;
+    esac
+    grep -v -F "$2|$3|" "$db" > "$db.n"; mv "$db.n" "$db"
+    echo "$2|$3|$tn|$val" >> "$db"; exit 0 ;;
+  delete)
+    grep -v -F "$2|$3|" "$db" > "$db.n"; mv "$db.n" "$db"; exit 0 ;;
+esac
+exit 1
+EOF
+  sed -i.bak "s#__LOG__#${LOG}#; s#__DB__#${DEFAULTS_DB}#" "${STUBS}/defaults"
+  chmod +x "${STUBS}/defaults"
+  # the Transmission blocklist URL is checked before it is written: keep that off the network
+  : | gzip -c > "${TMP}/blocklist.gz"
+  UNDO_ENV=( TRANSMISSION_BLOCKLIST_URL="file://${TMP}/blocklist.gz" )
+}
+
+# Settings that differ from what the script wants, of different types, to be restored later
+
+seed_defaults () {
+  printf '%s\n' \
+    "com.apple.dock|tilesize|integer|48" \
+    "com.apple.finder|ShowPathbar|boolean|0" \
+    "com.apple.screencapture|type|string|jpg" \
+    "com.apple.dock|autohide-time-modifier|float|0.25" \
+    "com.apple.screencapture|location|string|it's \"quoted\" here" >> "${DEFAULTS_DB}"
+}
+
+journal_lines () {
+  grep -c -v -E '^(#|UNDONE|$)' "${H}/.ussuri/defaults.journal" 2> /dev/null || print 0
+}
+
 # Tests
 
 test_syntax () {
@@ -1445,6 +1542,345 @@ EOF
   make_stubs
 }
 
+test_prompt_engine () {
+  new_home
+  check "the default is powerlevel10k alone: its config is used, oh-my-posh is not set up" "$( prompt_state )" "p10k=1 engine=p10k posh=0"
+  print -r -- "PROMPT_ENGINE=posh" > "${H}/.ussuri/config"
+  check "PROMPT_ENGINE=posh: oh-my-posh only" "$( prompt_state )" "p10k=no engine=posh posh=1"
+  print -r -- "PROMPT_ENGINE=none" > "${H}/.ussuri/config"
+  check "PROMPT_ENGINE=none: neither" "$( prompt_state )" "p10k=no engine=none posh=0"
+  print -r -- "PROMPT_ENGINE=starship" > "${H}/.ussuri/config"
+  local out
+  out=$( EXTRA_ENV=(); run 2>&1 )
+  check "an unknown engine falls back to p10k and says so" "$( prompt_state ) / $( print -r -- "${out}" | grep -c "Unknown prompt engine 'starship'" )" "p10k=1 engine=p10k posh=0 / 1"
+  rm -f "${H}/.ussuri/config"
+  EXTRA_ENV=( PROMPT_ENGINE=posh )
+  check "it can come from the environment too" "$( prompt_state )" "p10k=no engine=posh posh=1"
+  EXTRA_ENV=()
+}
+
+test_prompt_engine_installs () {
+  new_home
+  rm -rf "${H}/.oh-my-posh"
+  local inst="${TMP}/posh-install.sh"
+  print -r -- "echo installer-ran >> ${LOG}; mkdir -p ${H}/.oh-my-posh" > "${inst}"
+  EXTRA_ENV=( POSH_INSTALL_URL="file://${inst}" ); : > "${LOG}"
+  run > /dev/null 2>&1
+  check "powerlevel10k users never get oh-my-posh installed" "$( grep -c installer-ran "${LOG}" )" "0"
+  EXTRA_ENV=( POSH_INSTALL_URL="file://${inst}" PROMPT_ENGINE=posh ); : > "${LOG}"
+  run > /dev/null 2>&1
+  check "but it is installed when it is the engine" "$( grep -c installer-ran "${LOG}" )" "1"
+  EXTRA_ENV=()
+}
+
+test_prompt_engine_switches () {
+  new_home
+  local sw
+  for sw in -E --prompt --engine; do
+    EXTRA_ENV=(); : > "${LOG}"
+    run ${sw} posh > /dev/null 2>&1
+    check "${sw} posh sets up oh-my-posh for that run" "$( calls 'oh-my-posh init zsh' )" "1"
+  done
+  : > "${LOG}"; run -o > /dev/null 2>&1
+  check "-o still installs and sets up oh-my-posh" "$( calls 'oh-my-posh init zsh' )" "1"
+  : > "${LOG}"; run -T > /dev/null 2>&1
+  check "-T does the p10k setup and not oh-my-posh" "$( calls 'oh-my-posh' )" "0"
+  : > "${LOG}"; run -A --dryrun > /dev/null 2>&1
+  check "-A (do all) follows the engine: no oh-my-posh for a p10k user" "$( calls 'oh-my-posh' )" "0"
+  : > "${LOG}"; run -A -E posh > /dev/null 2>&1
+  check "-A -E posh: oh-my-posh, whatever order they are given in" "$( calls 'oh-my-posh init zsh' )" "1"
+  : > "${LOG}"; run -E posh -A > /dev/null 2>&1
+  check "-E posh -A: the same" "$( calls 'oh-my-posh init zsh' )" "1"
+  check "-E without a name is an error" "$( run -E > /dev/null 2>&1; echo $? | awk '{print ($1 != 0) ? "error" : "ok"}' )" "error"
+}
+
+test_prompt_engine_in_lists () {
+  new_home
+  print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"
+  local turbo engine
+  for turbo in true false; do
+    for engine in p10k posh none; do
+      : > "${LOG}"
+      EXTRA_ENV=( ZINIT_TURBO="${turbo}" PROMPT_ENGINE="${engine}" )
+      run --zinit > /dev/null 2>&1
+      check "turbo=${turbo} engine=${engine}: powerlevel10k plugin $( [[ ${engine} == p10k ]] && echo loads || echo is not loaded )" "$( grep -c 'zinit light romkatv/powerlevel10k' "${LOG}" )" "$( [[ ${engine} == p10k ]] && echo 1 || echo 0 )"
+    done
+  done
+  EXTRA_ENV=()
+}
+
+test_doctor_prompt_engine () {
+  healthy_home
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor names the engine" "$( print -r -- "${out}" | grep -c 'ok.*prompt engine: p10k' )" "1"
+  check "and does not ask for oh-my-posh when it is not the engine" "$( print -r -- "${out}" | grep -c 'oh-my-posh' )" "0"
+  rm -rf "${H}/.oh-my-posh"
+  mv "${STUBS}/oh-my-posh" "${TMP}/omp.stub"
+  EXTRA_ENV=( PROMPT_ENGINE=posh )
+  out=$( run --doctor 2>&1 )
+  mv "${TMP}/omp.stub" "${STUBS}/oh-my-posh"
+  check "with posh as the engine a missing oh-my-posh is reported" "$( print -r -- "${out}" | grep -c 'warn.*oh-my-posh' )" "1"
+  EXTRA_ENV=( DO_POSH_CHECK=true )
+  out=$( run --doctor 2>&1 )
+  check "doctor warns when oh-my-posh is switched on alongside p10k (two prompts fighting)" "$( print -r -- "${out}" | grep -c 'warn.*two prompt engines' )" "1"
+  EXTRA_ENV=()
+}
+
+test_update_files () {
+  new_home; make_release 9.9.9; UPDATE_ENV=()
+  local out live="${TMP}/live/ussuri.zsh" files="${H}/.ussuri/files"
+  print -r -- "my own list" > "${files}/zinit/local.zsh"
+  print -r -- "my own package" > "${files}/packages/local.brew"
+  out=$( run_update )
+  check "the script is replaced" "$( grep -m1 '^# Version:' "${live}" | awk '{print $3}' )" "9.9.9"
+  check "a file that is new in the release is added" "$( cat "${files}/zinit/brandnew.zsh" 2> /dev/null )" "# a list that did not exist before"
+  check "a changed list is updated" "$( grep -c '^a-new-package$' "${files}/packages/macos.brew" )" "1"
+  local kept
+  kept=( "${H}"/.ussuri/files.bak/*/packages/macos.brew(N) )
+  check "and the copy it replaced is kept, not lost" "$( grep -c '^a-new-package$' "${kept[1]}" 2> /dev/null )" "0"
+  check "an unchanged list is not touched or backed up" "$( ls "${H}"/.ussuri/files.bak/*/packages/ubuntu.apt 2> /dev/null | wc -l | tr -d ' ' )" "0"
+  check "your local files are never touched" "$( cat "${files}/zinit/local.zsh" "${files}/packages/local.brew" | tr '\n' ',' )" "my own list,my own package,"
+  check "it says what it did" "$( print -r -- "${out}" | grep -c -E 'Updated [0-9]+ supporting files' )" "1"
+}
+
+test_update_dryrun () {
+  new_home; make_release 9.9.9; UPDATE_ENV=()
+  local before after out
+  before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  out=$( run_update --dryrun )
+  after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  check "--dryrun changes nothing in the home directory" "${after}" "${before}"
+  check "nor the script" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
+}
+
+test_update_refusals () {
+  local out ver
+  ver=$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )
+  # An archive that tries to write outside the target
+  new_home; make_release 9.9.9; UPDATE_ENV=()
+  python3 - "${TMP}/rel.tgz" << 'EOF'
+import sys, tarfile, io
+with tarfile.open(sys.argv[1], 'w:gz') as t:
+    for name in ('ussuri-main/ussuri.zsh', '../escaped'):
+        data = b'# Version: 9.9.9\n'
+        i = tarfile.TarInfo(name); i.size = len(data); t.addfile(i, io.BytesIO(data))
+EOF
+  out=$( run_update )
+  check "an archive with a path that escapes is refused" "$( print -r -- "${out}" | grep -c -i 'unsafe' )" "1"
+  check "and nothing is changed" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "${ver}"
+  check "and nothing was written outside" "$( [[ -e "${TMP}/escaped" || -e "${TMP}/../escaped" ]] && echo written || echo safe )" "safe"
+  # A script that does not parse
+  new_home; make_release 9.9.9; UPDATE_ENV=()
+  print -r -- 'if [ then' >> "${TMP}/rel/ussuri-main/ussuri.zsh"
+  tar -czf "${TMP}/rel.tgz" -C "${TMP}/rel" ussuri-main
+  out=$( run_update )
+  check "a release whose script does not parse is refused" "$( print -r -- "${out}" | grep -c 'failed validation' )" "1"
+  check "with the files left alone too" "$( [[ -e "${H}/.ussuri/files/zinit/brandnew.zsh" ]] && echo changed || echo untouched )" "untouched"
+  # A pinned checksum that does not match
+  new_home; make_release 9.9.9
+  UPDATE_ENV=( UPDATE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 )
+  out=$( run_update )
+  check "a wrong UPDATE_SHA256 is refused" "$( print -r -- "${out}" | grep -c -i 'checksum' )" "1"
+  check "and nothing is changed" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "${ver}"
+  # The right one
+  local good
+  good=$( shasum -a 256 "${TMP}/rel.tgz" 2> /dev/null || sha256sum "${TMP}/rel.tgz" )
+  UPDATE_ENV=( UPDATE_SHA256="${good%% *}" )
+  out=$( run_update )
+  check "the right UPDATE_SHA256 is accepted" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "9.9.9"
+  UPDATE_ENV=()
+}
+
+test_update_archive_missing () {
+  new_home; make_release 9.9.9
+  RELEASE_ENV=( SCRIPT_URL="file://${TMP}/rel/ussuri-main/ussuri.zsh" UPDATE_URL="file://${TMP}/no-such.tgz" ); UPDATE_ENV=()
+  local out
+  out=$( run_update )
+  check "if the archive can't be fetched the script alone is still updated" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "9.9.9"
+  check "and it says the files were not" "$( print -r -- "${out}" | grep -c -i 'supporting files were not updated' )" "1"
+}
+
+test_local_zinit () {
+  new_home
+  print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"
+  printf '%s\n' '# my extras' 'zinit light someone/their-plugin' > "${H}/.ussuri/files/zinit/local.zsh"
+  : > "${LOG}"
+  run --zinit > /dev/null 2>&1
+  check "plugins in zinit/local.zsh are loaded" "$( grep -c 'zinit light someone/their-plugin' "${LOG}" )" "1"
+  check "after the shipped list, not before" "$( grep -n -E 'zsh-syntax-highlighting|their-plugin' "${LOG}" | sed -E 's/.*(zsh-syntax-highlighting|their-plugin).*/\1/' | tr '\n' ' ' )" "zsh-syntax-highlighting their-plugin "
+  rm "${H}/.ussuri/files/zinit/local.zsh"; : > "${LOG}"
+  run --zinit > /dev/null 2>&1
+  check "without the file nothing extra happens" "$( grep -c 'their-plugin' "${LOG}" )" "0"
+}
+
+test_local_packages () {
+  new_home
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  print -r -- "my-extra-tool" > "${H}/.ussuri/files/packages/local.brew"
+  printf '%s\n' "# a comment" "ansible" >> "${H}/.ussuri/files/packages/local.brew"
+  print -r -- "git" > "${H}/.ussuri/brew.list"; cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  local out
+  out=$( run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew install' | sed 's/.*install //' | sort | tr '\n' ' ' )
+  check "packages in packages/local.<ext> are added to the shipped list" "${out}" "ansible autoconf my-extra-tool "
+  : > "${LOG}"
+  cp "${ROOT}/files/packages/macos.brew" "${H}/.ussuri/brew.list"; print -r -- "my-extra-tool" >> "${H}/.ussuri/brew.list"
+  run -P > /dev/null 2>&1
+  check "once everything is installed a stamp is saved" "$( nfiles "${H}/.ussuri/*.sum" )" "1"
+  : > "${LOG}"
+  print -r -- "another-new-tool" >> "${H}/.ussuri/files/packages/local.brew"
+  EXTRA_ENV=( DO_PACKAGE_CHECK=true )
+  run --verbose 2>&1 | grep -c 'Installing package another-new-tool' | awk '{print ($1 > 0) ? "yes" : "no"}' > "${TMP}/relogin"
+  EXTRA_ENV=()
+  check "a login notices the local list changed (it is part of the checksum)" "$( cat "${TMP}/relogin" )" "yes"
+}
+
+test_doctor_local () {
+  healthy_home
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor says nothing about local files when there are none" "$( print -r -- "${out}" | grep -c -i 'local' )" "0"
+  printf '%s\n' "zinit light a/b" "zinit light c/d" > "${H}/.ussuri/files/zinit/local.zsh"
+  printf '%s\n' "x" "y" "z" > "${H}/.ussuri/files/packages/local.brew"
+  out=$( run --doctor 2>&1 )
+  check "doctor counts the extra plugin lines" "$( print -r -- "${out}" | grep -c 'ok.*local plugin list.*2' )" "1"
+  check "and the extra packages" "$( print -r -- "${out}" | grep -c 'ok.*local package list.*3' )" "1"
+}
+
+test_journal_encoding () {
+  load_function journal_field
+  load_function journal_unfield
+  local v enc
+  for v in "plain" "with space" "it's \"quoted\"" $'tab\there' $'new\nline' 'back\slash $HOME `x`' "unicode é 日本" "" "|pipe|" "~tilde" "#hash"; do
+    enc=$( journal_field "${v}" )
+    check "round trip [${v//$'\n'/\\n}]" "$( journal_unfield "${enc}" )" "${v}"
+    [[ "${enc}" == *$'\t'* || "${enc}" == *$'\n'* ]] && bad "an encoded field has a tab or newline in it: ${enc}"
+  done
+}
+
+test_defaults_journal () {
+  new_home; use_typed_defaults; seed_defaults
+  sort "${DEFAULTS_DB}" > "${TMP}/before.txt"
+  : > "${LOG}"
+  EXTRA_ENV=( "${UNDO_ENV[@]}" )
+  run --defaults > /dev/null 2>&1
+  local writes noop
+  writes=$( calls 'defaults write' )
+  noop=$( grep -c 'defaults write com.apple.addressbook' "${LOG}" )
+  check "the journal records exactly the writes that took effect" "$( journal_lines )" "$(( writes - noop ))"
+  check "and not the one that was silently ignored (it never changed anything)" "$( grep -c 'addressbook' "${H}/.ussuri/defaults.journal" )" "0"
+  local out
+  out=$( run --defaults-undo list 2>&1 )
+  check "the run is listed, with how many settings it changed" "$( print -r -- "${out}" | grep -c -E "^ +1 +[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8} +$(( writes - noop )) settings" )" "1"
+  : > "${LOG}"; sort "${DEFAULTS_DB}" > "${TMP}/applied.txt"
+  run --defaults > /dev/null 2>&1
+  check "a second apply with nothing to change adds nothing" "$( journal_lines )" "$(( writes - noop ))"
+  EXTRA_ENV=()
+  use_plain_defaults
+}
+
+test_defaults_undo () {
+  new_home; use_typed_defaults; seed_defaults
+  sort "${DEFAULTS_DB}" > "${TMP}/before.txt"
+  EXTRA_ENV=( "${UNDO_ENV[@]}" )
+  run --defaults > /dev/null 2>&1
+  : > "${LOG}"
+  run --defaults-undo > /dev/null 2>&1
+  sort "${DEFAULTS_DB}" > "${TMP}/after.txt"
+  check "undo puts every setting back exactly as it was (value, type and unset)" "$( diff "${TMP}/before.txt" "${TMP}/after.txt" > /dev/null && echo identical || echo DIFFERENT )" "identical"
+  check "settings that were not set before are deleted, not written as empty" "$( [[ $( calls 'defaults delete' ) -gt 90 ]] && echo yes || echo no )" "yes"
+  check "a bool that was off is written back as a bool" "$( grep -c 'defaults write com.apple.finder ShowPathbar -bool false' "${LOG}" )" "1"
+  check "an integer as an integer, a float as a float, a string with quotes intact" "$( grep -c -E 'tilesize -int 48|autohide-time-modifier -float 0.25|location -string' "${LOG}" )" "3"
+  check "the Dock is restarted so the old settings show" "$( calls 'killall Dock' )" "1"
+  local out
+  out=$( run --defaults-undo 2>&1 ); local rc=$?
+  check "the run is then marked as undone, so a second undo has nothing left" "${rc}:$( print -r -- "${out}" | grep -c 'Nothing to undo' )" "1:1"
+  EXTRA_ENV=()
+  use_plain_defaults
+}
+
+test_defaults_undo_changed_since () {
+  new_home; use_typed_defaults; seed_defaults
+  EXTRA_ENV=( "${UNDO_ENV[@]}" )
+  run --defaults > /dev/null 2>&1
+  # you change two settings yourself after the script applied them
+  sed -i.bak 's/^com.apple.dock|tilesize|integer|.*/com.apple.dock|tilesize|integer|99/; s/^com.apple.finder|ShowPathbar|boolean|.*/com.apple.finder|ShowPathbar|boolean|0/' "${DEFAULTS_DB}"
+  local out
+  out=$( run --defaults-undo 2>&1 )
+  check "a setting you changed since is left alone" "$( grep -c '^com.apple.dock|tilesize|integer|99$' "${DEFAULTS_DB}" )" "1"
+  check "and the script says which ones and why" "$( print -r -- "${out}" | grep -c -E 'skipped.*tilesize.*changed since' )" "1"
+  check "the rest are restored" "$( grep -c '^com.apple.screencapture|type|string|jpg$' "${DEFAULTS_DB}" )" "1"
+  check "the summary counts what was skipped" "$( print -r -- "${out}" | grep -c -E 'Restored [0-9]+ of [0-9]+ settings.*2 skipped' )" "1"
+  EXTRA_ENV=()
+  use_plain_defaults
+}
+
+test_defaults_undo_runs () {
+  new_home; use_typed_defaults; seed_defaults
+  EXTRA_ENV=( "${UNDO_ENV[@]}" )
+  run --defaults > /dev/null 2>&1
+  sleep 1
+  # something changes a setting, and a later apply puts it back: a second run in the journal
+  sed -i.bak 's/^com.apple.dock|tilesize|integer|.*/com.apple.dock|tilesize|integer|40/' "${DEFAULTS_DB}"
+  run --defaults > /dev/null 2>&1
+  local out
+  out=$( run --defaults-undo list 2>&1 )
+  check "two runs are listed, newest first" "$( print -r -- "${out}" | grep -c -E '^ +[12] +[0-9]{4}-' )" "2"
+  run --defaults-undo > /dev/null 2>&1
+  check "undo goes back one run (the newest)" "$( grep -c '^com.apple.dock|tilesize|integer|40$' "${DEFAULTS_DB}" )" "1"
+  check "and the other run is still there to undo" "$( run --defaults-undo list 2>&1 | grep -c -E '^ +1 +[0-9]{4}-' )" "1"
+  # a number picks an older run
+  new_home; use_typed_defaults; seed_defaults
+  run --defaults > /dev/null 2>&1; sleep 1
+  sed -i.bak 's/^com.apple.dock|tilesize|integer|.*/com.apple.dock|tilesize|integer|40/' "${DEFAULTS_DB}"
+  run --defaults > /dev/null 2>&1
+  run --defaults-undo 2 > /dev/null 2>&1
+  check "a number picks an older run: --defaults-undo 2 undoes the first one" "$( grep -c '^com.apple.screencapture|type|string|jpg$' "${DEFAULTS_DB}" )" "1"
+  check "-J is the short form, and a switch after it is still a switch" "$( run -J list -v 2>&1 | grep -c -E 'Information' | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
+  EXTRA_ENV=()
+  use_plain_defaults
+}
+
+test_defaults_undo_safety () {
+  new_home; use_typed_defaults; seed_defaults
+  EXTRA_ENV=( "${UNDO_ENV[@]}" )
+  local out rc
+  out=$( run --defaults-undo 2>&1 ); rc=$?
+  check "with no journal it says so and fails" "${rc}:$( print -r -- "${out}" | grep -c 'Nothing to undo' )" "1:1"
+  run --defaults --dryrun > /dev/null 2>&1
+  check "--dryrun apply records nothing" "$( [[ -e "${H}/.ussuri/defaults.journal" ]] && echo journal || echo none )" "none"
+  command -v python3 > /dev/null 2>&1 && {
+    run_on_tty n --defaults --confirm > /dev/null 2>&1
+    check "declining every --confirm prompt records nothing (nothing was written)" "$( journal_lines )" "0"
+  }
+  run --defaults > /dev/null 2>&1
+  sort "${DEFAULTS_DB}" > "${TMP}/applied.txt"; : > "${LOG}"
+  run --defaults-undo --dryrun > /dev/null 2>&1
+  sort "${DEFAULTS_DB}" > "${TMP}/after_dry.txt"
+  check "--defaults-undo --dryrun changes nothing" "$( diff "${TMP}/applied.txt" "${TMP}/after_dry.txt" > /dev/null && echo identical || echo DIFFERENT )" "identical"
+  check "and does not mark the run undone, so it can still be undone" "$( run --defaults-undo list 2>&1 | grep -c -E '^ +1 +[0-9]{4}-' )" "1"
+  # a previous value that cannot be restored (an array): reported, and left as it is
+  new_home; use_typed_defaults
+  print -r -- "com.apple.dock|tilesize|array|(1,2)" >> "${DEFAULTS_DB}"
+  run --defaults > /dev/null 2>&1
+  out=$( run --defaults-undo 2>&1 )
+  check "a value that was not a simple type is reported as not restorable" "$( print -r -- "${out}" | grep -c -E 'skipped.*tilesize.*array' )" "1"
+  check "and left as the script set it" "$( grep -c '^com.apple.dock|tilesize|integer|32$' "${DEFAULTS_DB}" )" "1"
+  EXTRA_ENV=()
+  use_plain_defaults
+}
+
+test_doctor_defaults_journal () {
+  healthy_home; use_typed_defaults; seed_defaults
+  local out
+  out=$( EXTRA_ENV=( "${UNDO_ENV[@]}" ); run --doctor 2>&1 )
+  check "doctor says nothing about undo before anything was applied" "$( print -r -- "${out}" | grep -c -i 'undo' )" "0"
+  ( EXTRA_ENV=( "${UNDO_ENV[@]}" ); run --defaults > /dev/null 2>&1 )
+  out=$( EXTRA_ENV=( "${UNDO_ENV[@]}" ); run --doctor 2>&1 )
+  check "doctor tells you a run can be undone" "$( print -r -- "${out}" | grep -c 'ok.*1 run.*can be undone' )" "1"
+  use_plain_defaults
+}
+
 test_init_cache () {
   new_home
   run > /dev/null 2>&1
@@ -1559,14 +1995,14 @@ test_updater () {
   local out
   out=$( EXTRA_ENV=( README_URL="file://${remote}/README.md" ); SCRIPT="${live}/ussuri.zsh"; run -C 2>&1 )
   check "-C reports a newer remote" "$( print -r -- "${out}" | grep -c 'Remote version: 9.9.9' )" "1"
-  ( EXTRA_ENV=( SCRIPT_URL="file://${remote}/ussuri.zsh" ); SCRIPT="${live}/ussuri.zsh"; run -U --dryrun > /dev/null 2>&1 )
+  ( EXTRA_ENV=( SCRIPT_URL="file://${remote}/ussuri.zsh" UPDATE_URL="file://${remote}/no-archive.tgz" ); SCRIPT="${live}/ussuri.zsh"; run -U --dryrun > /dev/null 2>&1 )
   check "-U --dryrun does not replace the script" "$( grep -m1 '^# Version:' "${live}/ussuri.zsh" | awk '{print $3}' )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
-  ( EXTRA_ENV=( SCRIPT_URL="file://${remote}/ussuri.zsh" ); SCRIPT="${live}/ussuri.zsh"; run -U > /dev/null 2>&1 )
+  ( EXTRA_ENV=( SCRIPT_URL="file://${remote}/ussuri.zsh" UPDATE_URL="file://${remote}/no-archive.tgz" ); SCRIPT="${live}/ussuri.zsh"; run -U > /dev/null 2>&1 )
   check "-U replaces it" "$( grep -m1 '^# Version:' "${live}/ussuri.zsh" | awk '{print $3}' )" "9.9.9"
   check "and keeps a backup" "$( nfiles "${H}/.ussuri/ussuri.zsh.*" )" "1"
   cp "${SCRIPT}" "${live}/ussuri.zsh"
   { sed 's/^# Version: .*/# Version: 9.9.9/' "${SCRIPT}"; print 'if [ then'; } > "${remote}/ussuri.zsh"
-  ( EXTRA_ENV=( SCRIPT_URL="file://${remote}/ussuri.zsh" ); SCRIPT="${live}/ussuri.zsh"; run -U > /dev/null 2>&1 )
+  ( EXTRA_ENV=( SCRIPT_URL="file://${remote}/ussuri.zsh" UPDATE_URL="file://${remote}/no-archive.tgz" ); SCRIPT="${live}/ussuri.zsh"; run -U > /dev/null 2>&1 )
   check "a download that does not parse is refused" "$( grep -m1 '^# Version:' "${live}/ussuri.zsh" | awk '{print $3}' )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
 }
 
