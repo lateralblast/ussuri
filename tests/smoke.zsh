@@ -2305,7 +2305,7 @@ test_package_drift_macos () {
   { grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
   printf '%s\n' zzz-extra git > "${TMP}/leaves.txt"
   print -r -- "wanted-app" > "${files}/local.cask"; print -r -- "other-app" > "${TMP}/casks.txt"
-  print -r -- "someone/tools" > "${files}/local.tap"; print -r -- "dkorunic/tap" > "${TMP}/taps.txt"
+  print -r -- "someone/tools" > "${files}/local.tap"; print -r -- "example/tap" > "${TMP}/taps.txt"
   : > "${LOG}"
   local before after
   before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
@@ -2316,7 +2316,7 @@ test_package_drift_macos () {
   check "casks in a list that are not installed" "$( drift_names "${out}" 'casks not installed (1)' )" "wanted-app"
   check "casks installed that are not in a list" "$( drift_names "${out}" 'casks installed but not in your lists (1)' )" "other-app"
   check "taps in a list that are not added" "$( drift_names "${out}" 'taps not added (1)' )" "someone/tools"
-  check "taps added that are not in a list" "$( drift_names "${out}" 'taps added but not in your lists (1)' )" "dkorunic/tap"
+  check "taps added that are not in a list" "$( drift_names "${out}" 'taps added but not in your lists (1)' )" "example/tap"
   check "something from the lists is missing, so there is drift" "${rc}" "1"
   check "the summary counts what -P would install, and says the rest is for information" "$( print -r -- "${out}" | grep -c -E '4 packages from your lists are not installed.*3 installed' )" "1"
   check "it changes nothing in the home directory" "${after}" "${before}"
