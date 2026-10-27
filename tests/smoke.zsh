@@ -535,6 +535,23 @@ wait_for_latest () {
   return 1
 }
 
+# Run the script as a login shell with a p10k config like the shipped one (a single line prompt) and a p10k
+# that logs what it is told, and report what the layout ended up as
+
+layout_state () {
+  cat > "${H}/.p10k.zsh" << EOF
+typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( os_icon dir vcs )
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( status time context )
+typeset -g POWERLEVEL9K_CONTEXT_{DEFAULT,SUDO}_CONTENT_EXPANSION=
+p10k () { print -r -- "p10k \$*" >> ${LOG}; }
+EOF
+  : > "${LOG}"
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" \
+    zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "left=${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]} | right=${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]} | context=${POWERLEVEL9K_CONTEXT_DEFAULT_CONTENT_EXPANSION:-hidden}"' zsh "${SCRIPT}"
+}
+
 # Tests
 
 test_syntax () {
@@ -2470,6 +2487,88 @@ test_package_names_brew () {
   out=$( run_names USSURI_OS=darwin ); rc=$?
   check "unless it is a cask, which brew install falls back to (as in the shipped list)" "${rc}:$( print -r -- "${out}" | grep -c 'all found' )" "0:1"
   make_stubs
+}
+
+test_two_line_prompt () {
+  new_home
+  check "by default the top line is user@host (the context segment), above the line you have" "$( layout_state )" 'left=context newline os_icon dir vcs | right=newline status time | context=${P9K_CONTENT}'
+  check "and p10k is told to reload, once" "$( grep -c '^p10k reload$' "${LOG}" )" "1"
+  EXTRA_ENV=( PROMPT_TWO_LINE=false )
+  check "PROMPT_TWO_LINE=false leaves the layout alone" "$( layout_state )" "left=os_icon dir vcs | right=status time context | context=hidden"
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS="os_icon context" )
+  check "any segments can be on the top line, and move up from the bottom one" "$( layout_state )" 'left=os_icon context newline dir vcs | right=newline status time | context=${P9K_CONTENT}'
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS="os_icon" PROMPT_TOP_RIGHT_ELEMENTS="time" )
+  check "the top line can have right hand segments too, and context stays hidden if it is not up there" "$( layout_state )" "left=os_icon newline dir vcs | right=time newline status context | context=hidden"
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS="context" PROMPT_TOP_RIGHT_ELEMENTS="status time" )
+  check "a segment is on the top line only, never repeated at the bottom" "$( layout_state | grep -o 'right=.*|' )" 'right=status time newline |'
+  local cwd="${TMP}/cwd" out
+  mkdir -p "${cwd}"
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS='context $(touch EVIL) dir' )
+  out=$( cd "${cwd}" && layout_state )
+  check "a name that is not a plain segment name is ignored, and the others are used" "${out}" 'left=context dir newline os_icon vcs | right=newline status time | context=${P9K_CONTENT}'
+  check "and nothing in it is executed" "$( [[ -e "${cwd}/EVIL" ]] && echo executed || echo safe )" "safe"
+  check "with a warning that says which" "$( cd "${cwd}" && env -i HOME="${H}" USER=tester PATH="${STUBS}:/usr/bin:/bin" "${TEST_OS_ENV[@]}" PROMPT_TOP_ELEMENTS='a;b' zsh -c 'src="$1"; shift; source "${src}" 2>&1' zsh "${SCRIPT}" | grep -c "Ignoring 'a;b'" )" "1"
+  EXTRA_ENV=()
+}
+
+test_two_line_prompt_leaves_other_setups_alone () {
+  new_home
+  # A p10k config that already has two lines is the user's own: it is not given a third
+  cat > "${H}/.p10k.zsh" << 'EOF'
+typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( dir newline prompt_char )
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( status )
+EOF
+  local out
+  out=$( env -i HOME="${H}" USER=tester PATH="${STUBS}:/usr/bin:/bin" "${TEST_OS_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "left=${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}"' zsh "${SCRIPT}" )
+  check "a config that is already more than one line is left alone" "${out}" "left=dir newline prompt_char"
+  # Another prompt engine: no p10k config is read at all, so nothing is laid out
+  EXTRA_ENV=( PROMPT_ENGINE=posh )
+  check "with oh-my-posh as the engine there is no p10k layout" "$( layout_state )" "left= | right= | context=hidden"
+  EXTRA_ENV=( PROMPT_ENGINE=none )
+  check "or with no prompt engine" "$( layout_state )" "left= | right= | context=hidden"
+  EXTRA_ENV=()
+}
+
+test_two_line_prompt_dryrun () {
+  new_home
+  cat > "${H}/.p10k.zsh" << 'EOF'
+typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( os_icon dir vcs )
+EOF
+  local out
+  out=$( env -i HOME="${H}" USER=tester PATH="${STUBS}:/usr/bin:/bin" "${TEST_OS_ENV[@]}" zsh "${SCRIPT}" -T --dryrun --verbose 2>&1 )
+  check "--dryrun shows the layout step without doing it" "$( print -r -- "${out}" | grep -c 'Executing: *apply_prompt_top_line' )" "1"
+}
+
+test_apply_prompt_top_line_unit () {
+  load_function apply_prompt_top_line
+  load_function prompt_engine_is
+  local reloads=0
+  p10k () { reloads=$(( reloads + 1 )) }
+  PROMPT_ENGINE=p10k PROMPT_TWO_LINE=true PROMPT_TOP_ELEMENTS="context" PROMPT_TOP_RIGHT_ELEMENTS=""
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( os_icon dir vcs )
+  POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( status time )
+  apply_prompt_top_line
+  check "the left list gets the top elements, a newline, then what was there" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}" "context newline os_icon dir vcs"
+  apply_prompt_top_line
+  check "running it again changes nothing (the layout is already more than one line)" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}:${reloads}" "context newline os_icon dir vcs:1"
+  # a p10k that is not loaded yet: the variables are set and nothing is reloaded
+  unfunction p10k
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( dir ); POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( status )
+  apply_prompt_top_line 2> /dev/null
+  check "without p10k loaded yet it still sets the layout, for p10k to read when it loads" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}" "context newline dir"
+  unset POWERLEVEL9K_LEFT_PROMPT_ELEMENTS POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS PROMPT_ENGINE PROMPT_TWO_LINE PROMPT_TOP_ELEMENTS PROMPT_TOP_RIGHT_ELEMENTS
+}
+
+test_doctor_prompt_layout () {
+  healthy_home
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor says the prompt is two lines, and what is on the top one" "$( print -r -- "${out}" | grep -c 'ok.*two line prompt.*top line: context' )" "1"
+  EXTRA_ENV=( PROMPT_TWO_LINE=false )
+  out=$( run --doctor 2>&1 )
+  check "or that it is one" "$( print -r -- "${out}" | grep -c 'ok.*single line prompt' )" "1"
+  EXTRA_ENV=()
 }
 
 test_init_cache () {
