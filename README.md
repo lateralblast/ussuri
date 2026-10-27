@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.5.0
+Current Version: 1.5.3
 
 License
 -------
@@ -198,6 +198,30 @@ commands typed with a leading space (a way to keep one out of history) and extra
 change the size, or DO_HISTORY=false to leave all of this to the system (SHARE_HISTORY=false turns sharing
 off separately), for example in the config.
 
+Plugins
+-------
+
+The zinit plugin lists are files/zinit/zinit-turbo.zsh (the default) and zinit.zsh. Besides the prompt,
+syntax highlighting, completions, autosuggestions and fzf-tab, they load zsh-history-substring-search:
+type part of a command and press Up or Down to step through the history entries that contain it (the
+arrow keys are bound for both keypad modes).
+
+It also loads forgit (https://github.com/wfxr/forgit), interactive git commands driven by fzf (git add,
+log, diff, checkout, stash, rebase and more with previews). forgit defines short aliases, and 16 of them (ga,
+gd, gco, gcb, gss, glo...) have the same name as aliases in the Oh My Zsh git snippet, which would silently
+change what they do (gcb creates a branch, but forgit's gcb is an interactive picker). So those 16 are renamed
+with an f in front (fga, fgd, fgco, fgcb, fgss, fglo...), your git aliases keep their meaning, and forgit's other
+aliases (gi, gat, gfu...) keep their names. `zsh tests/forgit-aliases.zsh` (needs the network) checks the
+renames against the current forgit and git snippet, and is worth running when either is updated.
+
+zoxide (https://github.com/ajeetdsouza/zoxide) is a smarter cd: `z foo` jumps to the directory you use most
+that matches foo, and `zi` picks interactively with fzf. It is in the package lists, so `-P` installs it,
+but note that `-P` installs every package in your list that is missing, not just this one; to install only
+zoxide use your package manager (for example `brew install zoxide`). On Ubuntu releases before 22.10 the
+package doesn't exist and apt will skip it. A login sets it up only if it is installed, so nothing is ever
+downloaded on login, and its init output goes through the init cache. Set INSTALL_ZOXIDE=false (for example in
+the config) to leave it alone. It only adds z and zi, it does not replace cd.
+
 Startup
 -------
 
@@ -352,6 +376,7 @@ Testing
 -------
 
 zsh tests/smoke.zsh [name-filter]
+zsh tests/forgit-aliases.zsh        (needs the network, see Plugins)
 
 The tests run against a copy of the script in a throwaway home directory with the system commands
 (defaults, brew, sudo, rbenv, pyenv...) stubbed, so they do not touch the real system.

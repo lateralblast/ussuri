@@ -78,9 +78,9 @@ Housekeeping on what is already loaded:
 
 Plugins to add (all checked as maintained on 2026-10-27, none tested in a shell yet; add to both `zinit-turbo.zsh` and `zinit.zsh` in the same order):
 
-- [ ] **T1. `zsh-users/zsh-history-substring-search`** (last push 2026-09). Up/Down searches history for the typed text. Must load after zsh-syntax-highlighting; needs key bindings.
-- [ ] **T2. `wfxr/forgit`** (2026-10). Interactive git commands driven by fzf (fzf is already in the package list).
-- [ ] **T3. `zoxide`** (2026-10). A tool, not a plugin: smarter `cd`. Add to the package lists and set it up through `cached_eval`. Not in `macos.brew` or installed today.
+- [x] **T1. `zsh-users/zsh-history-substring-search`** (1.5.1, 2026-10-27) Verified in a pty with the real plugin: Up after typing `echo a` recalls `echo alpha` rather than the previous command, for both `^[[A` and `^[OA`. The offline tests check list placement and the bindings. (last push 2026-09). Up/Down searches history for the typed text. Must load after zsh-syntax-highlighting; needs key bindings.
+- [x] **T2. `wfxr/forgit`** (1.5.2, 2026-10-27) 16 of its 29 aliases clashed with the OMZ git snippet (ga, gd, gco, gcb, gss, glo...), so they are renamed `fg*`. Verified in a pty that the git aliases keep their meaning. `tests/forgit-aliases.zsh` re-checks against upstream. (2026-10). Interactive git commands driven by fzf (fzf is already in the package list).
+- [x] **T3. `zoxide`** (1.5.3, 2026-10-27) In every package list; set up on login only when installed, cached. Not run against the real binary (see below): its init template was read from the source and its compdef guard emulated with a stub in a pty, which found that turbo mode needed `register_zoxide_completion` after compinit. Re-verify with the real binary once zoxide is installed. (2026-10). A tool, not a plugin: smarter `cd`. Add to the package lists and set it up through `cached_eval`. Not in `macos.brew` or installed today.
 - [ ] **T4. `MichaelAquilina/zsh-you-should-use`** (2026-05, optional). Reminds you of aliases you did not use.
 - [ ] **T5. `atuin`** (2026-10, optional). Searchable, optionally synced history database replacing Ctrl-R. Opinionated and heavier.
 - [ ] **T6. `jeffreytse/zsh-vi-mode`** (2026-07, optional). Only if you use vi bindings.

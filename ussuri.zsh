@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.5.0
+# Version: 1.5.3
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -130,6 +130,25 @@ is_osx () {
 
 is_linux () {
   [[ "${OS_NAME}" == *Linux* ]]
+}
+
+# Key bindings for zsh-history-substring-search (called from the plugin lists in files/zinit):
+# Up and Down search history for what has been typed so far. Terminals send different codes for
+# the arrow keys depending on keypad mode (zsh switches to "application mode" while editing),
+# so the usual ones are bound as well as the one terminfo names. A key whose widget isn't there
+# (the plugin didn't load) is left alone
+
+bind_history_search () {
+  zmodload zsh/terminfo 2> /dev/null
+  typeset -g HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
+  local key
+  for key in '^[[A' '^[OA' "${terminfo[kcuu1]}"; do
+    [[ -n "${key}" ]] && bindkey "${key}" history-substring-search-up 2> /dev/null
+  done
+  for key in '^[[B' '^[OB' "${terminfo[kcud1]}"; do
+    [[ -n "${key}" ]] && bindkey "${key}" history-substring-search-down 2> /dev/null
+  done
+  return 0
 }
 
 # Is this Linux distribution the given one, or derived from it? (os-release ID, or one of the
@@ -905,6 +924,8 @@ set_all_defaults () {
   set_env "DO_DRIFT"            "false"
   set_env "DO_GNOME_DEFAULTS"   "false"
   set_env "DO_TOOLS_CHECK"      "false"
+  set_env "DO_ZOXIDE_CHECK"     "false"
+  set_env "INSTALL_ZOXIDE"      "true"
   set_env "INSTALL_FNM"         "false"
   set_env "INSTALL_RUSTUP"      "false"
   set_env "INSTALL_UV"          "false"
@@ -973,6 +994,7 @@ set_inline_defaults () {
   set_env "DO_PYENV_CHECK"      "true"
   set_env "DO_RBENV_CHECK"      "true"
   set_env "DO_TOOLS_CHECK"      "true"
+  set_env "DO_ZOXIDE_CHECK"     "true"
   set_env "DO_FONTS_CHECK"      "true"
   set_env "DO_POSH_CHECK"       "true"
   set_env "DO_ZOSH_CHECK"       "false"
@@ -1504,6 +1526,35 @@ check_mise_config () {
       execute_command "mise use --global ${(j: :)${(q)${=MISE_TOOLS}}}" "show"
     fi
   fi
+}
+
+# zoxide: a smarter cd (z and zi). It is installed by the package lists (-P), not here, so a login
+# never downloads anything: this only sets it up when it is already installed. Its init output is
+# the same every time, so it goes through the cache. Its completions are registered only if compdef
+# exists when it loads, so this must run after the plugin lists (which is where compdef comes from)
+
+check_zoxide_config () {
+  [ "${INSTALL_ZOXIDE}" = "true" ] || return
+  verbose_message "Configuring zoxide"
+  if (( ! $+commands[zoxide] )); then
+    verbose_message "zoxide is not installed (it is in the package lists, -P installs the packages)"
+    return
+  fi
+  if [ "${DO_ENV_SETUP}" = "true" ]; then
+    execute_command "cached_eval ${(q)commands[zoxide]} \"${(q)commands[zoxide]} init zsh\""
+  fi
+}
+
+# Register zoxide's completion for z. zoxide registers it itself, but only if compdef exists when
+# it is set up, and in turbo mode that is before compinit has run (compdef comes with it). So the
+# turbo plugin list calls this right after compinit. Does nothing if zoxide isn't set up or
+# compdef still isn't there
+
+register_zoxide_completion () {
+  if (( $+functions[__zoxide_z_complete] && $+functions[compdef] )); then
+    compdef __zoxide_z_complete z
+  fi
+  return 0
 }
 
 check_tools_config () {
@@ -2244,6 +2295,9 @@ print_config_template () {
 #DO_SUDOERS_CHECK=false
 #DO_GNOME_DEFAULTS=true    # Linux: also apply GNOME settings on login (--defaults always does)
 
+# zoxide, a smarter cd (z, zi): set up on login if it is installed (the package lists install it)
+#INSTALL_ZOXIDE=false
+
 # Other language managers (true or false). They are installed and set up on login, and versions are
 # only installed when building (--tool NAME or --build)
 #INSTALL_FNM=true           # Node
@@ -2522,6 +2576,13 @@ doctor_components () {
   fi
   if [ "${INSTALL_OZSH}" = "true" ]; then
     if [ -d "${ZOSH_HOME}" ]; then doctor_ok "oh-my-zsh"; else doctor_warn "oh-my-zsh is not installed (${ZOSH_HOME})"; fi
+  fi
+  if [ "${INSTALL_ZOXIDE}" = "true" ]; then
+    if (( $+commands[zoxide] )); then
+      doctor_ok "zoxide"
+    else
+      doctor_warn "zoxide is not installed (it is in the package lists, -P installs the packages, or install just it with your package manager)"
+    fi
   fi
   # Only the tools that have been asked for (INSTALL_<NAME>=true, --tool)
   for DOCTOR_TOOL in fnm rustup uv mise; do
@@ -3201,6 +3262,12 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   if [ "${DO_TOOLS_CHECK}" = "true" ]; then
     check_tools_config
+  fi
+
+  # Do zoxide (after the plugin lists, which provide compdef for its completions)
+
+  if [ "${DO_ZOXIDE_CHECK}" = "true" ]; then
+    check_zoxide_config
   fi
 
   # Do Powerlevel10k config
