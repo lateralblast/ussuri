@@ -1,0 +1,4 @@
+# Homebrew taps to add with -P, one per line, before the formulae and casks are installed (so a formula
+# from a tap can be found by its short name). This file is replaced by updates: put your own in
+# ~/.ussuri/files/packages/local.tap, which never is. Nothing is added by default. Example:
+#   hashicorp/tap
