@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.5.3
+Current Version: 1.5.4
 
 License
 -------
@@ -140,6 +140,7 @@ Usage
     -u|--unlink       Unlink dotfiles
     -U|--update       Update the script   (default: false)
     -v|--verbose      Verbose output      (default: false)
+    -y|--yes          Answer yes, no prompts (default: false)
     -W|--tool NAME    Install a tool      (fnm, rustup, uv or mise)
     -X|--uninstall    Restore the .zshrc from before ussuri
     -x|--doctor       Check environment   (read only)
@@ -265,6 +266,18 @@ TRANSMISSION_BLOCKLIST_URL (for example in the config) to use another one. The U
 is written, and an unreachable one is reported and not written, so it never replaces a working setting.
 Neither list nor service is endorsed by the Transmission developers, and Level 1 blocks the address
 ranges of organisations known for anti-filesharing activity, so decide for yourself that you want it.
+
+Unattended installs
+-------------------
+
+./ussuri.zsh -P --yes
+
+Package installs are already unattended where the package manager allows it (apt, dnf and pacman are always run
+with -y or --noconfirm, and apk, nix and brew don't ask). --yes (or ASSUME_YES=true, for example in the config)
+also turns off what those flags don't cover: apt's debconf dialogs (DEBIAN_FRONTEND=noninteractive), the
+"Press RETURN" wait in the Homebrew installer (NONINTERACTIVE=1), and the script's own --confirm prompts, which
+are answered yes. It can't remove a password prompt: sudo, and Homebrew casks that run an installer, still ask
+for your password unless sudo is passwordless for you (--sudoers sets that up, see its warning).
 
 Language managers
 -----------------

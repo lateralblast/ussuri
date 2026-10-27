@@ -281,6 +281,15 @@ make_linux_stubs () {
   stub rpm  "echo \"rpm \$*\" >> ${LOG}; printf 'git\\n'"
 }
 
+# The stubs make_linux_stubs adds, taken away again so one test's package managers aren't there for the next
+
+remove_linux_stubs () {
+  local c
+  for c in apt apt-get pacman dnf apk nix dpkg rpm; do
+    rm -f "${STUBS}/${c}"
+  done
+}
+
 # Run the package check (-P) as the given distro, with an installed list that has only git
 
 linux_packages () {
@@ -1367,6 +1376,75 @@ test_zoxide_completion () {
   check "turbo: the completion is registered right after compinit, in the same step" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit.*zinit cdreplay -q; register_zoxide_completion"' )" "1"
 }
 
+test_assume_yes () {
+  make_linux_stubs
+  local sw
+  # apt: -y is always passed, but debconf dialogs can still prompt, so --yes also turns them off
+  linux_packages apt ubuntu "" ubuntu.apt
+  check "without --yes apt is run as before" "$( grep -c '^sudo apt install -y ansible$' "${LOG}" )" "1"
+  for sw in -y --yes --assume-yes; do
+    new_home
+    print -r -- "ID=ubuntu" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/apt.list"
+    EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
+    run -P ${sw} > /dev/null 2>&1
+    EXTRA_ENV=()
+    check "${sw}: apt gets no debconf dialogs" "$( grep -c '^sudo env DEBIAN_FRONTEND=noninteractive apt install -y ansible$' "${LOG}" )" "1"
+  done
+  new_home
+  print -r -- "ID=arch" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/pacman.list"
+  EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
+  run -P -y > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "pacman is unchanged by --yes (it never prompts)" "$( grep -c '^sudo pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
+  check "-y takes no value, so a switch after it is still a switch" "$( run -y -v --version 2>&1 | tail -1 )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
+  new_home
+  print -r -- "ASSUME_YES=true" > "${H}/.ussuri/config"
+  print -r -- "ID=ubuntu" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/apt.list"
+  EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
+  run -P > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "ASSUME_YES=true in the config does the same without the switch" "$( grep -c 'DEBIAN_FRONTEND=noninteractive apt install -y ansible$' "${LOG}" )" "1"
+}
+
+test_assume_yes_confirm () {
+  command -v python3 > /dev/null 2>&1 || { print "  skip  assume-yes confirm (no python3)"; return }
+  new_home
+  run_limited --defaults --confirm < /dev/null > /dev/null 2>&1
+  check "--confirm with no terminal and no --yes runs nothing" "$( calls 'defaults write' )" "0"
+  : > "${LOG}"
+  run_limited --defaults --confirm --yes < /dev/null > /dev/null 2>&1
+  check "--yes answers the --confirm prompts, even with no terminal" "$( [[ $( calls 'defaults write' ) -gt 100 ]] && echo yes || echo no )" "yes"
+  new_home; : > "${LOG}"
+  local out
+  out=$( run_on_tty n --defaults --confirm --yes 2>&1 )
+  check "and on a terminal it does not ask" "$( print -r -- "${out}" | grep -c '\[y/n\]' )" "0"
+  check "while still running everything" "$( [[ $( calls 'defaults write' ) -gt 100 ]] && echo yes || echo no )" "yes"
+}
+
+test_assume_yes_homebrew_installer () {
+  new_home
+  # No brew anywhere, so the script has to run the installer. The stand-in installer records whether
+  # it was told to be non-interactive, then provides a brew so the run can carry on
+  rm "${STUBS}/brew" "${TMP}/brew/bin/brew"
+  local inst="${TMP}/brew-install.sh"
+  cat > "${inst}" << EOF
+#!/bin/sh
+echo "installer noninteractive=\${NONINTERACTIVE:-unset}" >> ${LOG}
+mkdir -p ${TMP}/brew/bin
+printf '#!/bin/sh\nexit 0\n' > ${TMP}/brew/bin/brew; chmod +x ${TMP}/brew/bin/brew
+EOF
+  EXTRA_ENV=( BREW_INSTALL_URL="file://${inst}" ); : > "${LOG}"
+  run -P > /dev/null 2>&1
+  check "without --yes the Homebrew installer is left to ask" "$( grep '^installer' "${LOG}" )" "installer noninteractive=unset"
+  rm -f "${TMP}/brew/bin/brew"; : > "${LOG}"
+  run -P -y > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "with --yes it is told not to (NONINTERACTIVE=1)" "$( grep '^installer' "${LOG}" )" "installer noninteractive=1"
+  check "and that does not leak into the shell afterwards" "$( env -i HOME="${H}" zsh -c 'echo ${NONINTERACTIVE:-unset}' )" "unset"
+  # put the stubs back for the tests that follow
+  make_stubs
+}
+
 test_init_cache () {
   new_home
   run > /dev/null 2>&1
@@ -1522,6 +1600,7 @@ make_stubs
 FILTER="$1"
 for name in ${(ok)functions[(I)test_*]}; do
   [[ -n "${FILTER}" && "${name}" != *"${FILTER}"* ]] && continue
+  remove_linux_stubs
   print -r -- "${name#test_}"
   ${name}
 done

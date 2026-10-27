@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.5.3
+# Version: 1.5.4
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -312,7 +312,7 @@ execute_command () {
   fi
   if [ ! "${DO_DRYRUN}" = "true" ] || [ "${OPTION}" = "run" ]; then
     DO_EXECUTE="true"
-    if [ "${DO_CONFIRM}" = "true" ]; then
+    if [ "${DO_CONFIRM}" = "true" ] && [ ! "${ASSUME_YES}" = "true" ]; then
       DO_EXECUTE="false"
       RESPONSE=""
       if [[ -t 0 ]]; then
@@ -802,6 +802,11 @@ set_pkg_manager () {
       PKG_LIST_CMD="dpkg -l | grep ^ii | awk '{ print \$2 }' | sed 's/:[a-z0-9]*\$//'"
       PKG_PREPARE="apt-get update"
       PKG_INSTALL="apt install -y"
+      # -y answers apt's own questions, but not debconf's dialogs (configuring a package), which
+      # --yes turns off too. env, as sudo would otherwise drop the variable
+      if [ "${ASSUME_YES}" = "true" ]; then
+        PKG_INSTALL="env DEBIAN_FRONTEND=noninteractive apt install -y"
+      fi
       ;;
     pacman)
       PKG_TOOL="pacman"
@@ -952,6 +957,7 @@ set_all_defaults () {
   set_env "ZSH_THEME"           "robbyrussell"
   set_env "PLUGIN_MANAGER"      "zinit"
   set_env "SHARE_HISTORY"       "true"
+  set_env "ASSUME_YES"          "false"
   set_env "DO_HISTORY"          "true"
   set_env "HISTORY_SIZE"        "50000"
   set_env "SUDOERS_ENTRY"       "ALL=(ALL) NOPASSWD:ALL"
@@ -1129,6 +1135,7 @@ print_help () {
     -T|--p10k         Do p10k config      (default: ${DO_P10K_CHECK})
     -U|--update       Update the script   (default: ${DO_UPDATE_CHECK})
     -v|--verbose      Verbose output      (default: ${DO_VERBOSE})
+    -y|--yes          Answer yes, no prompts (default: ${ASSUME_YES})
     -W|--tool NAME    Install a tool      (fnm, rustup, uv or mise)
     -x|--doctor       Check environment   (read only)
     -z|--zinit        Do zinit check      (default: ${DO_ZINIT_CHECK})
@@ -1917,7 +1924,12 @@ check_osx_packages () {
       find_brew
       if [ -z "${BREW_BIN}" ]; then
         notice_message "Installing Homebrew"
-        execute_command "fetch_and_run ${(q)BREW_INSTALL_URL} ${(q)BREW_INSTALL_SHA256}" "show"
+        # NONINTERACTIVE=1 stops the installer waiting for RETURN. It still needs sudo to work
+        BREW_INSTALL_ENV=""
+        if [ "${ASSUME_YES}" = "true" ]; then
+          BREW_INSTALL_ENV="NONINTERACTIVE=1 "
+        fi
+        execute_command "${BREW_INSTALL_ENV}fetch_and_run ${(q)BREW_INSTALL_URL} ${(q)BREW_INSTALL_SHA256}" "show"
       fi
       setup_brew_env
     else
@@ -2275,6 +2287,7 @@ print_config_template () {
 #GO_HOME=~/go               # GOPATH
 #ZSH_THEME=robbyrussell
 #SHARE_HISTORY=true
+#ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
 #HISTORY_SIZE=50000         # lines kept in memory and in the history file
 #TRANSMISSION_BLOCKLIST_URL=https://example.com/list.p2p.gz   # a .p2p (or .gz) blocklist for Transmission (OS X)
@@ -2821,7 +2834,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --doctor -x       --config -k        --dotfiles -L
       --unlink -u       --profile -M       --backups -B
       --rollback -R     --uninstall -X     --drift -G
-      --tool -W
+      --tool -W         --yes -y           --assume-yes -y
+      --assumeyes -y
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -2849,7 +2863,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- A b B c C d D e f F g: G h i I k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- A b B c C d D e f F g: G h i I k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X y z Z: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -2938,6 +2952,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
         -u)
           DO_UNLINK="true"
+          shift OPTS
+          ;;
+        -y)
+          ASSUME_YES="true"
           shift OPTS
           ;;
         -W)
