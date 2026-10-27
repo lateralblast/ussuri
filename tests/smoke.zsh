@@ -116,6 +116,12 @@ EOF
   stub pyenv    "echo \"pyenv \$*\" >> ${LOG}; [ \"\$1\" = init ] && cat ${TMP}/pyenv.init; exit 0"
   # zoxide init prints the same text every time; this one sets a variable so a test can see it was used
   stub zoxide "echo \"zoxide \$*\" >> ${LOG}; [ \"\$1\" = init ] && printf 'export ZOXIDE_INIT_RAN=1\\n__zoxide_z () { :; }\\n'; exit 0"
+  # atuin: init prints text that records the flags it was asked for; anything else is just logged
+  stub atuin "echo \"atuin \$*\" >> ${LOG}; [ \"\$1 \$2\" = 'init zsh' ] && printf 'export ATUIN_INIT_FLAGS=\"%s\"\\n' \"\$*\"; exit 0"
+  # git: anything that would clone from the network is refused (and logged), so a test can never download a
+  # repository (a login on Linux clones nerd-fonts, which is hundreds of megabytes). Everything else is real git
+  REAL_GIT=$( command -v git )
+  stub git "case \"\$*\" in *clone*://[!f]*) echo \"git \$* BLOCKED: tests must not clone from the network\" >> ${LOG}; echo 'git: network clones are blocked in the tests' >&2; exit 1;; esac; exec ${REAL_GIT} \"\$@\""
   stub oh-my-posh "echo \"oh-my-posh \$*\" >> ${LOG}; exit 0"
   cp "${TMP}/stubs/brew" "${TMP}/brew/bin/brew"
   # Point the copy of the script at the stub brew. If the pattern goes missing the real brew
@@ -1237,7 +1243,7 @@ test_tools_switch () {
   new_home; make_tool_installers
   local out rc
   out=$( run -W bogus 2>&1 ); rc=$?
-  check "an unknown tool is an error that names the choices" "${rc}:$( print -r -- "${out}" | grep -c 'fnm, rustup, uv or mise' )" "1:1"
+  check "an unknown tool is an error that names the choices" "${rc}:$( print -r -- "${out}" | grep -c 'fnm, rustup, uv, mise or atuin' )" "1:1"
   out=$( run -W 2>&1 ); rc=$?
   check "--tool without a name is an error" "$( [[ ${rc} -ne 0 ]] && echo error || echo ok )" "error"
   EXTRA_ENV=( "${TOOL_ENV[@]}" )
@@ -2568,6 +2574,155 @@ test_doctor_prompt_layout () {
   EXTRA_ENV=( PROMPT_TWO_LINE=false )
   out=$( run --doctor 2>&1 )
   check "or that it is one" "$( print -r -- "${out}" | grep -c 'ok.*single line prompt' )" "1"
+  EXTRA_ENV=()
+}
+
+# Source the script as a login shell and report what atuin's init left behind
+
+atuin_state () {
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" \
+    zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "flags=[${ATUIN_INIT_FLAGS:-none}]"' zsh "${SCRIPT}"
+}
+
+test_atuin_is_opt_in () {
+  new_home
+  local f
+  for f in "${ROOT}"/files/packages/*; do
+    check "${f:t} does not list atuin (it records your commands, so it is only installed when asked for)" "$( grep -c -x 'atuin' "${f}" )" "0"
+  done
+  : > "${LOG}"
+  check "by default a login does not touch atuin" "$( atuin_state )" "flags=[none]"
+  check "and runs nothing" "$( calls 'atuin' )" "0"
+  check "and the official install script is never part of the code (it signs you up to a sync service)" "$( grep -c -E 'setup\.atuin\.sh|ATUIN_INSTALL_URL' "${SRC}" | awk '{print ($1 > 0) ? "present" : "absent"}' )" "absent"
+}
+
+test_atuin_setup () {
+  new_home
+  EXTRA_ENV=( INSTALL_ATUIN=true ); : > "${LOG}"
+  check "when asked for, its init is used, with the up arrow left to history search" "$( atuin_state )" "flags=[init zsh --disable-up-arrow]"
+  check "one init call to build the cache" "$( calls 'atuin init zsh' )" "1"
+  : > "${LOG}"
+  check "later logins use the cache and do not run atuin to build it" "$( atuin_state ) $( calls 'atuin init' )" "flags=[init zsh --disable-up-arrow] 0"
+  EXTRA_ENV=( INSTALL_ATUIN=true ATUIN_BIND_UP=true ); : > "${LOG}"
+  check "ATUIN_BIND_UP=true gives atuin the up arrow, and the cache follows the option at once (not stale)" "$( atuin_state )" "flags=[init zsh]"
+  check "with a cache of its own for each" "$( nfiles "${H}/.ussuri/cache/*atuin*" )" "2"
+  EXTRA_ENV=( INSTALL_ATUIN=true DO_CACHE_INIT=false ); : > "${LOG}"
+  atuin_state > /dev/null; atuin_state > /dev/null
+  check "DO_CACHE_INIT=false runs init every time" "$( calls 'atuin init zsh' )" "2"
+  EXTRA_ENV=()
+}
+
+test_atuin_never_syncs () {
+  new_home
+  EXTRA_ENV=( INSTALL_ATUIN=true ); : > "${LOG}"
+  run -W atuin > /dev/null 2>&1; run > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "ussuri never registers, logs in or syncs" "$( grep -c -E '^atuin (register|login|sync|account|key)' "${LOG}" )" "0"
+}
+
+test_atuin_install () {
+  make_linux_stubs
+  local row manager osid want out
+  # How it is installed: only where atuin's own docs list a package. Not installed: the stub is out of the way
+  new_home; mv "${STUBS}/atuin" "${TMP}/atuin.stub"
+  EXTRA_ENV=( INSTALL_ATUIN=true ); : > "${LOG}"
+  run > /dev/null 2>&1
+  check "macOS: it is installed with brew" "$( grep -c '^brew install atuin$' "${LOG}" )" "1"
+  for row in 'pacman arch ^sudo.pacman.--noconfirm.--needed.-S.atuin$' 'nix nixos ^nix.profile.install.nixpkgs#atuin$'; do
+    set -- ${=row}; manager="$1"; osid="$2"; want="$3"
+    new_home; print -r -- "ID=${osid}" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/${manager}.list"
+    EXTRA_ENV=( INSTALL_ATUIN=true DO_FONTS_CHECK=false USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
+    run > /dev/null 2>&1
+    check "${manager}: it is installed with ${manager}" "$( grep -c -E "${want//./ }" "${LOG}" | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
+  done
+  for row in 'apt ubuntu' 'dnf fedora' 'apk alpine'; do
+    set -- ${=row}; manager="$1"; osid="$2"
+    new_home; print -r -- "ID=${osid}" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/${manager}.list"
+    EXTRA_ENV=( INSTALL_ATUIN=true DO_FONTS_CHECK=false USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
+    out=$( run 2>&1 )
+    check "${manager}: nothing is installed (atuin's docs list no package for it), and it says what to do" "$( grep -c -E 'install atuin|add atuin|install .*atuin' "${LOG}" ):$( print -r -- "${out}" | grep -c 'cargo install atuin --locked' )" "0:1"
+  done
+  EXTRA_ENV=()
+  mv "${TMP}/atuin.stub" "${STUBS}/atuin"
+}
+
+test_atuin_import () {
+  new_home
+  EXTRA_ENV=( INSTALL_ATUIN=true ); : > "${LOG}"
+  run > /dev/null 2>&1
+  check "a login never imports history" "$( grep -c '^atuin import' "${LOG}" )" "0"
+  run -W atuin > /dev/null 2>&1
+  check "--tool atuin imports the existing history, once" "$( grep -c '^atuin import auto$' "${LOG}" )" "1"
+  : > "${LOG}"
+  run -W atuin > /dev/null 2>&1
+  check "and not again" "$( grep -c '^atuin import' "${LOG}" )" "0"
+  new_home; : > "${LOG}"
+  EXTRA_ENV=( ATUIN_IMPORT=false )
+  run -W atuin > /dev/null 2>&1
+  check "ATUIN_IMPORT=false skips it" "$( grep -c '^atuin import' "${LOG}" )" "0"
+  new_home; : > "${LOG}"
+  EXTRA_ENV=()
+  out=$( run -W atuin --dryrun --verbose 2>&1 )
+  check "--dryrun shows the import without doing it" "$( print -r -- "${out}" | grep -c 'Executing: *atuin import auto' ):$( grep -c '^atuin import' "${LOG}" )" "1:0"
+}
+
+test_atuin_keys () {
+  load_function bind_history_search
+  zle -N history-substring-search-up true 2> /dev/null; zle -N history-substring-search-down true 2> /dev/null
+  INSTALL_ATUIN=false ATUIN_BIND_UP=false
+  bind_history_search
+  check "history search has the up arrow when atuin does not" "$( bindkey | grep -c 'history-substring-search-up' | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
+  bindkey -r '^[[A' '^[OA' '^[[B' '^[OB' 2> /dev/null
+  INSTALL_ATUIN=true ATUIN_BIND_UP=true
+  bind_history_search
+  check "but leaves the arrow keys alone when atuin was given them" "$( bindkey | grep -c 'history-substring-search' )" "0"
+  INSTALL_ATUIN=true ATUIN_BIND_UP=false
+  bind_history_search
+  check "and not when atuin was told to leave them" "$( bindkey | grep -c 'history-substring-search-up' | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
+  unset INSTALL_ATUIN ATUIN_BIND_UP
+}
+
+test_cached_eval_key () {
+  load_function cached_eval
+  WORK_DIR="${TMP}/ce"; DO_CACHE_INIT=true
+  mkdir -p "${WORK_DIR}"
+  print -r -- '#!/bin/sh' > "${TMP}/fake-tool"; chmod +x "${TMP}/fake-tool"
+  cached_eval "${TMP}/fake-tool" "print -r -- 'export A=1'"
+  cached_eval "${TMP}/fake-tool" "print -r -- 'export A=2'"
+  check "the same tool with a different command has its own cache, so changing an option is not served stale" "$( ls "${WORK_DIR}/cache" | wc -l | tr -d ' ' )" "2"
+  unset WORK_DIR DO_CACHE_INIT
+}
+
+test_doctor_atuin () {
+  healthy_home
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor says nothing about atuin when it was not asked for" "$( print -r -- "${out}" | grep -c -i atuin )" "0"
+  EXTRA_ENV=( INSTALL_ATUIN=true )
+  out=$( run --doctor 2>&1 )
+  check "when it is asked for and installed it is ok" "$( print -r -- "${out}" | grep -c 'ok.*atuin' )" "1"
+  mv "${STUBS}/atuin" "${TMP}/atuin.stub"
+  out=$( run --doctor 2>&1 )
+  mv "${TMP}/atuin.stub" "${STUBS}/atuin"
+  EXTRA_ENV=()
+  check "and a warning with how to get it when it is not" "$( print -r -- "${out}" | grep -c 'warn.*atuin.*not installed' )" "1"
+}
+
+test_network_clones_are_blocked () {
+  new_home
+  : > "${LOG}"
+  local out rc
+  out=$( env -i HOME="${H}" PATH="${STUBS}:/usr/bin:/bin" git clone --depth 1 https://github.com/ryanoasis/nerd-fonts.git "${TMP}/never" 2>&1 ); rc=$?
+  check "a clone over the network is refused in the sandbox" "${rc}:$( [[ -e "${TMP}/never" ]] && echo cloned || echo refused )" "1:refused"
+  check "and logged, so it is visible" "$( grep -c 'BLOCKED' "${LOG}" )" "1"
+  check "ordinary git still works" "$( env -i HOME="${H}" PATH="${STUBS}:/usr/bin:/bin" git --version 2>&1 | grep -c 'git version' )" "1"
+  # A login on Linux would clone nerd-fonts for the fonts check: it must fail fast and quietly here, not download
+  print -r -- "ID=ubuntu" > "${TMP}/os-release"
+  : > "${LOG}"
+  EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" )
+  perl -e 'alarm 60; exec @ARGV' env -i HOME="${H}" USER=tester PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh "${SCRIPT}" > /dev/null 2>&1
+  check "a Linux login tries the fonts clone and is stopped by the guard, quickly" "$( grep -c 'nerd-fonts.*BLOCKED' "${LOG}" )" "1"
   EXTRA_ENV=()
 }
 

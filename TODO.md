@@ -82,7 +82,7 @@ Plugins to add (all checked as maintained on 2026-10-27, none tested in a shell 
 - [x] **T2. `wfxr/forgit`** (1.5.2, 2026-10-27) 16 of its 29 aliases clashed with the OMZ git snippet (ga, gd, gco, gcb, gss, glo...), so they are renamed `fg*`. Verified in a pty that the git aliases keep their meaning. `tests/forgit-aliases.zsh` re-checks against upstream. (2026-10). Interactive git commands driven by fzf (fzf is already in the package list).
 - [x] **T3. `zoxide`** (1.5.3, 2026-10-27) In every package list; set up on login only when installed, cached. Verified against the real zoxide 0.10.0 on 2026-10-27, running the actual 1.5.4 script as `~/.zshrc` in a pty with a sandbox home: z and zi defined, completion registered, `chpwd` hook installed, `z beta`/`z alpha`/fuzzy `z alp` jump correctly, the cache is written once and reused (its content equals the current `zoxide init zsh`). A/B: without `register_zoxide_completion` in the turbo list `z` has no completion; with it, it does.
 - [ ] **T4. `MichaelAquilina/zsh-you-should-use`** (2026-05, optional). Reminds you of aliases you did not use.
-- [ ] **T5. `atuin`** (2026-10, optional). Searchable, optionally synced history database replacing Ctrl-R. Opinionated and heavier.
+- [x] **T5. `atuin`** (2026-10, optional, 1.6.5). Searchable history database replacing Ctrl-R, opt in, never synced by ussuri. Stub tested only, not yet against the real binary.
 - [ ] **T6. `jeffreytse/zsh-vi-mode`** (2026-07, optional). Only if you use vi bindings.
 
 Decided against: fast-syntax-highlighting (alternative to the one already loaded), zsh-autocomplete (conflicts with fzf-tab), zsh-z (zoxide is better), zsh-defer (zinit `wait` does it, stale since 2024), zsh-autopair (stale since 2024).

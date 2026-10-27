@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.6.4
+# Version: 1.6.5
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -237,6 +237,8 @@ apply_prompt_top_line () {
 bind_history_search () {
   zmodload zsh/terminfo 2> /dev/null
   typeset -g HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
+  # atuin, when it was given the arrow keys (ATUIN_BIND_UP=true), has them: binding them here would undo that
+  [[ "${INSTALL_ATUIN}" == true && "${ATUIN_BIND_UP}" == true ]] && return 0
   local key
   for key in '^[[A' '^[OA' "${terminfo[kcuu1]}"; do
     [[ -n "${key}" ]] && bindkey "${key}" history-substring-search-up 2> /dev/null
@@ -609,7 +611,9 @@ cached_eval () {
     return
   fi
   CACHE_DIR="${WORK_DIR}/cache"
-  CACHE_FILE="${CACHE_DIR}/${CACHE_BIN//\//_}.zsh"
+  # The name includes the command, so the same tool run with different options (atuin's flags) has a cache for each
+  CACHE_KEY="${CACHE_CMD//[^[:alnum:]]/_}"
+  CACHE_FILE="${CACHE_DIR}/${CACHE_BIN//\//_}-${CACHE_KEY[1,120]}.zsh"
   if [[ -s "${CACHE_FILE}" && ! "${CACHE_BIN}" -nt "${CACHE_FILE}" ]]; then
     source "${CACHE_FILE}"
   else
@@ -1260,6 +1264,9 @@ set_all_defaults () {
   set_env "INSTALL_RUSTUP"      "false"
   set_env "INSTALL_UV"          "false"
   set_env "INSTALL_MISE"        "false"
+  set_env "INSTALL_ATUIN"       "false"
+  set_env "ATUIN_BIND_UP"       "false"
+  set_env "ATUIN_IMPORT"        "true"
   set_env "FNM_HOME"            "${HOME_DIR}/.local/share/fnm"
   set_env "UV_BIN_DIR"          "${HOME_DIR}/.local/bin"
   set_env "MISE_BIN"            "${HOME_DIR}/.local/bin/mise"
@@ -1477,7 +1484,7 @@ print_help () {
     -U|--update       Update the script   (default: ${DO_UPDATE_CHECK})
     -v|--verbose      Verbose output      (default: ${DO_VERBOSE})
     -y|--yes          Answer yes, no prompts (default: ${ASSUME_YES})
-    -W|--tool NAME    Install a tool      (fnm, rustup, uv or mise)
+    -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
     -x|--doctor       Check environment   (read only)
     -z|--zinit        Do zinit check      (default: ${DO_ZINIT_CHECK})
     -Z|--zshtheme     Set zsh theme       (default: ${ZSH_THEME})
@@ -2092,6 +2099,46 @@ register_zoxide_completion () {
   return 0
 }
 
+# atuin: searchable shell history (Ctrl-R), kept in a local database. Off unless INSTALL_ATUIN=true or
+# --tool atuin, because it records every command you run. It is installed only through a package manager
+# where atuin's own documentation lists one (Homebrew, pacman, nix): its official install script signs you
+# up to Atuin Cloud, so it is never run. Sync is never set up: ussuri does not register, log in or sync,
+# so history stays on this machine until you do that yourself (atuin register / atuin login). The init
+# output goes through the init cache, with a cache for each flag set. The up arrow stays with history
+# substring search unless ATUIN_BIND_UP=true. Existing history is imported once when building.
+
+atuin_install () {
+  if is_osx; then
+    check_osx_package "atuin"
+  elif [ "${PKG_MANAGER}" = "pacman" ] || [ "${PKG_MANAGER}" = "nix" ]; then
+    check_linux_package "atuin"
+  else
+    notice_message "atuin has no package for ${PKG_MANAGER:-this system} in its documentation: install it with 'cargo install atuin --locked' (see https://docs.atuin.sh) and ussuri will set it up"
+  fi
+}
+
+check_atuin_config () {
+  verbose_message "Configuring atuin"
+  if (( ! $+commands[atuin] )) && have_lock; then
+    atuin_install
+    hash -r 2> /dev/null
+  fi
+  if (( ! $+commands[atuin] )); then
+    verbose_message "atuin is not installed"
+    return
+  fi
+  if [ "${DO_ENV_SETUP}" = "true" ]; then
+    ATUIN_ARGS=""
+    if [ ! "${ATUIN_BIND_UP}" = "true" ]; then
+      ATUIN_ARGS=" --disable-up-arrow"
+    fi
+    execute_command "cached_eval ${(q)commands[atuin]} \"${(q)commands[atuin]} init zsh${ATUIN_ARGS}\""
+    if [ "${DO_BUILD}" = "true" ] && [ "${ATUIN_IMPORT}" = "true" ] && have_lock && [ ! -e "${WORK_DIR}/atuin.imported" ]; then
+      execute_command "atuin import auto && touch ${(q)WORK_DIR}/atuin.imported" "show"
+    fi
+  fi
+}
+
 check_tools_config () {
   if [ "${INSTALL_FNM}" = "true" ]; then
     check_fnm_config
@@ -2104,6 +2151,9 @@ check_tools_config () {
   fi
   if [ "${INSTALL_MISE}" = "true" ]; then
     check_mise_config
+  fi
+  if [ "${INSTALL_ATUIN}" = "true" ]; then
+    check_atuin_config
   fi
 }
 
@@ -2994,6 +3044,11 @@ print_config_template () {
 #UV_PYTHON=3.13
 #MISE_TOOLS="node@lts python@3.13"
 
+# atuin: searchable shell history. Off by default as it records every command. Never synced by ussuri
+#INSTALL_ATUIN=true
+#ATUIN_BIND_UP=true         # let atuin have the up arrow (default: history substring search keeps it)
+#ATUIN_IMPORT=false         # do not import existing history when building
+
 # Versions built by --rbenv and --pyenv (default is the latest stable)
 #RUBY_VER=3.4.2
 #PYTHON_VER=3.13.1
@@ -3302,7 +3357,7 @@ doctor_components () {
     fi
   fi
   # Only the tools that have been asked for (INSTALL_<NAME>=true, --tool)
-  for DOCTOR_TOOL in fnm rustup uv mise; do
+  for DOCTOR_TOOL in fnm rustup uv mise atuin; do
     DOCTOR_WANTED="INSTALL_${(U)DOCTOR_TOOL}"
     if [ "${(P)DOCTOR_WANTED}" = "true" ]; then
       case "${DOCTOR_TOOL}" in
@@ -3310,6 +3365,7 @@ doctor_components () {
         rustup) DOCTOR_PATH="${CARGO_HOME:-${HOME_DIR}/.cargo}/bin/rustup" ;;
         uv)     DOCTOR_PATH="${UV_BIN_DIR}/uv" ;;
         mise)   DOCTOR_PATH="${MISE_BIN}" ;;
+        atuin)  DOCTOR_PATH="atuin (brew, pacman or nix install atuin, or cargo install atuin --locked)" ;;
       esac
       if [ -x "${DOCTOR_PATH}" ] || (( $+commands[${DOCTOR_TOOL}] )); then
         doctor_ok "${DOCTOR_TOOL}"
@@ -3741,14 +3797,14 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
         -W)
           case "${OPTS[2]}" in
-            fnm|rustup|uv|mise)
+            fnm|rustup|uv|mise|atuin)
               typeset -g "INSTALL_${(U)OPTS[2]}=true"
               DO_TOOLS_CHECK="true"
               DO_BUILD="true"
               DO_ENV_SETUP="true"
               ;;
             *)
-              print -r -- "Unknown tool '${OPTS[2]}', choose from fnm, rustup, uv or mise"
+              print -r -- "Unknown tool '${OPTS[2]}', choose from fnm, rustup, uv, mise or atuin"
               release_lock
               exit 1
               ;;
@@ -4079,7 +4135,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     check_rbenv_config
   fi
 
-  # Do language and tool managers (fnm, rustup, uv, mise)
+  # Do language and tool managers (fnm, rustup, uv, mise, atuin)
 
   if [ "${DO_TOOLS_CHECK}" = "true" ]; then
     check_tools_config
