@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.4] - 2026-10-27
+
+### Added
+
+- -y|--yes|--assume-yes (ASSUME_YES=true, e.g. in the config): never prompt. Package installs were already unattended where possible (apt -y, dnf -y, pacman --noconfirm; apk, nix and brew don't ask), so this covers what those don't: apt's debconf dialogs (DEBIAN_FRONTEND=noninteractive, passed through sudo with env), the Homebrew installer's wait for RETURN (NONINTERACTIVE=1, which doesn't leak into your shell), and the script's own --confirm prompts, which are answered yes (even with no terminal). Without it nothing changes. It can't remove a password prompt: sudo, and Homebrew casks that run an installer
+
 ## [1.5.3] - 2026-10-27
 
 ### Added
