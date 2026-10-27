@@ -17,6 +17,11 @@ trap 'rm -rf "${TMP}"' EXIT
 
 typeset -U path
 
+# The OS and kernel the sandbox pretends to be, so the tests behave the same on any host (a test that is
+# about Linux sets USSURI_OS=linux itself). TEST_PATH_PREFIX goes in front of the sandbox's PATH, for
+# trying another userland, e.g. GNU tools on a Mac: TEST_PATH_PREFIX=/opt/homebrew/opt/coreutils/libexec/gnubin:
+TEST_OS_ENV=( USSURI_OS="${TEST_OS:-darwin}" USSURI_OS_REL="${TEST_OS_REL:-27.2.0}" )
+
 STUBS="${TMP}/stubs"
 LOG="${TMP}/calls.log"
 SCRIPT="${TMP}/ussuri.zsh"
@@ -71,10 +76,30 @@ stub () {
 make_stubs () {
   mkdir -p "${STUBS}" "${TMP}/brew/bin"
   : > "${TMP}/installed.txt"
+  : > "${TMP}/taps.txt"
+  : > "${TMP}/casks.txt"
+  : > "${TMP}/leaves.txt"
   stub defaults "echo \"defaults \$*\" >> ${LOG}; [ \"\$1\" = write ] && exit 0; exit 1"
   stub chflags  "echo \"chflags \$*\" >> ${LOG}"
   stub killall  "echo \"killall \$*\" >> ${LOG}"
-  stub brew     "echo \"brew \$*\" >> ${LOG}; [ \"\$1\" = list ] && cat ${TMP}/installed.txt; [ \"\$1\" = shellenv ] && echo 'export HOMEBREW_PREFIX=/stub'; exit 0"
+  # brew: list is the installed formulae and casks together (installed.txt), list --cask the casks alone
+  # (casks.txt), leaves the top level formulae (leaves.txt), tap the taps (taps.txt)
+  cat > "${STUBS}/brew" << 'EOF'
+#!/bin/sh
+echo "brew $*" >> __LOG__
+case "$1 $2" in
+  "list --cask") cat __TMP__/casks.txt; exit 0 ;;
+  "list --formula") cat __TMP__/installed.txt; exit 0 ;;
+esac
+# plain "brew list" is the formulae and the casks together, as the real one is
+[ "$1" = list ] && { cat __TMP__/installed.txt; cat __TMP__/casks.txt; }
+[ "$1" = leaves ] && cat __TMP__/leaves.txt
+[ "$1" = tap ] && [ -z "$2" ] && cat __TMP__/taps.txt
+[ "$1" = shellenv ] && echo 'export HOMEBREW_PREFIX=/stub'
+exit 0
+EOF
+  sed -i.bak "s#__LOG__#${LOG}#; s#__TMP__#${TMP}#g" "${STUBS}/brew"
+  chmod +x "${STUBS}/brew"
   stub sudo     "echo \"sudo \$*\" >> ${LOG}; case \"\$1\" in -n) exit 1;; visudo) shift; [ -x /usr/sbin/visudo ] && exec /usr/sbin/visudo \"\$@\";; install) cp \"\$4\" ${TMP}/sudoers.out; chmod \"\$3\" ${TMP}/sudoers.out;; esac; exit 0"
   stub rbenv    "echo \"rbenv \$*\" >> ${LOG}; [ \"\$1\" = init ] && printf 'export RBENV_SHELL=zsh\ncommand rbenv rehash 2>/dev/null || true\n'; exit 0"
   # What real pyenv prints for "init -", including the line that forks bash to tidy PATH
@@ -113,6 +138,7 @@ new_home () {
   cp "${ROOT}/files/p10k/p10k.zsh" "${H}/.p10k.zsh"
   print -r -- 'zinit () { :; }' > "${H}/.zinit/zinit.zsh"
   print -r -- 'font-fira-code-nerd-font' > "${TMP}/installed.txt"
+  : > "${TMP}/taps.txt"; : > "${TMP}/casks.txt"; : > "${TMP}/leaves.txt"
   cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
   : > "${LOG}"
 }
@@ -121,16 +147,16 @@ new_home () {
 
 run () {
   env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
-    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-    "${EXTRA_ENV[@]}" zsh "${SCRIPT}" "$@"
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh "${SCRIPT}" "$@"
 }
 
 # Run with a time limit (for anything that could hang)
 
 run_limited () {
   env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
-    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-    "${EXTRA_ENV[@]}" perl -e 'alarm 15; exec @ARGV' zsh "${SCRIPT}" "$@"
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" perl -e 'alarm 15; exec @ARGV' zsh "${SCRIPT}" "$@"
 }
 
 # Pull a function out of the script so it can be tested on its own
@@ -144,8 +170,8 @@ load_function () {
 run_on_tty () {
   local answer="$1"
   shift
-  python3 - "${answer}" env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
-    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+  python3 - "${answer}" env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm "${TEST_OS_ENV[@]}" \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
     zsh "${SCRIPT}" "$@" << 'EOF'
 import os, pty, select, sys, time
 answer = (sys.argv[1] + "\n").encode()
@@ -279,6 +305,11 @@ make_linux_stubs () {
   done
   stub dpkg "echo \"dpkg \$*\" >> ${LOG}; printf 'ii  git  1.0 all x\\n'"
   stub rpm  "echo \"rpm \$*\" >> ${LOG}; printf 'git\\n'"
+  # the explicitly installed packages (${TMP}/manual.txt, one per line), for the drift report
+  stub apt-mark "echo \"apt-mark \$*\" >> ${LOG}; cat ${TMP}/manual.txt 2> /dev/null; exit 0"
+  stub pacman "echo \"pacman \$*\" >> ${LOG}; case \"\$1\" in -Q) printf 'git 1.0\\n';; -Qqe) cat ${TMP}/manual.txt 2> /dev/null;; esac; exit 0"
+  stub dnf "echo \"dnf \$*\" >> ${LOG}; [ \"\$1\" = repoquery ] && cat ${TMP}/manual.txt 2> /dev/null; exit 0"
+  stub apk "echo \"apk \$*\" >> ${LOG}; [ \"\$1\" = info ] && printf 'git\\n'; exit 0"
 }
 
 # The stubs make_linux_stubs adds, taken away again so one test's package managers aren't there for the next
@@ -367,8 +398,8 @@ EOF
 
 history_state () {
   env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
-    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-    "${EXTRA_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
 print -r -- "size=${HISTSIZE} save=${SAVEHIST} file=${HISTFILE} dups=${options[histignoredups]} space=${options[histignorespace]} find=${options[histfindnodups]} blanks=${options[histreducebLanks]:-${options[histreduceblanks]}} share=${options[sharehistory]}"' zsh "${SCRIPT}"
 }
 
@@ -379,8 +410,8 @@ prompt_state () {
   print -r -- 'export P10K_SOURCED=1' > "${H}/.p10k.zsh"
   : > "${LOG}"
   env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
-    PATH="${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-    "${EXTRA_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "p10k=${P10K_SOURCED:-no} engine=${PROMPT_ENGINE:-unset}"' zsh "${SCRIPT}" > "${TMP}/prompt.out"
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "p10k=${P10K_SOURCED:-no} engine=${PROMPT_ENGINE:-unset}"' zsh "${SCRIPT}" > "${TMP}/prompt.out"
   print -r -- "$( cat "${TMP}/prompt.out" ) posh=$( calls 'oh-my-posh init zsh' )"
 }
 
@@ -469,11 +500,46 @@ journal_lines () {
   grep -c -v -E '^(#|UNDONE|$)' "${H}/.ussuri/defaults.journal" 2> /dev/null || print 0
 }
 
+# Source the script as an interactive login shell would and report the update hint's state. -i because the
+# hint is only for interactive shells. The remote the check fetches is a stub curl serving ${TMP}/remote-script
+
+hint_state () {
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -i -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "hook=${+precmd_functions[(r)show_update_hint]}"' zsh "${SCRIPT}" 2> /dev/null
+}
+
+# A curl that logs its calls and serves a script with the given version (optionally slowly, or garbage)
+
+make_hint_remote () {
+  local version="$1"
+  if [[ "${version}" == garbage ]]; then
+    print -r -- "<html>not found</html>" > "${TMP}/remote-script"
+  else
+    printf '%s\n' '#!/usr/bin/env zsh' '#' "# Version: ${version}" '#' > "${TMP}/remote-script"
+  fi
+  # Only the hint's own request (curl -fsS -m 15 URL) gets the script or the delay: applying the defaults
+  # also uses curl, to check the Transmission blocklist URL, and that must neither wait nor be counted
+  stub curl "echo \"curl \$*\" >> ${LOG}; if [ \"\$1\" = -fsS ]; then [ -n \"\${CURL_DELAY}\" ] && sleep \${CURL_DELAY}; cat ${TMP}/remote-script; fi; exit 0"
+}
+
+# Wait (up to five seconds) for the background check to write its answer
+
+wait_for_latest () {
+  local i
+  for i in {1..25}; do
+    [[ -f "${H}/.ussuri/update.latest" ]] && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
 # Tests
 
 test_syntax () {
   zsh -n "${SRC}" && ok "script parses" || bad "script parses"
-  check "stub brew is what runs, not the real one" "$( env -i PATH="${STUBS}:/usr/bin:/bin" sh -c 'command -v brew' )" "${STUBS}/brew"
+  check "stub brew is what runs, not the real one" "$( env -i PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin" sh -c 'command -v brew' )" "${STUBS}/brew"
 }
 
 test_version () {
@@ -941,7 +1007,7 @@ test_drift () {
   # Nothing applied yet: every setting differs
   local before after
   before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
-  out=$( run --drift 2>&1 ); rc=$?
+  out=$( run --drift settings 2>&1 ); rc=$?
   after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
   check "with nothing applied every setting is reported" "$( print -r -- "${out}" | grep -c -E '^ +[A-Za-z].* -> ' )" "${total}"
   check "the summary says how many differ, out of how many were checked" "$( print -r -- "${out}" | grep -c -E "^${total} of [0-9]+ settings differ" )" "1"
@@ -951,25 +1017,25 @@ test_drift () {
   use_stateful_defaults
   new_home; : > "${LOG}"
   run --defaults > /dev/null 2>&1
-  out=$( run --drift 2>&1 ); rc=$?
+  out=$( run --drift settings 2>&1 ); rc=$?
   check "after applying the defaults there is no drift" "${rc}" "0"
   check "and it says so" "$( print -r -- "${out}" | grep -c 'match' )" "1"
   # Change one value, remove another and flip a boolean behind its back
   grep -v '^com.apple.dock|autohide-delay|' "${DEFAULTS_DB}" > "${DEFAULTS_DB}.new"; mv "${DEFAULTS_DB}.new" "${DEFAULTS_DB}"
   sed -i.bak 's/^com.apple.dock|tilesize|.*/com.apple.dock|tilesize|48/; s/^com.apple.finder|ShowPathbar|.*/com.apple.finder|ShowPathbar|0/' "${DEFAULTS_DB}"
-  out=$( run --drift 2>&1 ); rc=$?
+  out=$( run --drift settings 2>&1 ); rc=$?
   check "exactly the three changed settings are reported" "$( print -r -- "${out}" | grep -c -E '^ +[A-Za-z].* -> ' )" "3"
   check "a changed value shows what it is and what it should be" "$( print -r -- "${out}" | grep -c -E 'tilesize +48 -> 32' )" "1"
   check "a missing one says it is not set" "$( print -r -- "${out}" | grep -c -E 'autohide-delay +\(not set\) -> 0.2' )" "1"
   check "a boolean is shown as true/false, not 1/0" "$( print -r -- "${out}" | grep -c -E 'ShowPathbar +false -> true' )" "1"
   check "settings are grouped under their domain" "$( print -r -- "${out}" | grep -c -E '^com\.apple\.(dock|finder)$' )" "2"
   check "the exit status is 1" "${rc}" "1"
-  out=$( run --drift 2>&1 )
+  out=$( run --drift settings 2>&1 )
   check "it points at the way to fix it" "$( print -r -- "${out}" | grep -c -- '--defaults' )" "1"
   : > "${LOG}"
-  run --drift > /dev/null 2>&1
+  run --drift settings > /dev/null 2>&1
   check "drift never writes, even when there is some" "$( calls 'defaults write' )" "0"
-  check "and --defaults then fixes exactly those" "$( run --defaults > /dev/null 2>&1; run --drift > /dev/null 2>&1; echo $? )" "0"
+  check "and --defaults then fixes exactly those" "$( run --defaults > /dev/null 2>&1; run --drift settings > /dev/null 2>&1; echo $? )" "0"
   use_plain_defaults
 }
 
@@ -993,7 +1059,7 @@ test_linux_defaults () {
   : > "${LOG}"
   run --defaults > /dev/null 2>&1
   check "applying again changes nothing" "$( calls 'gsettings set' )" "0"
-  out=$( run --drift 2>&1 ); rc=$?
+  out=$( run --drift settings 2>&1 ); rc=$?
   check "and there is no drift" "${rc}" "0"
   EXTRA_ENV=()
 }
@@ -1006,7 +1072,7 @@ test_linux_defaults_drift () {
   sed -i.bak "s/^org.gnome.desktop.peripherals.keyboard|repeat-interval|.*/org.gnome.desktop.peripherals.keyboard|repeat-interval|uint32 99/; s/^org.gtk.Settings.FileChooser|show-hidden|.*/org.gtk.Settings.FileChooser|show-hidden|false/" "${GSETTINGS_DB}"
   : > "${LOG}"
   local out rc
-  out=$( run --drift 2>&1 ); rc=$?
+  out=$( run --drift settings 2>&1 ); rc=$?
   check "drift reports the two changed settings" "$( print -r -- "${out}" | grep -c -E '^ +[a-z-]+ +.* -> ' )" "2"
   check "showing actual and expected" "$( print -r -- "${out}" | grep -c -E 'repeat-interval +uint32 99 -> uint32 30' )" "1"
   check "grouped under their schema" "$( print -r -- "${out}" | grep -c -E '^org\.gnome\.desktop\.peripherals\.keyboard$' )" "1"
@@ -1014,7 +1080,7 @@ test_linux_defaults_drift () {
   check "and it writes nothing" "$( calls 'gsettings set' )" "0"
   # Not a GNOME session
   EXTRA_ENV=( USSURI_OS=linux )
-  out=$( run --drift 2>&1 ); rc=$?
+  out=$( run --drift settings 2>&1 ); rc=$?
   check "without a desktop session it says so rather than reading nothing" "$( print -r -- "${out}" | grep -c -i 'no desktop session\|not available' )" "1"
   check "with exit status 2" "${rc}" "2"
   : > "${LOG}"
@@ -1291,7 +1357,7 @@ test_transmission_blocklist () {
   # Drift shows the old dead URL as drift to the new one
   new_home; use_stateful_defaults
   print -r -- "org.m0k.transmission|BlocklistURL|http://john.bitsurge.net/public/biglist.p2p.gz" >> "${db}"
-  out=$( run --drift 2>&1 )
+  out=$( run --drift settings 2>&1 )
   check "--drift shows the old URL moving to the new one" "$( print -r -- "${out}" | grep -c -E 'BlocklistURL +http://john.bitsurge.net.* -> https://list.iblocklist.com' )" "1"
   use_plain_defaults
 }
@@ -1420,7 +1486,7 @@ test_zoxide () {
   : > "${LOG}"
   run > /dev/null 2>&1
   check "later logins do not run zoxide at all" "$( calls 'zoxide' )" "0"
-  state=$( env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm PATH="${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "ran=${ZOXIDE_INIT_RAN:-no} fn=${+functions[__zoxide_z]}"' zsh "${SCRIPT}" )
+  state=$( env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" zsh -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1; print -r -- "ran=${ZOXIDE_INIT_RAN:-no} fn=${+functions[__zoxide_z]}"' zsh "${SCRIPT}" )
   check "and a login shell ends up with what init defines (from the cache)" "${state}" "ran=1 fn=1"
   EXTRA_ENV=( INSTALL_ZOXIDE=false ); : > "${LOG}"
   run > /dev/null 2>&1
@@ -1726,7 +1792,7 @@ test_local_packages () {
   : > "${LOG}"
   cp "${ROOT}/files/packages/macos.brew" "${H}/.ussuri/brew.list"; print -r -- "my-extra-tool" >> "${H}/.ussuri/brew.list"
   run -P > /dev/null 2>&1
-  check "once everything is installed a stamp is saved" "$( nfiles "${H}/.ussuri/*.sum" )" "1"
+  check "once everything is installed a stamp is saved" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
   : > "${LOG}"
   print -r -- "another-new-tool" >> "${H}/.ussuri/files/packages/local.brew"
   EXTRA_ENV=( DO_PACKAGE_CHECK=true )
@@ -1881,6 +1947,531 @@ test_doctor_defaults_journal () {
   use_plain_defaults
 }
 
+test_update_hint_off () {
+  new_home; make_hint_remote 9.9.9
+  : > "${LOG}"
+  check "by default no hook, no check" "$( hint_state )" "hook=0"
+  check "and no network" "$( calls 'curl -fsS -m' )" "0"
+  check "and no files" "$( nfiles "${H}/.ussuri/update.*" )" "0"
+  EXTRA_ENV=( UPDATE_HINT=true )
+  run --version > /dev/null 2>&1; run -v --dryrun > /dev/null 2>&1
+  EXTRA_ENV=()
+  check "a manual run never checks, even when it is turned on" "$( calls 'curl -fsS -m' )" "0"
+  rm -f "${STUBS}/curl"
+}
+
+test_update_hint_cycle () {
+  new_home; make_hint_remote 9.9.9
+  EXTRA_ENV=( UPDATE_HINT=true )
+  : > "${LOG}"
+  check "first login: nothing to say yet" "$( hint_state )" "hook=0"
+  wait_for_latest
+  check "but the check ran, in the background, and wrote what it found" "$( cat "${H}/.ussuri/update.latest" 2> /dev/null )" "9.9.9"
+  check "after one request" "$( calls 'curl -fsS -m' )" "1"
+  check "and left a stamp" "$( [[ -f "${H}/.ussuri/update.check" ]] && echo yes || echo no )" "yes"
+  : > "${LOG}"
+  check "next login: the newer version is known, so the hint is queued for the first prompt" "$( hint_state )" "hook=1"
+  check "without asking again (the stamp is fresh)" "$( calls 'curl -fsS -m' )" "0"
+  check "and the hint is marked as shown today" "$( [[ -f "${H}/.ussuri/update.hinted" ]] && echo yes || echo no )" "yes"
+  check "so the login after that is quiet" "$( hint_state )" "hook=0"
+  touch -t "$( date -v-2d +%Y%m%d%H%M 2> /dev/null || date -d '2 days ago' +%Y%m%d%H%M )" "${H}/.ussuri/update.hinted"
+  check "a day later it is mentioned again" "$( hint_state )" "hook=1"
+  touch -t "$( date -v-2d +%Y%m%d%H%M 2> /dev/null || date -d '2 days ago' +%Y%m%d%H%M )" "${H}/.ussuri/update.check"
+  : > "${LOG}"; hint_state > /dev/null; sleep 1
+  check "and a day later it checks again" "$( calls 'curl -fsS -m' )" "1"
+  EXTRA_ENV=()
+  rm -f "${STUBS}/curl"
+}
+
+test_update_hint_nothing_newer () {
+  new_home; make_hint_remote "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
+  EXTRA_ENV=( UPDATE_HINT=true )
+  hint_state > /dev/null; wait_for_latest
+  check "when the remote is the same version there is nothing to say" "$( hint_state )" "hook=0"
+  make_hint_remote 0.0.1
+  touch -t "$( date -v-2d +%Y%m%d%H%M 2> /dev/null || date -d '2 days ago' +%Y%m%d%H%M )" "${H}/.ussuri/update.check"
+  hint_state > /dev/null; sleep 1
+  check "or older (a development copy is newer than the release)" "$( hint_state )" "hook=0"
+  EXTRA_ENV=()
+  rm -f "${STUBS}/curl"
+}
+
+test_update_hint_bad_answers () {
+  new_home; make_hint_remote 9.9.9
+  EXTRA_ENV=( UPDATE_HINT=true )
+  hint_state > /dev/null; wait_for_latest
+  make_hint_remote garbage
+  touch -t "$( date -v-2d +%Y%m%d%H%M 2> /dev/null || date -d '2 days ago' +%Y%m%d%H%M )" "${H}/.ussuri/update.check"
+  : > "${LOG}"; hint_state > /dev/null; sleep 1
+  check "an answer that isn't a version leaves what was known alone" "$( cat "${H}/.ussuri/update.latest" )" "9.9.9"
+  check "and it did ask" "$( calls 'curl -fsS -m' )" "1"
+  print -r -- "not a version" > "${H}/.ussuri/update.latest"
+  check "a damaged file is ignored, not trusted" "$( hint_state )" "hook=0"
+  EXTRA_ENV=()
+  rm -f "${STUBS}/curl"
+}
+
+test_update_hint_does_not_block () {
+  zmodload zsh/datetime 2> /dev/null
+  new_home; make_hint_remote 9.9.9
+  # A first login applies all the defaults, which is slow and nothing to do with the hint: do that first,
+  # so what is timed is a login that does only the hint's work
+  hint_state > /dev/null
+  EXTRA_ENV=( UPDATE_HINT=true CURL_DELAY=3 )
+  local start="${EPOCHREALTIME}" took
+  hint_state > /dev/null
+  took=$(( EPOCHREALTIME - start ))
+  check "a login does not wait for the check (the fetch takes 3s, the login under 1.5s)" "$( (( took < 1.5 )) && echo fast || echo "SLOW ${took}" )" "fast"
+  check "and nothing is left holding the terminal's output open (the call returned while it was still running)" "$( [[ -f "${H}/.ussuri/update.latest" ]] && echo already-done || echo still-running )" "still-running"
+  wait_for_latest; sleep 4
+  check "it finishes on its own afterwards" "$( cat "${H}/.ussuri/update.latest" 2> /dev/null )" "9.9.9"
+  EXTRA_ENV=()
+  rm -f "${STUBS}/curl"
+}
+
+test_show_update_hint () {
+  load_function show_update_hint
+  UPDATE_HINT_TEXT="ussuri 9.9.9 is available (this is 1.0.0): run ussuri.zsh --update"
+  precmd_functions=( other_hook show_update_hint last_hook )
+  local out
+  out=$( show_update_hint )
+  check "the hint says what is available and what to do" "${out}" "ussuri 9.9.9 is available (this is 1.0.0): run ussuri.zsh --update"
+  show_update_hint > /dev/null
+  check "and it takes itself out of the prompt hooks, leaving the others" "${precmd_functions[*]}" "other_hook last_hook"
+  unset UPDATE_HINT_TEXT; precmd_functions=()
+}
+
+test_doctor_update_hint () {
+  healthy_home
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor says nothing when the hint is off" "$( print -r -- "${out}" | grep -c -i 'update' )" "0"
+  EXTRA_ENV=( UPDATE_HINT=true )
+  out=$( run --doctor 2>&1 )
+  check "when it is on and has not checked yet, it says so" "$( print -r -- "${out}" | grep -c 'ok.*update hint is on.*not checked yet' )" "1"
+  print -r -- "9.9.9" > "${H}/.ussuri/update.latest"
+  out=$( run --doctor 2>&1 )
+  check "and warns when a newer version is known" "$( print -r -- "${out}" | grep -c 'warn.*9.9.9 is available' )" "1"
+  EXTRA_ENV=()
+}
+
+test_casks_and_taps () {
+  new_home
+  local files="${H}/.ussuri/files/packages"
+  printf '%s\n' "# my apps" "some-app" "another-app" > "${files}/local.cask"
+  printf '%s\n' "someone/tools" "Other/Repo" > "${files}/local.tap"
+  # Everything in the formula list and the font is installed, one of the casks is, and one tap is (in lower case, as brew shows them)
+  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "another-app"; } > "${TMP}/installed.txt"
+  print -r -- "other/repo" > "${TMP}/taps.txt"
+  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
+  : > "${LOG}"
+  run -P > /dev/null 2>&1
+  check "a cask that is missing is installed as a cask" "$( grep -c '^brew install --cask some-app$' "${LOG}" )" "1"
+  check "one that is installed is not" "$( grep -c 'another-app' "${LOG}" )" "0"
+  check "a tap that is missing is added" "$( grep -c '^brew tap someone/tools$' "${LOG}" )" "1"
+  check "one that is there is not, whatever the case" "$( grep -c -i 'other/repo' "${LOG}" )" "0"
+  check "and nothing is installed as a plain formula by mistake" "$( grep -c -E '^brew install [^-]' "${LOG}" )" "0"
+  check "taps come first, so a formula from one can be found" "$( grep -n -E '^brew (tap someone|install --cask some)' "${LOG}" | head -1 | grep -c 'tap someone' )" "1"
+  check "the lists with something missing are not stamped as done (the one with nothing missing is)" "$( ls "${H}"/.ussuri/macos.*.sum 2> /dev/null | sed 's#.*/##' | tr '\n' ' ' )" "macos.brew.sum "
+  # Now everything is there: each list is stamped separately
+  { cat "${TMP}/installed.txt"; print -r -- "some-app"; } > "${TMP}/installed2.txt"; cp "${TMP}/installed2.txt" "${TMP}/installed.txt"
+  printf '%s\n' "other/repo" "someone/tools" > "${TMP}/taps.txt"
+  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
+  rm -f "${H}"/.ussuri/macos.*.sum
+  : > "${LOG}"
+  run -P > /dev/null 2>&1
+  check "once everything is there nothing is run" "$( grep -c -E '^brew (install|tap [a-z])' "${LOG}" )" "0"
+  check "and the formulae, casks and taps each get their own stamp" "$( ls "${H}"/.ussuri/macos.*.sum 2> /dev/null | sed 's#.*/##' | tr '\n' ' ' )" "macos.brew.sum macos.cask.sum macos.tap.sum "
+}
+
+test_casks_and_taps_dryrun () {
+  new_home
+  local files="${H}/.ussuri/files/packages"
+  printf '%s\n' "some-app" > "${files}/local.cask"; printf '%s\n' "someone/tools" > "${files}/local.tap"
+  local out
+  out=$( run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew (tap [a-z]|install --cask)' | sed 's/.*Executing: *//' | tr '\n' ',' )
+  check "a dry run shows the tap and the cask it would add" "${out}" "brew tap someone/tools,brew install --cask some-app,"
+}
+
+test_casks_and_taps_defaults () {
+  local f
+  for f in macos.cask macos.tap; do
+    check "files/packages/${f} ships with nothing to install (examples are comments)" "$( grep -c -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/${f}" )" "0"
+  done
+  new_home
+  rm -f "${H}/.ussuri/files/packages/macos.cask" "${H}/.ussuri/files/packages/macos.tap"
+  : > "${LOG}"
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  local out
+  out=$( run -P 2>&1 )
+  check "an install from before these lists existed still works, and processes the formulae" "$( grep -c -E '^brew install (ansible|autoconf)$' "${LOG}" )" "2"
+  check "without complaint" "$( print -r -- "${out}" | grep -c -i 'error\|no such' )" "0"
+}
+
+test_font_is_installed_as_a_cask () {
+  new_home
+  rm -f "${H}/.ussuri/brew.list"; : > "${TMP}/installed.txt"
+  : > "${LOG}"
+  run -f > /dev/null 2>&1
+  check "the Nerd Font is installed as a cask (it is not a formula, so as a formula it fails)" "$( grep -c '^brew install --cask font-fira-code-nerd-font$' "${LOG}" )" "1"
+  check "and not as a plain formula" "$( grep -c '^brew install font-fira-code-nerd-font$' "${LOG}" )" "0"
+}
+
+# Lists of the packages `brew install` would be asked for in a dry run, sorted, on one line
+
+dryrun_brew_installs () {
+  run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew install' | sed 's/.*install //' | sort | tr '\n' ' '
+}
+
+# A home where only what the layers add is missing (everything in the shipped list is installed)
+
+layered_home () {
+  new_home
+  # the shipped formulae and the font (a login also checks the font), so only what a test adds is missing
+  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; } > "${TMP}/installed.txt"
+  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  LF="${H}/.ussuri/files/packages"
+  mkdir -p "${LF}/profiles/work" "${LF}/profiles/home" "${LF}/hosts/box" "${LF}/hosts/other"
+}
+
+test_profile_layers () {
+  layered_home
+  print -r -- "common-extra" > "${LF}/local.brew"
+  print -r -- "work-extra"   > "${LF}/profiles/work/local.brew"
+  print -r -- "home-extra"   > "${LF}/profiles/home/local.brew"
+  print -r -- "box-extra"    > "${LF}/hosts/box/local.brew"
+  print -r -- "other-extra"  > "${LF}/hosts/other/local.brew"
+  EXTRA_ENV=( PROFILE=work MACHINE=box )
+  check "the profile and the machine add to the common list" "$( dryrun_brew_installs )" "box-extra common-extra work-extra "
+  EXTRA_ENV=( MACHINE=box )
+  check "with no profile only the common and machine lists apply" "$( dryrun_brew_installs )" "box-extra common-extra "
+  EXTRA_ENV=( PROFILE=home MACHINE=other )
+  check "another profile and machine get theirs, not the first ones" "$( dryrun_brew_installs )" "common-extra home-extra other-extra "
+  EXTRA_ENV=( PROFILE=work MACHINE=box )
+  print -r -- "work-cask" > "${LF}/profiles/work/local.cask"
+  check "casks are layered the same way" "$( run -P --dryrun --verbose 2>&1 | grep -c 'brew install --cask work-cask' )" "1"
+  run -P --version > /dev/null 2>&1
+  EXTRA_ENV=( PROFILE=work )
+  check "-M sets the profile for one run" "$( EXTRA_ENV=( MACHINE=box ); run -M home -P --dryrun --verbose 2>&1 | grep -c 'install home-extra' )" "1"
+  EXTRA_ENV=()
+}
+
+test_profile_exclusions () {
+  layered_home
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  printf '%s\n' '!ansible' '!not-in-the-list' > "${LF}/profiles/work/local.brew"
+  EXTRA_ENV=( MACHINE=box )
+  check "without the profile both missing packages are installed" "$( dryrun_brew_installs )" "ansible autoconf "
+  EXTRA_ENV=( PROFILE=work MACHINE=box )
+  check "a !name line in a profile takes a package out of the list" "$( dryrun_brew_installs )" "autoconf "
+  print -r -- "ansible" > "${LF}/hosts/box/local.brew"
+  check "and a later layer (the machine) can put it back" "$( dryrun_brew_installs )" "ansible autoconf "
+  # names are matched exactly, never as patterns
+  print -r -- "g++" > "${LF}/local.brew"; printf '%s\n' '!g*' '!ansible' > "${LF}/profiles/work/local.brew"; : > "${LF}/hosts/box/local.brew"
+  check "an exclusion is an exact name, not a pattern (!g* removes nothing)" "$( dryrun_brew_installs )" "autoconf g++ "
+  EXTRA_ENV=()
+}
+
+test_profile_checksum () {
+  layered_home
+  print -r -- "work-extra" > "${LF}/profiles/work/local.brew"
+  EXTRA_ENV=( MACHINE=box ); : > "${LOG}"
+  run -P > /dev/null 2>&1
+  check "no profile: the shipped list is complete, so it is stamped" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
+  : > "${LOG}"
+  EXTRA_ENV=( MACHINE=box DO_PACKAGE_CHECK=true )
+  run > /dev/null 2>&1
+  check "a login with nothing changed installs nothing" "$( grep -c '^brew install' "${LOG}" )" "0"
+  EXTRA_ENV=( MACHINE=box DO_PACKAGE_CHECK=true PROFILE=work ); : > "${LOG}"
+  run > /dev/null 2>&1
+  check "switching to a profile with more packages is noticed on a login, without -P" "$( grep -c '^brew install work-extra$' "${LOG}" )" "1"
+  EXTRA_ENV=()
+}
+
+test_profile_zinit () {
+  new_home
+  print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"
+  local z="${H}/.ussuri/files/zinit"
+  mkdir -p "${z}/profiles/work" "${z}/profiles/home" "${z}/hosts/box" "${z}/hosts/other"
+  print -r -- "zinit light l/common"  > "${z}/local.zsh"
+  print -r -- "zinit light p/work"    > "${z}/profiles/work/local.zsh"
+  print -r -- "zinit light p/home"    > "${z}/profiles/home/local.zsh"
+  print -r -- "zinit light h/box"     > "${z}/hosts/box/local.zsh"
+  print -r -- "zinit light h/other"   > "${z}/hosts/other/local.zsh"
+  : > "${LOG}"
+  EXTRA_ENV=( PROFILE=work MACHINE=box )
+  run --zinit > /dev/null 2>&1
+  check "plugins load in layer order: shipped, common, profile, machine" "$( grep -o -E 'zsh-syntax-highlighting|l/common|p/work|h/box' "${LOG}" | tr '\n' ' ' )" "zsh-syntax-highlighting l/common p/work h/box "
+  check "and nothing from another profile or machine" "$( grep -c -E 'p/home|h/other' "${LOG}" )" "0"
+  EXTRA_ENV=()
+}
+
+test_profile_names () {
+  layered_home
+  mkdir -p "${LF}/etc"
+  print -r -- "evil-pkg" > "${LF}/etc/local.brew"
+  local out
+  for name in '../etc' 'a/b' '.hidden'; do
+    EXTRA_ENV=( PROFILE="${name}" MACHINE=box )
+    out=$( run -P --dryrun --verbose 2>&1 )
+    check "profile '${name}' is refused, with a warning" "$( print -r -- "${out}" | grep -c "Ignoring PROFILE='${name}'" )" "1"
+    check "and its path is never read (evil-pkg is not offered)" "$( print -r -- "${out}" | grep -c 'evil-pkg' )" "0"
+  done
+  EXTRA_ENV=( MACHINE='../etc' PROFILE=work )
+  out=$( run -P --dryrun --verbose 2>&1 )
+  check "a machine name with .. is refused too" "$( print -r -- "${out}" | grep -c "Ignoring MACHINE='../etc'" )" "1"
+  # With no machine name the machine layer must not become the whole hosts/ directory
+  print -r -- "box-extra" > "${LF}/hosts/box/local.brew"
+  check "and then no machine layer is used (not every machine's)" "$( print -r -- "${out}" | grep -c 'box-extra' )" "0"
+  EXTRA_ENV=()
+}
+
+test_profile_dotfiles () {
+  new_home; make_dotfiles
+  EXTRA_ENV=( PROFILE=work DOTFILES_HOST=box )
+  run -L > /dev/null 2>&1
+  check "dotfiles follow PROFILE" "$( cat "${H}/.gitconfig" 2> /dev/null )" "work gitconfig"
+  new_home; make_dotfiles
+  EXTRA_ENV=( PROFILE=work MACHINE=box )
+  run -L > /dev/null 2>&1
+  check "and the machine name (MACHINE) picks the host layer" "$( cat "${H}/.hostonly" 2> /dev/null )" "only on box"
+  new_home; make_dotfiles
+  mkdir -p "${H}/.ussuri/dotfiles/profiles/home"; print -r -- "home gitconfig" > "${H}/.ussuri/dotfiles/profiles/home/.gitconfig"
+  EXTRA_ENV=( PROFILE=work DOTFILES_PROFILE=home MACHINE=nowhere )
+  run -L > /dev/null 2>&1
+  check "DOTFILES_PROFILE still overrides PROFILE for dotfiles alone" "$( cat "${H}/.gitconfig" 2> /dev/null )" "home gitconfig"
+  new_home; make_dotfiles
+  EXTRA_ENV=( DOTFILES_HOST='../x' )
+  run -L > /dev/null 2>&1
+  check "an invalid host never turns the host layer into every host's files" "$( [[ -e "${H}/.hostonly" ]] && echo linked || echo absent )" "absent"
+  EXTRA_ENV=()
+}
+
+test_profile_update_keeps_layers () {
+  new_home; make_release 9.9.9; UPDATE_ENV=()
+  local files="${H}/.ussuri/files"
+  mkdir -p "${files}/packages/profiles/work" "${files}/zinit/hosts/box"
+  print -r -- "mine" > "${files}/packages/profiles/work/local.brew"
+  print -r -- "mine too" > "${files}/zinit/hosts/box/local.zsh"
+  run_update > /dev/null
+  check "an update leaves profile and machine files alone" "$( cat "${files}/packages/profiles/work/local.brew" "${files}/zinit/hosts/box/local.zsh" | tr '\n' ',' )" "mine,mine too,"
+}
+
+test_doctor_profile () {
+  healthy_home
+  local out machine
+  machine=$( zsh -c 'print -r -- ${HOST%%.*}' )
+  out=$( run --doctor 2>&1 )
+  check "doctor shows the machine name, which defaults to the short hostname" "$( print -r -- "${out}" | grep -c "ok.*machine: ${machine}" )" "1"
+  check "and no profile" "$( print -r -- "${out}" | grep -c 'ok.*profile: none' )" "1"
+  mkdir -p "${H}/.ussuri/files/packages/profiles/work"
+  printf '%s\n' "a" "b" > "${H}/.ussuri/files/packages/profiles/work/local.brew"
+  EXTRA_ENV=( PROFILE=work )
+  out=$( run --doctor 2>&1 )
+  EXTRA_ENV=()
+  check "doctor names the profile" "$( print -r -- "${out}" | grep -c 'ok.*profile: work' )" "1"
+  check "and counts the lines of its package list" "$( print -r -- "${out}" | grep -c 'ok.*local package list.*profiles/work.*2 lines' )" "1"
+}
+
+# The text under a label in the drift report: the label's line is followed by one line of names
+
+drift_names () {
+  print -r -- "$1" | grep -A1 -F "$2" | tail -1 | sed 's/^ *//; s/ *$//'
+}
+
+test_package_drift_macos () {
+  layered_home
+  local files="${H}/.ussuri/files/packages" out rc
+  # ansible and autoconf are not installed, and zzz-extra is installed (a leaf) but not in any list
+  { grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
+  printf '%s\n' zzz-extra git > "${TMP}/leaves.txt"
+  print -r -- "wanted-app" > "${files}/local.cask"; print -r -- "other-app" > "${TMP}/casks.txt"
+  print -r -- "someone/tools" > "${files}/local.tap"; print -r -- "dkorunic/tap" > "${TMP}/taps.txt"
+  : > "${LOG}"
+  local before after
+  before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  out=$( run --drift packages 2>&1 ); rc=$?
+  after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  check "formulae in the list that are not installed" "$( drift_names "${out}" 'formulae not installed (2)' )" "ansible autoconf"
+  check "formulae installed that are not in any list (leaves only, not dependencies)" "$( drift_names "${out}" 'formulae installed but not in your lists (1)' )" "zzz-extra"
+  check "casks in a list that are not installed" "$( drift_names "${out}" 'casks not installed (1)' )" "wanted-app"
+  check "casks installed that are not in a list" "$( drift_names "${out}" 'casks installed but not in your lists (1)' )" "other-app"
+  check "taps in a list that are not added" "$( drift_names "${out}" 'taps not added (1)' )" "someone/tools"
+  check "taps added that are not in a list" "$( drift_names "${out}" 'taps added but not in your lists (1)' )" "dkorunic/tap"
+  check "something from the lists is missing, so there is drift" "${rc}" "1"
+  check "the summary counts what -P would install, and says the rest is for information" "$( print -r -- "${out}" | grep -c -E '4 packages from your lists are not installed.*3 installed' )" "1"
+  check "it changes nothing in the home directory" "${after}" "${before}"
+  check "and installs and adds nothing" "$( grep -c -E '^brew (install|tap [a-z])' "${LOG}" )" "0"
+  # Only extras: information, not drift
+  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
+  print -r -- "wanted-app" >> "${TMP}/casks.txt"; print -r -- "someone/tools" >> "${TMP}/taps.txt"
+  out=$( run --drift packages 2>&1 ); rc=$?
+  check "with everything installed and only extras, there is no drift" "${rc}" "0"
+  check "but the extras are still shown, to help keep the lists up to date" "$( print -r -- "${out}" | grep -c 'but not in your lists' )" "3"
+  check "and it says everything in the lists is in place" "$( print -r -- "${out}" | grep -c -i 'everything in your lists is installed' )" "1"
+}
+
+test_package_drift_cask_in_formula_list () {
+  layered_home
+  # A cask named in the formula list (brew install falls back to the cask), installed as a cask: it is neither
+  # a missing formula nor an extra cask. The font is in the cask list and installed, so it is not an extra either
+  print -r -- "some-cask-app" >> "${H}/.ussuri/files/packages/macos.brew"
+  print -r -- "font-fira-code-nerd-font" > "${H}/.ussuri/files/packages/local.cask"
+  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "some-cask-app"; } > "${TMP}/installed.txt"
+  # as brew list --formula would not show it: only brew list (both) and brew list --cask do
+  printf '%s\n' some-cask-app font-fira-code-nerd-font > "${TMP}/casks.txt"
+  local out rc
+  out=$( run --drift packages 2>&1 ); rc=$?
+  check "a cask named in the formula list and installed is not reported missing" "$( print -r -- "${out}" | grep -c 'some-cask-app' )" "0"
+  check "so there is nothing to report" "${rc}:$( print -r -- "${out}" | grep -c -i 'everything in your lists is installed' )" "0:1"
+}
+
+test_package_drift_layers () {
+  layered_home
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"; print -r -- "font-fira-code-nerd-font" >> "${TMP}/installed.txt"
+  printf '%s\n' '!ansible' "work-only" > "${LF}/profiles/work/local.brew"
+  local out
+  EXTRA_ENV=( MACHINE=box )
+  out=$( run --drift packages 2>&1 )
+  check "without a profile both are missing" "$( drift_names "${out}" 'formulae not installed (2)' )" "ansible autoconf"
+  EXTRA_ENV=( PROFILE=work MACHINE=box )
+  out=$( run --drift packages 2>&1 )
+  check "with the profile an excluded package is not missing, and one it adds is" "$( drift_names "${out}" 'formulae not installed (2)' )" "autoconf work-only"
+  EXTRA_ENV=()
+}
+
+test_package_drift_switch () {
+  layered_home
+  local out rc
+  out=$( run --drift packages 2>&1 ); rc=$?
+  check "packages alone does not mention settings" "$( print -r -- "${out}" | grep -c -E 'settings differ|^Settings' )" "0"
+  out=$( run --drift settings 2>&1 )
+  check "settings alone does not mention packages" "$( print -r -- "${out}" | grep -c '^Packages' )" "0"
+  out=$( run --drift 2>&1 ); rc=$?
+  check "a bare --drift is both, each under a heading" "$( print -r -- "${out}" | grep -c -E '^(Settings|Packages \(brew\))$' )" "2"
+  out=$( run --drift all 2>&1 )
+  check "--drift all is the same" "$( print -r -- "${out}" | grep -c -E '^(Settings|Packages \(brew\))$' )" "2"
+  check "-G is the short form, and a switch after it is still a switch" "$( run -G -v 2>&1 | grep -c -E '^(Settings|Packages)' | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
+  out=$( run --drift nonsense 2>&1 ); rc=$?
+  check "anything else is an error that says what is allowed" "${rc}:$( print -r -- "${out}" | grep -c 'settings, packages or all' )" "2:1"
+}
+
+test_package_drift_linux () {
+  make_linux_stubs
+  local row manager osid list lines out rc
+  # Everything the apt list names, as dpkg would show it, to test the no-drift case
+  for row in 'apt ubuntu ubuntu.apt' 'pacman arch arch.pacman' 'dnf fedora fedora.dnf' 'apk alpine alpine.apk'; do
+    set -- ${=row}; manager="$1"; osid="$2"; list="$3"
+    new_home
+    print -r -- "ID=${osid}" > "${TMP}/os-release"
+    printf '%s\n' git my-manual-pkg > "${TMP}/manual.txt"
+    printf '%s\n' git curl "my-manual-pkg=1.2" > "${TMP}/apk-world"
+    lines=$( grep -c -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/${list}" )
+    EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" APK_WORLD_FILE="${TMP}/apk-world" ); : > "${LOG}"
+    out=$( run --drift packages 2>&1 ); rc=$?
+    EXTRA_ENV=()
+    check "${manager}: the heading names the package manager" "$( print -r -- "${out}" | grep -c "^Packages (${manager})$" )" "1"
+    check "${manager}: everything in the list but git (the only one installed) is missing" "$( print -r -- "${out}" | grep -c "not installed ($(( lines - 1 )))" )" "1"
+    check "${manager}: an explicitly installed package that is not listed is shown" "$( print -r -- "${out}" | grep -c 'my-manual-pkg' )" "1"
+    check "${manager}: there is drift" "${rc}" "1"
+    check "${manager}: nothing is installed or run with sudo" "$( grep -c -E '^sudo|^(apt|dnf|pacman|apk) (install|add|-S)' "${LOG}" )" "0"
+  done
+  # Nothing missing: everything the list names is installed
+  new_home; print -r -- "ID=ubuntu" > "${TMP}/os-release"; : > "${TMP}/manual.txt"
+  stub dpkg "echo \"dpkg \$*\" >> ${LOG}; sed -e '/^[[:space:]]*#/d;/^[[:space:]]*\$/d;s/^/ii  /;s/\$/  1.0 all x/' ${ROOT}/files/packages/ubuntu.apt"
+  EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" )
+  out=$( run --drift packages 2>&1 ); rc=$?
+  EXTRA_ENV=()
+  check "with everything installed there is no drift" "${rc}:$( print -r -- "${out}" | grep -c -i 'everything in your lists is installed' )" "0:1"
+}
+
+test_package_drift_unavailable () {
+  make_linux_stubs
+  new_home; print -r -- "ID=opensuse-leap" > "${TMP}/os-release"
+  local out rc
+  EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" )
+  out=$( run --drift packages 2>&1 ); rc=$?
+  check "on a distribution with no supported package manager it says so, and is not drift" "${rc}:$( print -r -- "${out}" | grep -c -i "isn't available" )" "2:1"
+  print -r -- "ID=ubuntu" > "${TMP}/os-release"; rm -f "${STUBS}/apt-get"
+  out=$( run --drift packages 2>&1 ); rc=$?
+  check "when the package manager's own tool is not installed it says which" "${rc}:$( print -r -- "${out}" | grep -c 'apt-get' )" "2:1"
+  EXTRA_ENV=()
+}
+
+# Run tests/package-names.zsh in the sandbox, with the given extra environment
+
+run_names () {
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" "${TEST_OS_ENV[@]}" "$@" \
+    zsh "${ROOT}/tests/package-names.zsh" 2>&1
+}
+
+test_package_names () {
+  make_linux_stubs
+  new_home
+  local list="${ROOT}/files/packages/ubuntu.apt" out rc
+  grep -v -E '^[[:space:]]*(#|$)' "${list}" > "${TMP}/known.txt"
+  # apt-cache show NAME succeeds for the names in known.txt
+  stub apt-cache "grep -q -x -F \"\$2\" ${TMP}/known.txt"
+  print -r -- "ID=ubuntu" > "${TMP}/os-release"
+  out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
+  check "when every name is found it says so and succeeds" "${rc}:$( print -r -- "${out}" | grep -c 'all found' )" "0:1"
+  check "and it names the list and the package manager it checked with" "$( print -r -- "${out}" | grep -c '^ubuntu.apt (apt)$' )" "1"
+  grep -v -x 'ansible' "${TMP}/known.txt" > "${TMP}/known2.txt"; mv "${TMP}/known2.txt" "${TMP}/known.txt"
+  out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
+  check "a name that is not in the repositories is reported, and fails" "${rc}:$( print -r -- "${out}" | grep -c 'NOT FOUND ansible$' )" "1:1"
+  check "with a count" "$( print -r -- "${out}" | grep -c -E '[0-9]+ names checked, 1 not found' )" "1"
+  rm -f "${STUBS}/apt-get"
+  out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
+  check "without the package manager's own tool there is nothing to check with (status 2)" "${rc}:$( print -r -- "${out}" | grep -c 'apt-get is not installed' )" "2:1"
+  print -r -- "ID=opensuse-leap" > "${TMP}/os-release"
+  out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
+  check "and none on a distribution with no supported manager (status 2)" "${rc}:$( print -r -- "${out}" | grep -c 'No supported package manager' )" "2:1"
+}
+
+test_package_names_lists () {
+  # Each list is checked with its own manager's lookup: a name present only for the right one is found
+  make_linux_stubs
+  new_home
+  local row manager osid list out rc
+  for row in 'pacman arch arch.pacman' 'dnf fedora fedora.dnf' 'apk alpine alpine.apk'; do
+    set -- ${=row}; manager="$1"; osid="$2"; list="$3"
+    print -r -- "ID=${osid}" > "${TMP}/os-release"
+    grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/${list}" > "${TMP}/known.txt"
+    case "${manager}" in
+      pacman) stub pacman "[ \"\$1\" = -Si ] && grep -q -x -F \"\$2\" ${TMP}/known.txt" ;;
+      dnf)    stub dnf "[ \"\$2\" = repoquery ] && grep -x -F \"\$3\" ${TMP}/known.txt; exit 0" ;;
+      apk)    stub apk "[ \"\$1\" = search ] && grep -x -F \"\$3\" ${TMP}/known.txt | sed 's/\$/-1.0-r0/'; exit 0" ;;
+    esac
+    out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
+    check "${manager}: every name in ${list} is found by ${manager}'s own lookup" "${rc}:$( print -r -- "${out}" | grep -c 'all found' )" "0:1"
+    grep -v -x 'git' "${TMP}/known.txt" > "${TMP}/known2.txt"; mv "${TMP}/known2.txt" "${TMP}/known.txt"
+    out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
+    check "${manager}: and one that is not there is reported" "${rc}:$( print -r -- "${out}" | grep -c 'NOT FOUND git$' )" "1:1"
+  done
+}
+
+test_package_names_brew () {
+  new_home
+  # A formula, a cask named in the formula list (found through brew's cask fallback), and a name that exists nowhere
+  printf '%s\n' a-formula a-cask-in-the-formula-list nowhere-at-all > "${TMP}/formula-names.txt"
+  stub brew "case \"\$2\" in --formula) grep -q -x -F \"\$4\" ${TMP}/known-formulae.txt;; --cask) grep -q -x -F \"\$4\" ${TMP}/known-casks.txt;; esac"
+  grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.brew" > "${TMP}/known-formulae.txt"
+  : > "${TMP}/known-casks.txt"
+  local out rc
+  out=$( run_names USSURI_OS=darwin ); rc=$?
+  check "the Homebrew lists are checked too (formulae, then casks)" "${rc}:$( print -r -- "${out}" | grep -c -E '^macos\.(brew|cask) \(brew' )" "0:2"
+  grep -v -x 'xquartz' "${TMP}/known-formulae.txt" > "${TMP}/kf2.txt"; mv "${TMP}/kf2.txt" "${TMP}/known-formulae.txt"
+  out=$( run_names USSURI_OS=darwin ); rc=$?
+  check "a name that is not a formula is reported" "${rc}:$( print -r -- "${out}" | grep -c 'NOT FOUND xquartz$' )" "1:1"
+  print -r -- "xquartz" > "${TMP}/known-casks.txt"
+  out=$( run_names USSURI_OS=darwin ); rc=$?
+  check "unless it is a cask, which brew install falls back to (as in the shipped list)" "${rc}:$( print -r -- "${out}" | grep -c 'all found' )" "0:1"
+  make_stubs
+}
+
 test_init_cache () {
   new_home
   run > /dev/null 2>&1
@@ -1960,10 +2551,10 @@ test_packages () {
   : > "${LOG}"
   run -P > /dev/null 2>&1
   check "installs the missing packages" "$( calls 'brew install' )" "2"
-  check "no stamp while the installed list is still incomplete" "$( nfiles "${H}/.ussuri/*.sum" )" "0"
+  check "no stamp while the installed list is still incomplete" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "none"
   cp "${ROOT}/files/packages/macos.brew" "${TMP}/installed.txt"
   run -P > /dev/null 2>&1
-  check "stamp once everything is installed" "$( nfiles "${H}/.ussuri/*.sum" )" "1"
+  check "stamp once everything is installed" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
   printf 'hashicorp/tap/terraform\n# comment\n\nfoo\n' > "${H}/.ussuri/files/packages/macos.brew"
   printf 'terraform\nfoo\n' > "${H}/.ussuri/brew.list"
   cp "${H}/.ussuri/brew.list" "${TMP}/installed.txt"
@@ -1979,7 +2570,7 @@ test_sudoers () {
   rm -f "${TMP}/sudoers.out"
   run -s > /dev/null 2>&1
   check "entry is validated and installed" "$( cat "${TMP}/sudoers.out" 2> /dev/null )" "$( id -un ) ALL=(ALL) NOPASSWD:ALL"
-  check "with mode 0440" "$( stat -f %Lp "${TMP}/sudoers.out" 2> /dev/null || stat -c %a "${TMP}/sudoers.out" )" "440"
+  check "with mode 0440" "$( stat -c %a "${TMP}/sudoers.out" 2> /dev/null || stat -f %Lp "${TMP}/sudoers.out" )" "440"
   rm -f "${TMP}/sudoers.out"
   run -s -S 'ALL=(ALL NOPASSWD ALL ((' > /dev/null 2>&1
   check "a malformed entry is rejected before install" "$( [[ -e "${TMP}/sudoers.out" ]] && echo installed || echo rejected )" "rejected"

@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.5.7
+Current Version: 1.6.2
 
 License
 -------
@@ -108,7 +108,7 @@ Usage
 
   When run manually with switches:
 
-    -G|--drift        Report settings that differ from the defaults (read only)
+    -G|--drift [settings|packages|all]  Report what differs from the defaults and package lists (read only)
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
@@ -125,7 +125,7 @@ Usage
     -f|--font(s)      Install font(s)     (default: false)
     -k|--config       Create config file  (~/.ussuri/config)
     -L|--dotfiles     Link dotfiles       (default: false)
-    -M|--profile      Dotfiles profile    (default: none)
+    -M|--profile NAME Profile for dotfiles, packages and plugins (default: none)
     -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -m|--manager      Plugin manager      (default: zinit)
     -n|--notheme      No zsh theme        (default: true)
@@ -200,6 +200,24 @@ A login shell keeps 50000 lines of history (macOS defaults to 2000, a bare zsh t
 commands typed with a leading space (a way to keep one out of history) and extra blanks. Set HISTORY_SIZE to
 change the size, or DO_HISTORY=false to leave all of this to the system (SHARE_HISTORY=false turns sharing
 off separately), for example in the config.
+
+Update hint
+-----------
+
+UPDATE_HINT=true
+
+Off by default, because it contacts GitHub from your shell. Turn it on (for example in the config) and, at most
+once a day, a check runs in the background (a disowned job with its output detached, so a login never waits for
+it) and records the latest version in ~/.ussuri/update.latest. When that is newer than your script, one line is
+shown at the next prompt, at most once a day:
+
+    ussuri 1.6.0 is available (this is 1.5.8): run ussuri.zsh --update  (UPDATE_HINT=false turns this off)
+
+It is shown from a prompt hook after startup finishes, not during startup, as output during startup upsets
+powerlevel10k's instant prompt. A normal login does no extra work: two checks of stamp files and one small file
+read, with no new processes. Only interactive logins check (never a manual run), a damaged or unexpected answer is
+ignored, and several shells opened together start one check. `--doctor` reports the state and warns when an update
+is available.
 
 Updating, and your own plugins and packages
 -------------------------------------------
@@ -301,7 +319,7 @@ It covers OS X defaults, not the Linux GNOME settings or the Library folder's hi
 Drift report
 ------------
 
-./ussuri.zsh --drift
+./ussuri.zsh --drift [settings|packages|all]
 
 Reads every OS X (or, on Linux, GNOME) setting ussuri would apply and prints the ones that differ, as actual -> expected and
 grouped by domain, then a summary. It never writes anything, and exits 1 if there is drift (0 if there
@@ -354,6 +372,51 @@ RUSTUP_INSTALL_SHA256, UV_INSTALL_SHA256 or MISE_INSTALL_SHA256. They are told n
 files. mise's activation is cached like rbenv's; fnm's can't be, as it points at a directory made for
 each shell. fnm is offered rather than nvm because nvm's init costs hundreds of milliseconds per shell.
 
+Profiles and machines
+---------------------
+
+One set of settings can differ per profile (work, personal) and per machine. A profile (`-M work`, or PROFILE=work in the
+config) and a machine name (MACHINE, the short hostname by default) add layers on top of the common ones, for dotfiles,
+packages and plugins alike. For a list `files/packages/macos.brew` and the plugin lists in `files/zinit`, your own files are
+(in `~/.ussuri/files`, where updates and --install never touch them):
+
+    packages/local.brew                       every machine (local.cask, local.tap, local.apt, local.pacman... likewise)
+    packages/profiles/work/local.brew         machines using the work profile
+    packages/hosts/mybox/local.brew           just the machine called mybox
+    zinit/local.zsh, zinit/profiles/work/local.zsh, zinit/hosts/mybox/local.zsh      the same, for plugins
+
+and ~/.ussuri/dotfiles/{common,profiles/<name>,hosts/<machine>} for dotfiles. Layers are applied in that order and later ones
+win. For packages a line `!name` takes a package out of what the earlier layers added (the shipped list included), matched exactly
+rather than as a pattern, and a later layer can put it back:
+
+    # packages/profiles/work/local.brew
+    !docker
+    !lftp
+
+Switching profile is noticed on the next login, as the profile is part of the package list's checksum. A profile or machine name is
+part of a file path, so one containing a slash or starting with a dot is refused with a warning. `--doctor` shows the profile, the
+machine and the local lists found. DOTFILES_PROFILE and DOTFILES_HOST (the older names) still override them for dotfiles alone.
+
+Casks and taps (macOS)
+----------------------
+
+Besides the formulae in files/packages/macos.brew, `-P` handles Homebrew casks (applications and fonts) and taps:
+
+    files/packages/macos.tap     taps, added first so a formula from one can be found by its short name
+    files/packages/macos.brew    formulae
+    files/packages/macos.cask    casks, installed with brew install --cask
+
+The shipped macos.tap and macos.cask contain only comments, so nothing is installed or tapped by default. The shipped
+lists are replaced by updates, so put your own in ~/.ussuri/files/packages/local.tap, local.brew and local.cask, one
+per line, which never are:
+
+    # ~/.ussuri/files/packages/local.cask
+    firefox
+    iterm2
+
+Each list has its own stamp, so a change to one only reprocesses that one, and a package that is already installed (casks
+are in `brew list` too) or a tap that is already there (compared without regard to case) is skipped.
+
 Linux package managers
 ----------------------
 
@@ -381,6 +444,28 @@ clean-up and so on), and --drift reports where they differ. A setting that doesn
 desktop is skipped, and nothing is done without gsettings and a desktop session (without a session bus
 gsettings only writes to a throwaway store). Unlike on OS X these are not applied on every login unless
 you set DO_GNOME_DEFAULTS=true (for example in the config). The list is apply_linux_defaults in the script.
+
+### Package drift
+
+`--drift packages` (and a bare `--drift`, which is both, each under a heading) compares what is installed with your package lists,
+every layer of them (local, profile, machine, and `!name` exclusions applied). It reads only, from live queries to the package
+manager and never the cached lists:
+
+    Packages (brew)
+      taps added but not in your lists (1):
+        dkorunic/tap
+      formulae not installed (1):
+        rust
+      casks installed but not in your lists (23):
+        firefox iterm2 slack ...
+
+    1 packages from your lists are not installed (-P installs them); 59 installed ones are not in your lists (shown for information)
+
+What is in a list but not installed is drift (exit status 1), which `-P` would install. What is installed because you chose it (brew leaves
+and casks, apt-mark showmanual, pacman -Qe, dnf userinstalled, the apk world file) but is in no list is only shown, as that is what you would
+add to a local list to keep it, so a machine that only has extras is not drift (exit status 0). On macOS a name in the formula list that is
+installed as a cask counts as installed (brew install falls back to a cask, as -P does). Exit status 2 means there was nothing to compare
+(no supported package manager, or its tool is not installed).
 
 Backups, rollback and uninstall
 -------------------------------
@@ -441,14 +526,25 @@ Git installs follow the latest by default. To pin the first clone to a branch, t
 ZINIT_REF, RBENV_REF, RUBY_BUILD_REF, PYENV_REF, NERD_FONTS_REF, ZOSH_REF or P10K_REF.
 An existing install is never changed.
 
-Testing
--------
+Testing and CI
+--------------
 
 zsh tests/smoke.zsh [name-filter]
+zsh tests/package-names.zsh [-v]
 zsh tests/forgit-aliases.zsh        (needs the network, see Plugins)
 
-The tests run against a copy of the script in a throwaway home directory with the system commands
-(defaults, brew, sudo, rbenv, pyenv...) stubbed, so they do not touch the real system.
+The smoke tests run against a copy of the script in a throwaway home directory with the system commands (defaults, brew, sudo,
+rbenv, pyenv...) stubbed, so they do not touch the real system. They pretend to be macOS whatever the host is
+(TEST_OS=linux and TEST_OS_REL change that), and TEST_PATH_PREFIX goes in front of the sandbox's PATH, to try another userland,
+for example GNU tools on a Mac: `TEST_PATH_PREFIX=/opt/homebrew/opt/coreutils/libexec/gnubin: zsh tests/smoke.zsh`.
+
+tests/package-names.zsh checks that every package named in the shipped list for this system exists in its repositories (apt-cache,
+pacman -Si, dnf repoquery, apk search or brew info), installing nothing. It needs a fresh package index. It is how a wrong name in a list is
+found before -P fails on it.
+
+.github/workflows/ci.yml runs both on macOS and Ubuntu runners, and on Debian, Ubuntu, Fedora, Arch and Alpine in containers, where it also
+runs `--doctor` and `--drift packages` for real, as those are the paths the smoke tests can only check against stubs. Nothing in it installs
+packages from your lists or changes the runner. The actions are pinned to a major version (actions/checkout@v4), not to a commit.
 
 License
 -------

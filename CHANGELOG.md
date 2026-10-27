@@ -4,6 +4,65 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.2] - 2026-10-27
+
+### Added
+
+- CI: .github/workflows/ci.yml. The smoke tests and the package name check on macOS and Ubuntu runners, and on Debian, Ubuntu, Fedora, Arch and Alpine in containers, where --install, --doctor and --drift packages are also run for real (the paths the smoke tests can only check against stubs). Read only apart from the throwaway container. Not yet run on GitHub: the YAML is valid, and what it runs was checked locally
+- tests/package-names.zsh: checks every package named in the shipped list for this system exists in its repositories (apt-cache show, pacman -Si, dnf repoquery, apk search -e, brew info), installing nothing, using the script's own distribution detection. Against the real Homebrew all 92 names in macos.brew and macos.cask were found. Tested offline with stub package managers, including the cask fallback
+
+### Changed
+
+- The smoke tests no longer depend on the host: they pretend to be macOS (TEST_OS, TEST_OS_REL) whatever they run on, and TEST_PATH_PREFIX puts another userland in front of the sandbox's PATH. Before they were only ever run on macOS, and on Linux the kernel version would have changed a setting count (USSURI_OS_REL now overrides the kernel release the script reads for a macOS version check)
+- set_osx_file_state hides the error from the BSD-only ls -O on other systems, and where the flags can't be read it skips the check instead of reporting a setting that differs. Found by running the whole suite with GNU coreutils, sed and grep first in PATH (an approximation of a Linux userland): it passed 618 of 623, and the failures were this (four settings drift tests) and a test whose stat fallback was in the wrong order for GNU stat, both fixed
+
+## [1.6.1] - 2026-10-27
+
+### Added
+
+- Package drift: -G|--drift [settings|packages|all] (a bare --drift is all, each part under a heading). Packages compares what is installed with your package lists, all their layers, from live queries and never the cached lists, read only. In a list but not installed is drift (exit status 1, what -P would install); installed because you chose it (brew leaves and casks, apt-mark showmanual, pacman -Qqe, dnf repoquery --userinstalled, the apk world file) but in no list is shown for information and is not drift, as that is what you would add to a local list. macOS covers taps, formulae and casks. Exit status 2 if there is nothing to compare with. Run against the real Homebrew: it found one genuinely missing formula (rust) and your 36 extra formulae, 23 casks and one tap
+
+### Changed
+
+- A bare --drift now includes packages; --drift settings is the previous behaviour. Settings drift is run_settings_drift
+
+### Fixed
+
+- Found by that real run: a name in the formula list that is installed as a cask (blackhole-2ch, multipass, utm, warp, xquartz are in the shipped macos.brew but are casks) was reported as a missing formula, though brew install falls back to the cask and -P already counts it as installed. The report now counts brew list (formulae and casks) as installed, and a name in either list as listed
+
+## [1.6.0] - 2026-10-27
+
+### Added
+
+- Profiles and machines for packages and plugins, the same layering dotfiles already had. For a list in files/packages or files/zinit the layers are local.<ext>, profiles/<PROFILE>/local.<ext> and hosts/<MACHINE>/local.<ext> (casks and taps too), later ones winning, none of them touched by updates or --install. PROFILE (or -M) and MACHINE (default: the short hostname) are the one profile and machine name for dotfiles, packages and plugins; DOTFILES_PROFILE and DOTFILES_HOST still override them for dotfiles alone
+- A package line !name takes a package out of what the earlier layers added (matched exactly, never as a pattern), and a later layer can put it back
+- The profile is part of the package list checksum (only when there is one, so existing stamps are unchanged), so switching profile is noticed on a login. --doctor shows the profile, the machine and the local lists it found, layer by layer
+
+### Fixed
+
+- A profile or machine name is part of a file path, and wasn't checked: -M ../x or a DOTFILES_HOST of ../x read files outside the layers. Names with a slash or starting with a dot are now refused with a warning
+- With an empty host name the dotfiles host layer became the hosts/ directory itself, linking every machine's files. It is now skipped
+
+## [1.5.9] - 2026-10-27
+
+### Added
+
+- Casks and taps on macOS: files/packages/macos.cask and macos.tap (shipped with only comments, so nothing is installed or tapped by default) and your own local.cask, local.tap and local.brew, which updates never overwrite. -P adds taps first (so a formula from one can be found by its short name), then formulae, then casks (brew install --cask). A cask is "installed" if it is in brew list, and a tap if it is in brew tap (compared in lower case, as brew prints them). Each list has its own stamp. Checked against the real brew: brew list includes casks and tap names are lower case. An install from before these existed has its taps list written on its own
+
+### Changed
+
+- The package list code takes the list as an argument (package_layer_files, read_required_list, package_list_changed, all_packages_installed and process_package_list), which is what lets casks and taps be lists of their own
+
+### Fixed
+
+- Casks were never installed as casks, the Nerd Font included. verbose_message set a global called TYPE, and check_osx_package kept its package type in a global with the same name and then called verbose_message, which wiped it, so brew install ran without --cask and fails for a cask. verbose_message's variables are now local, and check_osx_package uses its own. A test checks the font is installed with --cask
+
+## [1.5.8] - 2026-10-27
+
+### Added
+
+- An update hint, off unless UPDATE_HINT=true as it contacts GitHub from your shell. At most once a day a check runs in the background (a disowned job with its output detached, so a login never waits for it, and the stamp is touched first so shells opened together start one check) and writes the latest version to ~/.ussuri/update.latest, only if the answer looks like a version. If that is newer than this script a one line hint is shown at the next prompt, at most once a day, from a one-shot prompt hook (show_update_hint) rather than during startup. Only interactive logins, never a manual run. A normal login with it on costs nothing: the stamps are checked with glob qualifiers and the file read with $(<file), 0 external processes measured. Checked in a real terminal (hint shown once at the first prompt, not on the next session), a real fetch from GitHub parsed correctly, and a test proves the login returns while the fetch is still running. --doctor reports it and warns when an update is available
+
 ## [1.5.7] - 2026-10-27
 
 ### Added
