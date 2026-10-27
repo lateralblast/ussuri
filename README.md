@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.6.4
+Current Version: 1.6.5
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -51,7 +51,7 @@ What it manages:
   settings, zoxide, forgit, history search, and an init cache so a login stays fast
 - **Packages**: Homebrew formulae, casks and taps on macOS; apt, pacman, dnf, apk and nix on Linux; layered per profile and per machine,
   with a drift report that compares what is installed with your lists
-- **Languages and tools**: rbenv and pyenv, and optionally fnm, rustup, uv and mise
+- **Languages and tools**: rbenv and pyenv, and optionally fnm, rustup, uv, mise and atuin
 - **System settings**: macOS defaults (with a journal so they can be undone) and a set of GNOME settings on Linux, plus the Transmission
   blocklist and an optional sudoers entry
 - **Dotfiles**: symlinked from layers (common, profile, machine), with backups
@@ -173,7 +173,7 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
     -U|--update       Update the script   (default: false)
     -v|--verbose      Verbose output      (default: false)
     -y|--yes          Answer yes, no prompts (default: false)
-    -W|--tool NAME    Install a tool      (fnm, rustup, uv or mise)
+    -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
     -x|--doctor       Check environment   (read only)
     -z|--zinit        Do zinit check      (default: false)
     -Z|--zshtheme     Set zsh theme       (default: robbyrussell)
@@ -208,7 +208,7 @@ The switches by what they are for:
 |---|---|
 | Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back, `-U` update, `-C` check for a newer version |
 | Looking without touching (read only) | `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
-| What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv or mise, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
+| What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
 | Undoing | `-J [N]` undo a run of defaults changes, `-u` unlink dotfiles, `-R`/`-X` restore a `.zshrc` |
 | How it runs | `-t` dry run, `-v` verbose, `-c` confirm, `-y` yes, `-F` force, `-d` debug, `-N` no environment setup, `-b` build language versions |
 | Choosing | `-M NAME` profile, `-m` plugin manager, `-Z` zsh theme, `-n` no theme, `-O` oh-my-zsh, `-g` GOPATH, `-l` start directory, `-S` sudoers entry |
@@ -277,7 +277,9 @@ True or false unless a value is given. Defaults are for a login shell.
 |---|---|
 | `INSTALL_ZINIT`, `INSTALL_RBENV`, `INSTALL_PYENV`, `INSTALL_FONTS`, `INSTALL_BREW` (macOS packages) | true |
 | `INSTALL_P10K`, `INSTALL_POSH` | follow `PROMPT_ENGINE` |
-| `INSTALL_OZSH`, `INSTALL_FNM`, `INSTALL_RUSTUP`, `INSTALL_UV`, `INSTALL_MISE` | false |
+| `INSTALL_OZSH`, `INSTALL_FNM`, `INSTALL_RUSTUP`, `INSTALL_UV`, `INSTALL_MISE`, `INSTALL_ATUIN` | false |
+| `ATUIN_BIND_UP` | false (history substring search keeps the up arrow) |
+| `ATUIN_IMPORT` | true (import existing history once, when building) |
 
 **What a login checks** (`DO_..._CHECK`; the switches turn these on for a manual run)
 
@@ -398,6 +400,18 @@ The lists are copied to `~/.ussuri/files` when installed, so a changed shipped l
 A login shell keeps 50000 lines of history (macOS defaults to 2000, a bare zsh to 30) in the history file (`~/.zsh_history` unless `HISTFILE` is already
 set), shared between shells, and leaves out repeated commands, commands typed with a leading space (a way to keep one out of history) and extra blanks.
 Set `HISTORY_SIZE` to change the size, or `DO_HISTORY=false` to leave all of this to the system (`SHARE_HISTORY=false` turns sharing off separately).
+
+### atuin (optional)
+
+[atuin](https://atuin.sh) replaces Ctrl-R with a searchable database of your history (with directory, exit status and duration). It records every command, so it is off
+unless you ask: `--tool atuin` once, or `INSTALL_ATUIN=true` in the config. It is installed with Homebrew on macOS and with pacman or nix on Arch and NixOS, the
+package managers atuin's documentation lists; elsewhere it tells you to `cargo install atuin --locked`, and sets atuin up once it is there. Its official install script
+is never run, as it signs you up to Atuin Cloud. Its init output goes through the init cache (a cache for each set of flags, so changing an option takes effect
+at once).
+
+- The up arrow stays with history substring search; atuin gets Ctrl-R. `ATUIN_BIND_UP=true` gives atuin the up arrow as well.
+- Existing history is imported once, when building (`--tool atuin` or `--build`; `ATUIN_IMPORT=false` skips it).
+- **ussuri never syncs.** It does not register, log in or sync, so your history stays on this machine until you run `atuin register` or `atuin login` yourself.
 
 ## PATH and build flags
 
@@ -522,7 +536,7 @@ Exit status 2 means there was nothing to compare (no supported package manager, 
 - **rbenv and pyenv** (`-r`, `-p`, on by default for a login): installed from git, their environment set up (with the init output cached). `-b` (or `-r`/`-p`, which imply it)
   builds a version: `RUBY_VER` and `PYTHON_VER`, by default the latest stable (found with `sort -V`, and only looked up when building). Only an installed version is made the
   global one, and `local` is never used, as it writes a version file into whatever directory the shell started in.
-- **fnm, rustup, uv and mise** can be installed and set up too. They are off unless you ask, either once with `--tool NAME` or permanently with `INSTALL_<NAME>=true` in the
+- **fnm, rustup, uv and mise** (and [atuin](#atuin-optional)) can be installed and set up too. They are off unless you ask, either once with `--tool NAME` or permanently with `INSTALL_<NAME>=true` in the
   config (on a login they are then installed if missing and set up, and no versions are installed):
 
   ```

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.5] - 2026-10-27
+
+### Added
+
+- atuin (opt in): searchable shell history in place of Ctrl-R. Set INSTALL_ATUIN=true or use --tool atuin. It records every command, so it is in none of the package lists. It is installed with brew, pacman or nix (the package managers its documentation lists); on others it says to run cargo install atuin --locked. Its official install script, which signs you up to Atuin Cloud, is never used, and ussuri never registers, logs in or syncs. Its init goes through the init cache. The up arrow stays with history substring search (atuin is started with --disable-up-arrow) unless ATUIN_BIND_UP=true, in which case the substring search bindings for the arrows are skipped. Existing history is imported once when building (ATUIN_IMPORT=false skips it). --doctor reports it when asked for. Checked against a stub only: not yet against the real atuin
+- Tests refuse any git clone from the network and log it, so a test can't download a repository
+
+### Changed
+
+- The init cache file name now includes the command, so the same tool run with different options has a cache for each rather than being served stale. Existing cache files are simply rebuilt once
+
 ## [1.6.4] - 2026-10-27
 
 ### Changed
