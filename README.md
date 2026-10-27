@@ -12,7 +12,7 @@ https://www.catster.com/cat-breeds/ussuri-cat/
 Version
 -------
 
-Current Version: 1.6.2
+Current Version: 1.6.3
 
 License
 -------
@@ -253,6 +253,27 @@ is installed, what is set up on login and whether the zinit plugin lists load th
 `-T` select oh-my-posh and powerlevel10k for that run, `-A` follows the setting (it used to do both), and if
 several are given the last wins. `--doctor` shows the engine and warns if the other one has been switched on.
 Measured with the real script and oh-my-posh, dropping the second engine took a login from about 167 to 129 ms.
+
+### Two line prompt (powerlevel10k)
+
+With powerlevel10k the prompt is two lines: a configurable line on top, starting with `user@hostname`, and your existing line below it,
+as it was, with its right hand segments:
+
+    ╭─░▒▓ spindler@MacBookPro                                                         ─╮
+    ╰─░▒▓    ~/c/ussuri    main !2 ?6                                      ✔  16:15:40  ▓▒░─╯
+
+The top line is whatever powerlevel10k segments you name, in the config (the names are the ones in the LEFT_PROMPT_ELEMENTS and
+RIGHT_PROMPT_ELEMENTS lists of ~/.p10k.zsh, for example os_icon, dir, vcs, context, time, status, kubecontext, aws):
+
+    PROMPT_TOP_ELEMENTS="os_icon context"     # the left of the top line (default: context, which is user@hostname)
+    PROMPT_TOP_RIGHT_ELEMENTS="time"          # the right of the top line (default: nothing)
+    PROMPT_TWO_LINE=false                     # a single line prompt, as before
+
+A segment on the top line is taken off the bottom one, so it is never shown twice, and `context` is shown whatever the user (powerlevel10k
+hides it for a default user). It is applied after your ~/.p10k.zsh is read, so it works on top of whatever that holds, including one made by
+`p10k configure`; a config that already has more than one line is yours and is left alone. Names are limited to letters, digits and
+underscores, and one that is not is ignored with a warning. Your config's transient prompt (if on) still collapses old prompts to one line, and
+your frame characters are the ones in ~/.p10k.zsh (POWERLEVEL9K_MULTILINE_*). `--doctor` says what the layout is.
 
 Plugins
 -------

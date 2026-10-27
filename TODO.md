@@ -98,6 +98,10 @@ Decided against: fast-syntax-highlighting (alternative to the one already loaded
 - [x] **R7. Profiles for packages and plugins** (1.6.0, 2026-10-27) `PROFILE`/`-M` and `MACHINE`, layers `local.<ext>`, `profiles/<p>/local.<ext>`, `hosts/<m>/local.<ext>` for packages (incl. casks and taps) and plugins, plus `!name` exclusions; names are validated as they go into paths. Tested with stubs only (profiles have no external binary to check against).
 - [x] **R8. Daily non-blocking "update available" hint** (1.5.8, 2026-10-27) `UPDATE_HINT=true` (off by default: it contacts GitHub). Background check once a day, hint once a day at the first prompt. Verified: 0 extra processes on a normal login, a login returns while a 3 s fetch is still running, hint shown once in a real terminal, real GitHub fetch parsed. Not established: whether powerlevel10k instant prompt is active in this setup (the config says `verbose` but the script has no instant-prompt preamble), so the absence of a warning proves little; the hint prints from a prompt hook, after startup, which is safe either way.
 
+## Requests
+
+- [x] **Q1. A two line prompt** (1.6.3, 2026-10-27) A configurable top line starting with user@hostname, the current line kept at the bottom. `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS`; applied on top of `~/.p10k.zsh`. Verified in a real terminal with a copy of the real config. The prompt after pressing Enter was not inspected in detail (the old prompt collapses to one line through the config's transient prompt, which my terminal emulator doesn't render faithfully).
+
 ## Housekeeping when a fix ships
 
 Bump `# Version:` in `ussuri.zsh`, `Current Version` in `README.md`, and add a `CHANGELOG.md` entry (single digits per component, per CLAUDE.md).

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.3] - 2026-10-27
+
+### Added
+
+- A two line powerlevel10k prompt: a configurable line above the one you have, starting with user@hostname. PROMPT_TOP_ELEMENTS (default: context) are the p10k segments on the left of the top line and PROMPT_TOP_RIGHT_ELEMENTS (default: none) on its right, and your existing line stays below with its right hand segments. PROMPT_TWO_LINE=false keeps a single line. It is applied by apply_prompt_top_line after ~/.p10k.zsh is read (so it works on top of any config, including one from p10k configure, and ~/.p10k.zsh and the shipped files/p10k/p10k.zsh are not edited), puts an explicit newline in both element lists, takes a segment moved to the top off the bottom line so it isn't repeated, makes context visible whatever the user (p10k hides it for a default user), leaves a config that already has more than one line alone, and asks p10k to reload. Segment names are limited to letters, digits and underscores and nothing is eval'd. Run through execute_command, so --dryrun shows it without doing it, with the show option so a warning isn't discarded. Checked in a real terminal with a copy of the real ~/.p10k.zsh: the default, a customised top line, and the switch off. A newline alone puts the right hand segments on the top line (p10k's default for a multi line prompt), which is why both lists get one
+- --doctor reports whether the prompt is one or two lines and what is on the top one
+
 ## [1.6.2] - 2026-10-27
 
 ### Added

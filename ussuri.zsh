@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.6.2
+# Version: 1.6.3
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -175,6 +175,56 @@ resolve_prompt_engine () {
   if [ "${DO_PROMPT_CHECK}" = "true" ]; then
     DO_POSH_CHECK="${PROMPT_WANT_POSH}"
     DO_P10K_CHECK="${PROMPT_WANT_P10K}"
+  fi
+}
+
+# A two line powerlevel10k prompt: a configurable line above the one you have. PROMPT_TOP_ELEMENTS (default:
+# context, which is user@hostname) are the p10k segments on the left of the top line, and
+# PROMPT_TOP_RIGHT_ELEMENTS (default: none) on its right. Your line, with its right hand segments, stays
+# as it is below. A segment moved to the top line is taken off the bottom one, so it isn't shown twice, and
+# context is made visible whatever the user (p10k hides it for a default user). It is done after your
+# ~/.p10k.zsh is read, so it works on top of whatever that holds, even one made by p10k configure. A config that
+# already has more than one line is yours and is left alone. PROMPT_TWO_LINE=false turns it off
+
+apply_prompt_top_line () {
+  setopt localoptions extendedglob
+  [ "${PROMPT_TWO_LINE}" = "true" ] || return 0
+  prompt_engine_is p10k || return 0
+  local -a top=() top_right=() moved bottom_left bottom_right
+  local name
+  # Segment names go into p10k's lists, so only plain names are accepted
+  for name in ${=PROMPT_TOP_ELEMENTS}; do
+    if [[ "${name}" == [A-Za-z0-9_]## ]]; then
+      top+=( "${name}" )
+    else
+      echo "Warning:        Ignoring '${name}' in PROMPT_TOP_ELEMENTS: a segment name is letters, digits and underscores"
+    fi
+  done
+  for name in ${=PROMPT_TOP_RIGHT_ELEMENTS}; do
+    if [[ "${name}" == [A-Za-z0-9_]## ]]; then
+      top_right+=( "${name}" )
+    else
+      echo "Warning:        Ignoring '${name}' in PROMPT_TOP_RIGHT_ELEMENTS: a segment name is letters, digits and underscores"
+    fi
+  done
+  (( ${#top} + ${#top_right} )) || return 0
+  if (( ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[(Ie)newline]} || ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[(Ie)newline]} )); then
+    verbose_message "The p10k config already has more than one line, leaving it as it is"
+    return 0
+  fi
+  moved=( "${top[@]}" "${top_right[@]}" )
+  bottom_left=( ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS:|moved} )
+  bottom_right=( ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS:|moved} )
+  # An explicit newline in both lists puts the right hand segments of each line on their own line
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( "${top[@]}" newline "${bottom_left[@]}" )
+  POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( "${top_right[@]}" newline "${bottom_right[@]}" )
+  if (( ${moved[(Ie)context]} )); then
+    typeset -g POWERLEVEL9K_CONTEXT_DEFAULT_CONTENT_EXPANSION='${P9K_CONTENT}'
+    typeset -g POWERLEVEL9K_CONTEXT_SUDO_CONTENT_EXPANSION='${P9K_CONTENT}'
+  fi
+  # p10k is loaded already when the plugin was, and has read the config before this: tell it to read it again
+  if (( $+functions[p10k] )); then
+    p10k reload
   fi
 }
 
@@ -1164,6 +1214,9 @@ set_all_defaults () {
   set_env "INSTALL_PYENV"       "true"
   resolve_prompt_engine
   set_env "PROMPT_ENGINE"       "${PROMPT_ENGINE}"
+  set_env "PROMPT_TWO_LINE"     "true"
+  set_env "PROMPT_TOP_ELEMENTS" "context"
+  set_env "PROMPT_TOP_RIGHT_ELEMENTS" ""
   set_env "INSTALL_POSH"        "${PROMPT_WANT_POSH}"
   set_env "INSTALL_OZSH"        "false"
   set_env "INSTALL_FONTS"       "true"
@@ -2135,6 +2188,7 @@ check_p10k_config () {
             fi
           fi
           execute_command "source ${(q)P10K_INIT}"
+          execute_command "apply_prompt_top_line" "show"
           if [ -f "${P10K_THEME}" ]; then
             execute_command "source ${(q)P10K_THEME}"
           fi
@@ -2149,6 +2203,7 @@ check_p10k_config () {
         fi
       fi
       execute_command "source ${(q)P10K_INIT}"
+      execute_command "apply_prompt_top_line" "show"
       if [ -f "${P10K_THEME}" ]; then
         execute_command "source ${(q)P10K_THEME}"
       fi
@@ -2901,6 +2956,9 @@ print_config_template () {
 #SHARE_HISTORY=true
 #UPDATE_HINT=true           # once a day, in the background, check GitHub for a newer version and say so at the next prompt
 #PROMPT_ENGINE=p10k         # p10k (powerlevel10k), posh (oh-my-posh) or none: only one is installed and loaded
+#PROMPT_TWO_LINE=false      # p10k: false keeps a single line prompt (the default is a line above yours)
+#PROMPT_TOP_ELEMENTS="context os_icon"       # p10k segments on the left of the top line (context is user@hostname)
+#PROMPT_TOP_RIGHT_ELEMENTS="time"            # p10k segments on the right of the top line
 #ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
 #HISTORY_SIZE=50000         # lines kept in memory and in the history file
@@ -3213,6 +3271,13 @@ doctor_components () {
     if [ -d "${PYENV_HOME}" ]; then doctor_ok "pyenv"; else doctor_warn "pyenv is not installed (${PYENV_HOME})"; fi
   fi
   doctor_ok "prompt engine: ${PROMPT_ENGINE}"
+  if prompt_engine_is p10k; then
+    if [ "${PROMPT_TWO_LINE}" = "true" ]; then
+      doctor_ok "two line prompt, top line: ${PROMPT_TOP_ELEMENTS:-nothing}${PROMPT_TOP_RIGHT_ELEMENTS:+ (right: ${PROMPT_TOP_RIGHT_ELEMENTS})}"
+    else
+      doctor_ok "single line prompt (PROMPT_TWO_LINE=false)"
+    fi
+  fi
   if { [ "${DO_POSH_CHECK}" = "true" ] && [ ! "${PROMPT_ENGINE}" = "posh" ]; } || { [ "${DO_P10K_CHECK}" = "true" ] && [ ! "${PROMPT_ENGINE}" = "p10k" ]; }; then
     doctor_warn "two prompt engines are switched on (the engine is ${PROMPT_ENGINE}, but DO_POSH_CHECK or DO_P10K_CHECK is set for the other): both hook every prompt and fight over it"
   fi
