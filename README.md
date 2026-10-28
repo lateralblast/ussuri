@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.6.5
+Current Version: 1.6.6
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -35,7 +35,6 @@ Fund me here: https://ko-fi.com/richardatlateralblast
 - [Testing and CI](#testing-and-ci)
 - [Files and directories](#files-and-directories)
 - [License](#license)
-
 
 ## What it does
 
@@ -136,8 +135,8 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
-    -A|--doall        Do all fuction (where set to true)
-    -i|--inline       Set inline defaults when not runing inline mode
+    -A|--doall        Do all function (where set to true)
+    -i|--inline       Set inline defaults when not running inline mode
     -I|--install      Installs ussuri as: ~/.zshrc
     -b|--build        Build sources       (default: false)
     -c|--confirm      Confirm commands    (default: false)
@@ -150,6 +149,9 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
     -g|--gopath       Set GOPATH          (default: ~/go)
     -G|--drift [settings|packages|all]  Report what differs from the defaults and the package lists (read only)
     -k|--config       Create config file  (~/.ussuri/config)
+    --set NAME VALUE  Save a setting in the config file, for every new shell
+    --unset NAME      Remove a setting from the config file
+    --get [NAME]      Show a setting (default: all) and where it comes from
     -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -l|--location     Set start dir       (default: none)
     -B|--backups      List .zshrc backups
@@ -208,17 +210,23 @@ The switches by what they are for:
 |---|---|
 | Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back, `-U` update, `-C` check for a newer version |
 | Looking without touching (read only) | `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
+| Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all |
 | What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
 | Undoing | `-J [N]` undo a run of defaults changes, `-u` unlink dotfiles, `-R`/`-X` restore a `.zshrc` |
 | How it runs | `-t` dry run, `-v` verbose, `-c` confirm, `-y` yes, `-F` force, `-d` debug, `-N` no environment setup, `-b` build language versions |
 | Choosing | `-M NAME` profile, `-m` plugin manager, `-Z` zsh theme, `-n` no theme, `-O` oh-my-zsh, `-g` GOPATH, `-l` start directory, `-S` sudoers entry |
 
-Most switches have more than one long name; the others are `--assume-yes` and `--assumeyes` (`--yes`), `--changes` (`--changelog`), `--compile` (`--build`),
-`--engine` (`--prompt`), `--fonts` (`--font`), `--gohome` (`--gopath`), `--packages` (`--package`), `--plugin` (`--manager`), `--posh` (`--ohmyposh`), `--startdir` (`--location`),
-`--test` (`--dryrun`), `--usage` (`--help`) and `--zosh` (`--ohmyzsh`). Short switches can be bundled (`-vt`). A switch that takes a value ignores a leading `-` in it, and one that is missing its value, or an unknown
-switch, prints the usage and exits with status 1. Exit statuses of the commands that report: `--doctor` is 0, or 1 if anything failed; `--drift`
-is 0 for none, 1 for drift, 2 if there was nothing to compare with; `--defaults-undo`, `--rollback` and `--uninstall` are 0, or 1 if there was
-nothing (or no such backup or run) to act on.
+Notes on the switches:
+
+- **Other long names:** most switches have more than one. The others are `--assume-yes` and `--assumeyes` (`--yes`), `--changes` (`--changelog`),
+  `--compile` (`--build`), `--engine` (`--prompt`), `--fonts` (`--font`), `--gohome` (`--gopath`), `--packages` (`--package`), `--plugin`
+  (`--manager`), `--posh` (`--ohmyposh`), `--startdir` (`--location`), `--test` (`--dryrun`), `--usage` (`--help`) and `--zosh` (`--ohmyzsh`).
+  `--set`, `--unset` and `--get` have no short form.
+- **Bundling and values:** short switches can be bundled (`-vt`). A switch that takes a value ignores a leading `-` in it.
+- **Mistakes:** a switch that is missing its value, or an unknown switch, prints the usage and exits with status 1.
+- **Exit statuses:** `--doctor` is 0, or 1 if anything failed. `--drift` is 0 for none, 1 for drift, 2 if there was nothing to compare with.
+  `--defaults-undo`, `--rollback` and `--uninstall` are 0, or 1 if there was nothing (or no such backup or run) to act on. `--set`, `--unset` and
+  `--get` are 0, or 1 if a name or value was refused.
 
 ## Configuration
 
@@ -236,12 +244,34 @@ START_DIR=~/code
 ```
 
 changes the default for every shell without editing the script (which would then stop being updatable). It is executed, so keep it writable
-only by you; `--doctor` warns if it is not, and if it has a syntax error. It is never overwritten. Some defaults can also be declared at the top
-of the script itself.
+only by you; `--doctor` warns if it is not, and if it has a syntax error. `--config` never overwrites an existing file. Some defaults can also be declared at the top
+of the script itself. To change a setting without opening the file, see below.
+
+### Changing a setting from the command line
+
+```
+./ussuri.zsh --set PROMPT_TOP_ELEMENTS "context os_icon"    # saved for every new shell
+./ussuri.zsh --set PROMPT_TWO_LINE=false                    # NAME=VALUE works too
+./ussuri.zsh --unset PROMPT_TOP_ELEMENTS                    # back to the default
+./ussuri.zsh --get PROMPT_TOP_ELEMENTS                      # the value, and whether it is from the config, the environment or the default
+./ussuri.zsh --get                                          # every setting, one per line, with its value and where it comes from
+```
+
+These edit `~/.ussuri/config` (or the file named by `USSURI_CONFIG`), so nothing in the script, which is replaced by `--update`, is touched, and
+the new value applies from the next shell. The file is created from the template if there is none.
+
+- **Which names:** the settings the template lists (`--config`). Another upper case name needs `--force`. A setting that is true or false, and
+  `PROMPT_ENGINE`, refuse any other value.
+- **Values are text:** a value is saved quoted and never run, so `$(...)` and backticks in one are kept as they were typed.
+- **Your file stays yours:** a new setting is added under its commented example in the template, an existing line is replaced where it is, and
+  your own lines and comments are left alone. Several `--set` and `--unset` in one run are written together.
+- **Safe to run at any time:** the file is written to a copy and renamed into place, under the lock, so a shell that starts at that moment reads
+  the old file or the new one. The previous file is kept as `~/.ussuri/config.<date>` (the newest ten). `--dryrun` shows what would be written.
 
 ### Settings
 
-True or false unless a value is given. Defaults are for a login shell.
+True or false unless a value is given. Defaults are for a login shell. `--get` prints the current value of every setting here, and where
+each comes from.
 
 **Behaviour**
 
@@ -368,8 +398,8 @@ characters are the ones in `~/.p10k.zsh` (`POWERLEVEL9K_MULTILINE_*`). `--doctor
 
 #### Prompt settings
 
-Set these in `~/.ussuri/config` (see [Configuration](#configuration)), the environment, or at the top of the script. `--config` writes them
-commented out.
+Set these in `~/.ussuri/config` (see [Configuration](#configuration)), with `--set` (for example `--set PROMPT_TOP_ELEMENTS "os_icon context"`),
+in the environment, or at the top of the script. `--config` writes them commented out.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -720,7 +750,7 @@ any failures, and it never changes anything (a missing directory is reported, no
 - Every path, name and version that goes into a command is quoted, and values read back from the defaults journal and the dotfile names are never evaluated. Profile and machine names and prompt segment names are validated.
 - `--update` refuses an archive with an unsafe path or a wrong checksum, never deletes anything, and keeps a copy of every file it replaces.
 - Anything that contacts the network on a login (the update hint) is off by default, runs in the background and never blocks. `--drift`, `--doctor`, `--help` and `--version` change nothing.
-- `~/.ussuri/config` is executed on every shell, so it should be writable only by you. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
+- `~/.ussuri/config` is executed on every shell, so it should be writable only by you. `--set` saves a value quoted and never runs it, and replaces the file with one rename. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
 - What the script writes outside `~/.ussuri` and your dotfiles is what you enable: the OS X defaults and Transmission blocklist, GNOME settings, packages, language managers, a sudoers file, and `~/.zshrc` itself. Each has an undo
   or a backup, except installed packages.
 
@@ -753,7 +783,8 @@ real systems.
 ~/.p10k.zsh                   your powerlevel10k config (copied from files/p10k on install if it is missing)
 ~/.ussuri.lock                the lock (a directory, present only while a run holds it)
 ~/.ussuri/
-  config                      your settings (--config creates it)
+  config                      your settings (--config creates it, --set and --unset edit it)
+  config.<date>               the newest ten copies of it from before a --set or --unset
   files/                      the shipped lists, copied from the repository (replaced by --update and --install)
     packages/  zinit/  p10k/  local.* files in here are yours and are never touched
   files.bak/<date>/           files --update replaced
