@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.6.9
+# Version: 1.7.1
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -32,6 +32,47 @@ else
   DATE=$( date )
 fi
 
+# A profile or machine name becomes part of a file path (profiles/<name>/...), so one that could point
+# somewhere else (a slash, or starting with a dot as in ..) is refused rather than used
+
+check_layer_name () {
+  local value="${(P)1}"
+  if [[ "${value}" == */* || "${value}" == .* ]]; then
+    echo "Warning:        Ignoring ${1}='${value}': a profile or machine name can't contain / or start with a dot"
+    typeset -g "${1}="
+  fi
+}
+
+# Your own additions to a list or plugin file, in layers that updates and --install never overwrite, in the
+# directory of the file it adds to. For files/packages/macos.brew (extension brew) and files/zinit (zsh):
+#
+#   local.<ext>                               every machine
+#   profiles/<PROFILE>/local.<ext>            machines using that profile (-M, or PROFILE)
+#   hosts/<MACHINE>/local.<ext>               just that machine (MACHINE, the short hostname by default)
+#
+# Later layers win. Sets LOCAL_LAYERS to the ones that exist. A profile or machine that is not set has no layer.
+# With a third argument "layers" the first, every machine one, is left out (the config has its own file for that:
+# local_layer_files "${CONFIG_FILE:h}" config layers gives profiles/<PROFILE>/local.config and hosts/<MACHINE>/local.config)
+
+local_layer_files () {
+  LOCAL_LAYERS=()
+  local candidates=( "$1/local.$2" ) f
+  if [ "$3" = "layers" ]; then
+    candidates=()
+  fi
+  if [ -n "${PROFILE}" ]; then
+    candidates+=( "$1/profiles/${PROFILE}/local.$2" )
+  fi
+  if [ -n "${MACHINE}" ]; then
+    candidates+=( "$1/hosts/${MACHINE}/local.$2" )
+  fi
+  for f in "${candidates[@]}"; do
+    if [ -f "${f}" ]; then
+      LOCAL_LAYERS+=( "${f}" )
+    fi
+  done
+}
+
 if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Optional user settings (see --config), e.g. DO_VERBOSE=true. Sourced before anything reads
@@ -41,6 +82,22 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   if [ -r "${CONFIG_FILE}" ]; then
     source "${CONFIG_FILE}"
   fi
+
+  # Settings for one profile or machine, on top of the config (and under the command line): the files
+  # profiles/<PROFILE>/local.config and hosts/<MACHINE>/local.config next to it, sourced in that order. PROFILE
+  # and MACHINE are the ones the environment or the config set (-M and -H come too late for this), and there is
+  # no layer for a profile that is not set. Two file checks and no processes when there are none
+
+  MACHINE="${MACHINE:-${HOST%%.*}}"
+  check_layer_name "PROFILE"
+  check_layer_name "MACHINE"
+  local_layer_files "${CONFIG_FILE:h}" "config" "layers"
+  CONFIG_LAYER_FILES=( "${LOCAL_LAYERS[@]}" )
+  for CONFIG_LAYER in "${CONFIG_LAYER_FILES[@]}"; do
+    if [ -r "${CONFIG_LAYER}" ]; then
+      source "${CONFIG_LAYER}"
+    fi
+  done
 
   # USSURI_OS (darwin or linux) overrides the detected OS, which the tests use to exercise
   # the Linux code on any machine
@@ -130,17 +187,6 @@ is_osx () {
 
 is_linux () {
   [[ "${OS_NAME}" == *Linux* ]]
-}
-
-# A profile or machine name becomes part of a file path (profiles/<name>/...), so one that could point
-# somewhere else (a slash, or starting with a dot as in ..) is refused rather than used
-
-check_layer_name () {
-  local value="${(P)1}"
-  if [[ "${value}" == */* || "${value}" == .* ]]; then
-    echo "Warning:        Ignoring ${1}='${value}': a profile or machine name can't contain / or start with a dot"
-    typeset -g "${1}="
-  fi
 }
 
 # The prompt engine: which of powerlevel10k (p10k), oh-my-posh (posh) or neither (none) is installed,
@@ -246,6 +292,17 @@ bind_history_search () {
   for key in '^[[B' '^[OB' "${terminfo[kcud1]}"; do
     [[ -n "${key}" ]] && bindkey "${key}" history-substring-search-down 2> /dev/null
   done
+  return 0
+}
+
+# Put the directory of ussuri's own completion on the fpath, ahead of compinit (which the plugin lists run later, or
+# oh-my-zsh does). Nothing is run or forked: one directory test and an array assignment, with no repeats
+
+add_completions_dir () {
+  typeset -gU fpath
+  if [[ -d "${WORK_DIR}/files/completions" ]]; then
+    fpath=( "${WORK_DIR}/files/completions" ${fpath} )
+  fi
   return 0
 }
 
@@ -465,6 +522,8 @@ package_drift_group () {
     print -r -- "  ${label} ${present} but not in your lists (${#extra}):"
     print_wrapped_names "${(@o)extra}"
   fi
+  # Kept for --adopt, one name to a line, by the kind of package (taps, formulae, casks or packages)
+  (( ${#extra} )) && PKGDRIFT_EXTRAS[${label}]="${(pj:\n:)${(@o)extra}}"
   PKGDRIFT_MISSING=$(( PKGDRIFT_MISSING + ${#missing} ))
   PKGDRIFT_EXTRA=$(( PKGDRIFT_EXTRA + ${#extra} ))
 }
@@ -475,9 +534,12 @@ package_drift_group () {
 # in no list is only shown, as that is what you would add to a local list to keep it. Returns 1 for drift,
 # 2 if there is nothing to compare with
 
+typeset -gA PKGDRIFT_EXTRAS
+
 run_package_drift () {
   PKGDRIFT_MISSING=0
   PKGDRIFT_EXTRA=0
+  PKGDRIFT_EXTRAS=()
   PKGDRIFT_LOWER="false"
   local brew_cmd=""
   if is_osx; then
@@ -543,6 +605,105 @@ run_package_drift () {
     return 1
   fi
   print -r -- "Everything in your lists is installed${${PKGDRIFT_EXTRA#0}:+; ${PKGDRIFT_EXTRA} installed ones are not in your lists (shown for information)}"
+}
+
+# --drift --adopt: add what is installed but in no list to your local list, the one that --drift said it is
+# missing from, asking about each package (y, n, a to add it and all that are left, q to stop; or --yes to add
+# them all, --dryrun to see what would be added). The list is local.<ext> next to the shipped one, or with -M or
+# -H that profile's or machine's, and is backed up, then replaced in one rename. Nothing is installed or removed
+
+adopt_packages () {
+  local label ext dir file tmp name reply everyone="false" stop="false" total=0
+  local -a names accepted existing
+  if [ -z "${REQUIRED_FILE}" ]; then
+    print -r -- "Nothing to adopt: there is no package list for this system"
+    return 1
+  fi
+  layer_choice || return 1
+  dir="${REQUIRED_FILE:h}"
+  if (( ! ${#PKGDRIFT_EXTRAS} )); then
+    print -r -- "Nothing to adopt: everything installed is already in your lists"
+    return 0
+  fi
+  if [ ! "${DO_DRYRUN}" = "true" ] && [ ! "${ASSUME_YES}" = "true" ] && [[ ! -t 0 ]]; then
+    print -u2 -r -- "Error:          --adopt asks about each package, so it needs a terminal (or --yes to add them all, --dryrun to see them)"
+    return 1
+  fi
+  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+    print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
+    return 1
+  fi
+  print
+  for label in taps formulae casks packages; do
+    [ "${stop}" = "true" ] && break
+    names=( ${(f)PKGDRIFT_EXTRAS[${label}]} )
+    (( ${#names} )) || continue
+    case "${label}" in
+      taps)     ext="tap" ;;
+      formulae) ext="brew" ;;
+      casks)    ext="cask" ;;
+      *)        ext="${REQUIRED_FILE:e}" ;;
+    esac
+    # The same layout as local_layer_files (which only lists the files that exist)
+    case "${LAYER_KIND}" in
+      profile) file="${dir}/profiles/${LAYER_NAME}/local.${ext}" ;;
+      host)    file="${dir}/hosts/${LAYER_NAME}/local.${ext}" ;;
+      *)       file="${dir}/local.${ext}" ;;
+    esac
+    existing=()
+    [ -r "${file}" ] && existing=( "${(@f)$(<${file})}" )
+    accepted=()
+    for name in "${names[@]}"; do
+      # Already there (a name is the whole line)
+      (( ${existing[(Ie)${name}]} )) && continue
+      if [ "${DO_DRYRUN}" = "true" ]; then
+        accepted+=( "${name}" )
+      elif [ "${ASSUME_YES}" = "true" ] || [ "${everyone}" = "true" ]; then
+        accepted+=( "${name}" )
+      else
+        reply=""
+        read -r "reply?Add ${name} to ${file:t}? [y/n] (a adds all that are left, q stops): "
+        case "${reply}" in
+          [yY]*) accepted+=( "${name}" ) ;;
+          [aA]*) accepted+=( "${name}" ); everyone="true" ;;
+          [qQ]*) stop="true"; break ;;
+        esac
+      fi
+    done
+    (( ${#accepted} )) || continue
+    total=$(( total + ${#accepted} ))
+    if [ "${DO_DRYRUN}" = "true" ]; then
+      print -r -- "Would add to ${file}: ${accepted[*]}"
+      continue
+    fi
+    tmp="${file}.tmp.$$"
+    ADOPT_NEW_LINES=( "${existing[@]}" )
+    (( ${#ADOPT_NEW_LINES} == 1 )) && [[ -z "${ADOPT_NEW_LINES[1]}" ]] && ADOPT_NEW_LINES=()
+    ADOPT_NEW_LINES+=( "# added by ussuri --drift --adopt, ${DATE}" "${accepted[@]}" )
+    execute_command "mkdir -p ${(q)file:h}"
+    if [ -e "${file}" ]; then
+      backup_user_file "${file}" "packages-${ext}${LAYER_NAME:+-${LAYER_KIND}-${LAYER_NAME}}"
+      execute_command "cp -p ${(q)file} ${(q)tmp}"
+    fi
+    execute_command "write_adopted_lines ${(q)tmp}"
+    execute_command "mv -f ${(q)tmp} ${(q)file}"
+    if [ -e "${tmp}" ]; then
+      rm -f -- "${tmp}"
+      print -u2 -r -- "Error:          ${file} was not changed"
+      return 1
+    fi
+    print -r -- "Added to ${file}: ${accepted[*]}"
+  done
+  if (( total == 0 )); then
+    print -r -- "Nothing added"
+  elif [ ! "${DO_DRYRUN}" = "true" ]; then
+    print -r -- "${total} added. They are installed already, so this only keeps them from being extras: -P installs from the lists on another machine"
+  fi
+  return 0
+}
+
+write_adopted_lines () {
+  print -r -l -- "${ADOPT_NEW_LINES[@]}" > "$1"
 }
 
 # --drift [settings|packages|all]: what differs from what ussuri would apply or install. Exit status 1 if
@@ -959,31 +1120,6 @@ set_osx_defaults () {
 
 # Read the required package list (one package per line, ignoring blank lines and comments)
 # Only called when the list is processed, not on every shell
-
-# Your own additions to a list or plugin file, in layers that updates and --install never overwrite, in the
-# directory of the file it adds to. For files/packages/macos.brew (extension brew) and files/zinit (zsh):
-#
-#   local.<ext>                               every machine
-#   profiles/<PROFILE>/local.<ext>            machines using that profile (-M, or PROFILE)
-#   hosts/<MACHINE>/local.<ext>               just that machine (MACHINE, the short hostname by default)
-#
-# Later layers win. Sets LOCAL_LAYERS to the ones that exist. A profile or machine that is not set has no layer
-
-local_layer_files () {
-  LOCAL_LAYERS=()
-  local candidates=( "$1/local.$2" ) f
-  if [ -n "${PROFILE}" ]; then
-    candidates+=( "$1/profiles/${PROFILE}/local.$2" )
-  fi
-  if [ -n "${MACHINE}" ]; then
-    candidates+=( "$1/hosts/${MACHINE}/local.$2" )
-  fi
-  for f in "${candidates[@]}"; do
-    if [ -f "${f}" ]; then
-      LOCAL_LAYERS+=( "${f}" )
-    fi
-  done
-}
 
 # The files that make up a package list, in order: the shipped one, then the local layers on top of it.
 # Sets PACKAGE_LAYERS to the ones that exist
@@ -1486,13 +1622,15 @@ print_help () {
     --set NAME VALUE  Save a setting in the config file, for every new shell
     --unset NAME      Remove a setting from the config file
     --get [NAME]      Show a setting (default: all) and where it comes from
+    -K|--edit         Edit the config in \$EDITOR, and check it before it is kept
+    -H|--host NAME    Machine for hosts/NAME (default: ${MACHINE}); with --set, --unset or --edit it picks that machine's config
     -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -l|--location     Set start dir       (default: ${START_DIR})
     -B|--backups      List .zshrc backups
     -R|--rollback [N] Restore a backup    (default: newest)
     -X|--uninstall    Restore the .zshrc from before ussuri
     -L|--dotfiles     Link dotfiles       (default: ${DO_DOTFILES_CHECK})
-    -M|--profile NAME Profile for dotfiles, packages and plugins (default: ${PROFILE:-none}, machine: ${MACHINE})
+    -M|--profile NAME Profile for dotfiles, packages and plugins (default: ${PROFILE:-none}); with --set, --unset or --edit it picks that profile's config
     -u|--unlink       Unlink dotfiles
     -m|--manager      Plugin manager      (default: ${PLUGIN_MANAGER})
     -n|--notheme      No zsh theme        (default: ${DO_ZSH_THEME})
@@ -1510,7 +1648,9 @@ print_help () {
     -v|--verbose      Verbose output      (default: ${DO_VERBOSE})
     -y|--yes          Answer yes, no prompts (default: ${ASSUME_YES})
     -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
-    -x|--doctor       Check environment   (read only)
+    -x|--doctor       Check environment   (read only; with --fix, repairs the safe problems)
+    -Y|--fix          With --doctor: repair what can be repaired safely (permissions, a missing p10k config, leftover temp files, a broken config)
+    -a|--adopt        With --drift: add the packages that are installed but in no list to your local list, asking about each
     -z|--zinit        Do zinit check      (default: ${DO_ZINIT_CHECK})
     -Z|--zshtheme     Set zsh theme       (default: ${ZSH_THEME})
 HELP
@@ -3168,31 +3308,102 @@ write_config_lines () {
 
 # Keep the newest ten copies of the config from before a change
 
-backup_config () {
-  local backup="${WORK_DIR}/config.${DATE_SUFFIX}" n=0 old
+# Which layer -M and -H ask for: the main one, or that profile's, or that machine's. Sets LAYER_KIND (base, profile or
+# host) and LAYER_NAME, and refuses both at once or a name that was refused as unusable (check_layer_name emptied it)
+
+layer_choice () {
+  LAYER_KIND="base"
+  LAYER_NAME=""
+  if [ "${PROFILE_SWITCH}" = "true" ] && [ "${MACHINE_SWITCH}" = "true" ]; then
+    print -u2 -r -- "Error:          choose one of --profile and --host: a change goes in one file"
+    return 1
+  fi
+  if [ "${PROFILE_SWITCH}" = "true" ]; then
+    if [ -z "${PROFILE}" ]; then
+      print -u2 -r -- "Error:          that profile name is not usable"
+      return 1
+    fi
+    LAYER_KIND="profile"
+    LAYER_NAME="${PROFILE}"
+  elif [ "${MACHINE_SWITCH}" = "true" ]; then
+    if [ -z "${MACHINE}" ]; then
+      print -u2 -r -- "Error:          that machine name is not usable"
+      return 1
+    fi
+    LAYER_KIND="host"
+    LAYER_NAME="${MACHINE}"
+  fi
+  return 0
+}
+
+# Which file --set, --unset and --edit change: the config, or with -M NAME the one for that profile, or with -H NAME
+# the one for that machine, in the places local_layer_files finds them (it only lists the ones that exist, so the
+# path is built here, in the same layout). Sets CONFIG_TARGET, and CONFIG_TARGET_LABEL for names and messages
+
+config_target () {
+  CONFIG_TARGET="${CONFIG_FILE}"
+  CONFIG_TARGET_LABEL="config"
+  layer_choice || return 1
+  case "${LAYER_KIND}" in
+    profile)
+      CONFIG_TARGET="${CONFIG_FILE:h}/profiles/${LAYER_NAME}/local.config"
+      CONFIG_TARGET_LABEL="config-profile-${LAYER_NAME}"
+      ;;
+    host)
+      CONFIG_TARGET="${CONFIG_FILE:h}/hosts/${LAYER_NAME}/local.config"
+      CONFIG_TARGET_LABEL="config-host-${LAYER_NAME}"
+      ;;
+  esac
+  return 0
+}
+
+# The text a new profile or machine file starts with (the main config starts from the template)
+
+config_layer_header () {
+  print -r -- "# ussuri settings for ${CONFIG_TARGET_LABEL#config-}"
+  print -r -- "#"
+  print -r -- "# Sourced as zsh after ${CONFIG_FILE}, so these win over it, and the command line wins over these."
+  print -r -- "# It is read for the profile or machine the environment or the config names (PROFILE, MACHINE)."
+}
+
+# Copy a file of yours to ~/.ussuri before it is changed, as <label>.<date>, and keep the newest ten of that label
+
+backup_user_file () {
+  local source="$1" label="$2" backup n=0 old
+  backup="${WORK_DIR}/${label}.${DATE_SUFFIX}"
   while [ -e "${backup}" ]; do
     n=$(( n + 1 ))
-    backup="${WORK_DIR}/config.${DATE_SUFFIX}_${n}"
+    backup="${WORK_DIR}/${label}.${DATE_SUFFIX}_${n}"
   done
-  verbose_message "${CONFIG_FILE} to ${backup}" "save"
-  execute_command "cp -p ${(q)CONFIG_FILE} ${(q)backup}"
-  old=( ${WORK_DIR}/config.*(Nom[11,-1]) )
+  verbose_message "${source} to ${backup}" "save"
+  execute_command "cp -p ${(q)source} ${(q)backup}"
+  # Only the backups themselves (the label, a date and perhaps a number), not a .rejected, .broken or temp file beside them
+  old=( ${WORK_DIR}/${label}.[0-9][0-9]_[0-9][0-9]_[0-9][0-9][0-9][0-9]_*(Nom[11,-1]) )
   if (( ${#old} )) && [ ! "${DO_DRYRUN}" = "true" ]; then
     rm -f -- "${old[@]}"
   fi
 }
 
+backup_config () {
+  backup_user_file "${CONFIG_TARGET}" "${CONFIG_TARGET_LABEL}"
+}
+
 config_get () {
-  local name="$1" file="${CONFIG_FILE}" value
+  local name="$1" file="${CONFIG_FILE}" value layer where=""
   local -a lines=()
   if [[ ! "${name}" =~ '^[A-Z][A-Z0-9_]*$' ]]; then
     print -u2 -r -- "Error:          '${name}' is not a setting name (upper case letters, digits and underscores)"
     return 1
   fi
-  [ -r "${file}" ] && lines=( "${(@f)$(<${file})}" )
   value="${(P)name}"
-  if (( ${lines[(I)${name}=*]} )); then
-    print -r -- "${name}=${(q)value}  (config: ${file})"
+  # The last of the config and its layers to set it is the one that counts
+  for layer in "${file}" "${CONFIG_LAYER_FILES[@]}"; do
+    lines=()
+    [ -r "${layer}" ] && lines=( "${(@f)$(<${layer})}" )
+    (( ${lines[(I)${name}=*]} )) && where="${layer}"
+  done
+  if [ -n "${where}" ]; then
+    print -r -- "${name}=${(q)value}  (config: ${where})"
   elif (( ${CONFIG_PRESET[(Ie)${name}]} )); then
     print -r -- "${name}=${(q)value}  (environment)"
   elif [ -n "${value}" ]; then
@@ -3206,13 +3417,14 @@ config_get () {
 # where that comes from
 
 config_get_all () {
-  local line name file="${CONFIG_FILE}" result=0
+  local line name file result=0
   local -a names=( ${(ko)CONFIG_EXAMPLE} )
-  if [ -r "${file}" ]; then
+  for file in "${CONFIG_FILE}" "${CONFIG_LAYER_FILES[@]}"; do
+    [ -r "${file}" ] || continue
     for line in "${(@f)$(<${file})}"; do
       [[ "${line}" =~ '^([A-Z][A-Z0-9_]*)=' ]] && names+=( "${match[1]}" )
     done
-  fi
+  done
   for name in ${(u)names}; do
     config_get "${name}" || result=1
   done
@@ -3222,7 +3434,7 @@ config_get_all () {
 # Apply every --set and --unset to the config in one go (one backup, one write)
 
 config_edit () {
-  local file="${CONFIG_FILE}" arg name value quoted line i changed="false"
+  local file="${CONFIG_TARGET}" arg name value quoted line i changed="false"
   local -a lines=() before removed
   load_config_names
   if [ -e "${file}" ]; then
@@ -3232,8 +3444,11 @@ config_edit () {
     fi
     lines=( "${(@f)$(<${file})}" )
     (( ${#lines} == 1 )) && [[ -z "${lines[1]}" ]] && lines=()
-  else
+  elif [ "${CONFIG_TARGET}" = "${CONFIG_FILE}" ]; then
     lines=( "${(@f)$( print_config_template )}" )
+    changed="true"
+  else
+    lines=( "${(@f)$( config_layer_header )}" )
     changed="true"
   fi
   before=( "${lines[@]}" )
@@ -3307,6 +3522,63 @@ config_edit () {
   return 0
 }
 
+# --edit: change a copy in $VISUAL, $EDITOR or vi, and keep it only if it is valid zsh, so a slip never leaves
+# every new shell with a broken config. Names that are not settings ussuri knows are reported (they work, but
+# may be a typo). The file that was there is backed up first, and a rejected edit is left next to it as .rejected
+
+edit_config () {
+  local file="${CONFIG_TARGET}" editor="${VISUAL:-${EDITOR:-vi}}" tmp="${CONFIG_TARGET}.edit.$$" line name
+  local -a lines=()
+  load_config_names
+  if [ -e "${file}" ] && { [ ! -f "${file}" ] || [ ! -r "${file}" ] || [ ! -w "${file}" ]; }; then
+    print -u2 -r -- "Error:          ${file} is not a file you can read and write"
+    return 1
+  fi
+  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+    print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
+    return 1
+  fi
+  check_dir_exists "${file:h}"
+  if [ -e "${file}" ]; then
+    execute_command "cp -p ${(q)file} ${(q)tmp}"
+  elif [ "${file}" = "${CONFIG_FILE}" ]; then
+    execute_command "print_config_template > ${(q)tmp}"
+  else
+    execute_command "config_layer_header > ${(q)tmp}"
+  fi
+  # The editor is yours (it may have arguments), the file is quoted
+  execute_command "${editor} ${(q)tmp}" "show"
+  if [ "${DO_DRYRUN}" = "true" ]; then
+    print -r -- "Would edit ${file} with ${editor}"
+    return 0
+  fi
+  if [ ! -e "${tmp}" ]; then
+    print -u2 -r -- "Error:          ${editor} did not leave a file to keep, ${file} is unchanged"
+    return 1
+  fi
+  if [ -e "${file}" ] && cmp -s "${file}" "${tmp}"; then
+    rm -f -- "${tmp}"
+    print -r -- "No changes to ${file}"
+    return 0
+  fi
+  if ! zsh -n "${tmp}" 2> /dev/null; then
+    mv -f -- "${tmp}" "${file}.rejected"
+    print -u2 -r -- "Error:          the edit has a syntax error, so ${file} is unchanged. Your edit is in ${file}.rejected: fix it and copy it over"
+    return 1
+  fi
+  lines=( "${(@f)$(<${tmp})}" )
+  for line in "${lines[@]}"; do
+    if [[ "${line}" =~ '^([A-Z][A-Z0-9_]*)=' ]]; then
+      name="${match[1]}"
+      (( ${+CONFIG_EXAMPLE[${name}]} )) || print -r -- "Note:           ${name} is not a setting ussuri lists (a typo? --config shows the ones it knows)"
+    fi
+  done
+  [ -e "${file}" ] && backup_config
+  execute_command "mv -f ${(q)tmp} ${(q)file}"
+  print -r -- "Saved ${file}, it applies to new shells"
+  return 0
+}
+
 run_config_commands () {
   local name result=0
   load_config_names
@@ -3317,8 +3589,14 @@ run_config_commands () {
       config_get "${name}" || result=1
     fi
   done
+  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )) || [ "${DO_CONFIG_EDIT}" = "true" ]; then
+    config_target || return 1
+  fi
   if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )); then
     config_edit || result=1
+  fi
+  if [ "${DO_CONFIG_EDIT}" = "true" ]; then
+    edit_config || result=1
   fi
   return ${result}
 }
@@ -3342,6 +3620,134 @@ doctor_warn () {
 doctor_fail () {
   DOCTOR_FAIL=$(( DOCTOR_FAIL + 1 ))
   print -r -- "  FAIL  $1"
+}
+
+# A problem --doctor --fix can repair: what to do (kind), how bad it was (warn or fail, which count goes down when it
+# is repaired), what it is done to (arg, and arg2 for the backup that replaces a broken file) and a sentence for it.
+# Only things that are small, local and reversible are listed: permissions, a missing p10k config copied from files,
+# temp files an interrupted --set or --edit left, and a broken config put back from its newest valid backup (the broken
+# one is kept beside it). Nothing is installed, deleted from your files, or fetched
+
+doctor_fixable () {
+  DOCTOR_FIX_KIND+=( "$1" )
+  DOCTOR_FIX_SEV+=( "$2" )
+  DOCTOR_FIX_ARG+=( "$3" )
+  DOCTOR_FIX_ARG2+=( "$4" )
+  DOCTOR_FIX_TEXT+=( "$5" )
+}
+
+# The label a config file's backups have: config, or config-profile-<name>, or config-host-<name>
+
+config_backup_label () {
+  case "${1:h:h:t}/${1:h:t}" in
+    profiles/*) print -r -- "config-profile-${1:h:t}" ;;
+    hosts/*)    print -r -- "config-host-${1:h:t}" ;;
+    *)          print -r -- "config" ;;
+  esac
+}
+
+# The newest backup of a config file that is valid zsh, in DOCTOR_BACKUP_FOUND (empty if none)
+
+doctor_valid_backup () {
+  local candidate
+  DOCTOR_BACKUP_FOUND=""
+  for candidate in ${WORK_DIR}/$( config_backup_label "$1" ).[0-9][0-9]_[0-9][0-9]_[0-9][0-9][0-9][0-9]_*(Nom); do
+    if zsh -n "${candidate}" 2> /dev/null; then
+      DOCTOR_BACKUP_FOUND="${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# One config file (the config or a layer): valid zsh, not writable by others, no temp files left over
+
+doctor_config_file () {
+  local file="$1"
+  if zsh -n "${file}" 2> /dev/null; then
+    doctor_ok "${file} is valid"
+  else
+    doctor_fail "${file} has a syntax error (it is sourced on every shell)"
+    if doctor_valid_backup "${file}"; then
+      doctor_fixable "restore" "fail" "${file}" "${DOCTOR_BACKUP_FOUND}" "put the newest valid backup (${DOCTOR_BACKUP_FOUND:t}) back as ${file:t}, keeping the broken one as ${file:t}.broken"
+    fi
+  fi
+  # It is executed, so anyone who can write to it can run commands as you
+  DOCTOR_WRITABLE=( ${file}(Nf:go+w:) )
+  if (( ${#DOCTOR_WRITABLE} )); then
+    doctor_warn "${file} is writable by others, and it is executed on every shell (chmod go-w it)"
+    doctor_fixable "chmod" "warn" "${file}" "" "make ${file:t} not writable by others"
+  fi
+  # A temp copy is only there between the write and the rename of --set, --edit or --adopt: one that is 10 minutes old was left by a run that died
+  DOCTOR_LEFTOVER=( ${file}.tmp.*(Nmm+10) )
+  for DOCTOR_TMP in "${DOCTOR_LEFTOVER[@]}"; do
+    doctor_warn "${DOCTOR_TMP} was left by a --set or --edit that did not finish"
+    doctor_fixable "remove" "warn" "${DOCTOR_TMP}" "" "remove the leftover ${DOCTOR_TMP:t}"
+  done
+}
+
+# Whether a fix worked, checked afterwards rather than trusted
+
+doctor_fix_worked () {
+  case "$1" in
+    chmod)   DOCTOR_STILL=( ${2}(Nf:go+w:) ); (( ! ${#DOCTOR_STILL} )) ;;
+    restore) zsh -n "$2" 2> /dev/null ;;
+    p10k)    [ -f "$2" ] ;;
+    remove)  [ ! -e "$2" ] ;;
+  esac
+}
+
+apply_doctor_fixes () {
+  local i kind arg arg2 sev text fixed=0 failed=0
+  if (( ! ${#DOCTOR_FIX_KIND} )); then
+    print -r -- "Nothing to repair"
+    return
+  fi
+  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+    print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
+    return
+  fi
+  print -r -- "Repairing"
+  for (( i = 1; i <= ${#DOCTOR_FIX_KIND}; i++ )); do
+    kind="${DOCTOR_FIX_KIND[i]}"; sev="${DOCTOR_FIX_SEV[i]}"; arg="${DOCTOR_FIX_ARG[i]}"; arg2="${DOCTOR_FIX_ARG2[i]}"; text="${DOCTOR_FIX_TEXT[i]}"
+    if [ "${DO_DRYRUN}" = "true" ]; then
+      print -r -- "  would ${text}"
+      continue
+    fi
+    case "${kind}" in
+      chmod)
+        execute_command "chmod go-w ${(q)arg}"
+        ;;
+      restore)
+        # The copy is made first, so a failed copy leaves the broken file where it was
+        execute_command "cp -p ${(q)arg2} ${(q)arg}.restore.$$ && mv -f ${(q)arg} ${(q)arg}.broken && mv -f ${(q)arg}.restore.$$ ${(q)arg}"
+        ;;
+      p10k)
+        execute_command "cp ${(q)arg2} ${(q)arg}"
+        ;;
+      remove)
+        execute_command "rm -f -- ${(q)arg}"
+        ;;
+    esac
+    if doctor_fix_worked "${kind}" "${arg}"; then
+      print -r -- "  fixed  ${text}"
+      fixed=$(( fixed + 1 ))
+      if [ "${sev}" = "fail" ]; then
+        DOCTOR_FAIL=$(( DOCTOR_FAIL - 1 ))
+      else
+        DOCTOR_WARN=$(( DOCTOR_WARN - 1 ))
+      fi
+      DOCTOR_OK=$(( DOCTOR_OK + 1 ))
+    else
+      print -r -- "  NOT fixed  ${text}"
+      failed=$(( failed + 1 ))
+    fi
+  done
+  if [ ! "${DO_DRYRUN}" = "true" ]; then
+    print
+    print -r -- "${fixed} repaired${${failed#0}:+, ${failed} not repaired}"
+    print -r -- "${DOCTOR_OK} ok, ${DOCTOR_WARN} warnings, ${DOCTOR_FAIL} failures"
+  fi
 }
 
 doctor_shell () {
@@ -3475,22 +3881,25 @@ doctor_install () {
   fi
 }
 
+# The settings for the profile and machine (profiles/<PROFILE>/local.config, hosts/<MACHINE>/local.config) are
+# sourced on every shell like the config is, so they get the same checks
+
+doctor_config_layers () {
+  local layer
+  for layer in "${CONFIG_LAYER_FILES[@]}"; do
+    doctor_config_file "${layer}"
+  done
+}
+
 doctor_config () {
   print -r -- "Config"
   if [ ! -e "${CONFIG_FILE}" ]; then
     doctor_ok "no config file, the defaults are used (--config creates one)"
+    doctor_config_layers
     return
   fi
-  if zsh -n "${CONFIG_FILE}" 2> /dev/null; then
-    doctor_ok "${CONFIG_FILE} is valid"
-  else
-    doctor_fail "${CONFIG_FILE} has a syntax error (it is sourced on every shell)"
-  fi
-  # It is executed, so anyone who can write to it can run commands as you
-  DOCTOR_WRITABLE=( ${CONFIG_FILE}(Nf:go+w:) )
-  if (( ${#DOCTOR_WRITABLE} )); then
-    doctor_warn "${CONFIG_FILE} is writable by others, and it is executed on every shell (chmod go-w it)"
-  fi
+  doctor_config_file "${CONFIG_FILE}"
+  doctor_config_layers
 }
 
 doctor_dotfiles () {
@@ -3576,7 +3985,14 @@ doctor_components () {
     fi
   fi
   if [ "${INSTALL_P10K}" = "true" ]; then
-    if [ -f "${P10K_INIT}" ]; then doctor_ok "powerlevel10k config ${P10K_INIT}"; else doctor_warn "powerlevel10k config ${P10K_INIT} is missing"; fi
+    if [ -f "${P10K_INIT}" ]; then
+      doctor_ok "powerlevel10k config ${P10K_INIT}"
+    else
+      doctor_warn "powerlevel10k config ${P10K_INIT} is missing"
+      if [ -f "${SOURCE_P10K_INIT}" ]; then
+        doctor_fixable "p10k" "warn" "${P10K_INIT}" "${SOURCE_P10K_INIT}" "copy ${SOURCE_P10K_INIT} to ${P10K_INIT}"
+      fi
+    fi
   fi
   if [ "${INSTALL_OZSH}" = "true" ]; then
     if [ -d "${ZOSH_HOME}" ]; then doctor_ok "oh-my-zsh"; else doctor_warn "oh-my-zsh is not installed (${ZOSH_HOME})"; fi
@@ -3698,6 +4114,11 @@ run_doctor () {
   DOCTOR_OK=0
   DOCTOR_WARN=0
   DOCTOR_FAIL=0
+  DOCTOR_FIX_KIND=()
+  DOCTOR_FIX_SEV=()
+  DOCTOR_FIX_ARG=()
+  DOCTOR_FIX_ARG2=()
+  DOCTOR_FIX_TEXT=()
   print -r -- "ussuri ${SCRIPT_VERSION} doctor (${OS_NAME}${LSB_ID:+, ${LSB_ID}})"
   doctor_shell
   doctor_tools
@@ -3711,6 +4132,12 @@ run_doctor () {
   doctor_state
   print
   print -r -- "${DOCTOR_OK} ok, ${DOCTOR_WARN} warnings, ${DOCTOR_FAIL} failures"
+  if [ "${DO_FIX}" = "true" ]; then
+    print
+    apply_doctor_fixes
+  elif (( ${#DOCTOR_FIX_KIND} )); then
+    print -r -- "${#DOCTOR_FIX_KIND} of these can be repaired safely: ${SCRIPT_NAME}.zsh --doctor --fix (add --dryrun to see them first)"
+  fi
   (( DOCTOR_FAIL == 0 ))
 }
 
@@ -3876,6 +4303,11 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   CONFIG_SETS=()
   CONFIG_UNSETS=()
   CONFIG_GETS=()
+  DO_CONFIG_EDIT="false"
+  DO_ADOPT="false"
+  DO_FIX="false"
+  PROFILE_SWITCH="false"
+  MACHINE_SWITCH="false"
 
   if (( $# )); then
 
@@ -3903,6 +4335,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --prompt -E       --engine -E        --defaults-undo -J
       --assumeyes -y
       --set -Q          --unset -q         --get -w
+      --host -H         --edit -K
+      --adopt -a        --fix -Y
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -3916,7 +4350,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       ARG="${LONG_SWITCHES[${ARG}]:-${ARG}}"
       SWITCHES+=( "${ARG}" )
       case "${ARG}" in
-        -g|-l|-m|-M|-S|-W|-E|-Z|-q)
+        -g|-l|-m|-M|-S|-W|-E|-Z|-q|-H)
           SWITCH_VALUE="true"
           ;;
         -w)
@@ -3958,7 +4392,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- A b B c C d D e E: f F g: G: h i I J: k l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -4054,7 +4488,25 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
         -M)
           PROFILE="${OPTS[2]}"
+          PROFILE_SWITCH="true"
           shift 2 OPTS
+          ;;
+        -H)
+          MACHINE="${OPTS[2]}"
+          MACHINE_SWITCH="true"
+          shift 2 OPTS
+          ;;
+        -K)
+          DO_CONFIG_EDIT="true"
+          shift OPTS
+          ;;
+        -a)
+          DO_ADOPT="true"
+          shift OPTS
+          ;;
+        -Y)
+          DO_FIX="true"
+          shift OPTS
           ;;
         -u)
           DO_UNLINK="true"
@@ -4247,6 +4699,19 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     set -x
   fi
 
+  # --adopt and --fix modify --drift and --doctor, and mean nothing without them
+
+  if [ "${DO_ADOPT}" = "true" ] && [ ! "${DO_DRIFT}" = "true" ]; then
+    print -u2 -r -- "Error:          --adopt goes with --drift (--drift packages --adopt)"
+    release_lock
+    exit 1
+  fi
+  if [ "${DO_FIX}" = "true" ] && [ ! "${DO_DOCTOR}" = "true" ]; then
+    print -u2 -r -- "Error:          --fix goes with --doctor (--doctor --fix)"
+    release_lock
+    exit 1
+  fi
+
   # Print help
 
   if [ "${DO_HELP}" = "true" ]; then
@@ -4277,6 +4742,14 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   if [ "${DO_DRIFT}" = "true" ]; then
     run_drift "${DRIFT_WHAT}"
     DRIFT_STATUS=$?
+    if [ "${DO_ADOPT}" = "true" ]; then
+      if [ "${DRIFT_WHAT}" = "settings" ]; then
+        print -u2 -r -- "Error:          --adopt is for packages: --drift packages --adopt"
+        DRIFT_STATUS=1
+      else
+        adopt_packages || DRIFT_STATUS=1
+      fi
+    fi
     release_lock
     exit ${DRIFT_STATUS}
   fi
@@ -4291,12 +4764,17 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do --set, --unset and --get
 
-  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} + ${#CONFIG_GETS} )); then
+  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} + ${#CONFIG_GETS} )) || [ "${DO_CONFIG_EDIT}" = "true" ]; then
     run_config_commands
     CONFIG_STATUS=$?
     release_lock
     exit ${CONFIG_STATUS}
   fi
+
+  # Completion for this script's own switches and settings (files/completions/_ussuri). It only has to be on
+  # the fpath before compinit runs, which the plugin lists do after this
+
+  add_completions_dir
 
   # Set Go PATH
 
