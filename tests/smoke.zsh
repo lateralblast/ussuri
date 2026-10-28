@@ -1353,6 +1353,35 @@ rc=3 timed=0"
   check "and records the step and keeps the status when timing" "${result}" "rc=4 timed=1 name=step seconds=1"
 }
 
+test_help_layout () {
+  new_home
+  local out short missing="" col
+  out=$( run --help 2>&1 )
+  check "the help has its groups" "$( print -r -- "${out}" | grep -c -E '^(Look, without changing anything|Install, update and undo|Settings|Set up|How it runs|What a login does with no switches)' )" "6"
+  # Every short switch the script takes is listed, as '-X, --long' (q, Q and w are --unset, --set and --get inside, with no short form)
+  for short in $( sed -n '/zparseopts -D -F -a OPTS --/p' "${SRC}" | sed 's/.*-a OPTS -- //; s/ ||.*//' | tr ' ' '\n' | sed 's/[:+]*$//' | grep -E '^[A-Za-z]$' | grep -v -E '^[qQw]$' ); do
+    print -r -- "${out}" | grep -q -E "^  -${short}, --" || missing+="-${short} "
+  done
+  check "every short switch is in it" "${missing}" ""
+  # And every long one, from the script's own table
+  missing=""
+  for long in $( sed -n '/typeset -A LONG_SWITCHES=(/,/^    )/p' "${SRC}" | grep -o -E -- '--[a-z0-9-]+' | sort -u ); do
+    print -r -- "${out}" | grep -q -F -e "${long}" || missing+="${long} "
+  done
+  # (the alternative long names are in the README, not here)
+  check "the main long switch of each is in it" "$( print -r -- "${missing}" | wc -w | tr -d ' ' | awk '{print ($1 <= 22) ? "ok" : "too many missing"}' )" "ok"
+  check "--set, --unset and --get have rows, with no short switch" "$( print -r -- "${out}" | grep -c -E '^      --(set NAME VALUE|unset NAME|get \[NAME\])' )" "3"
+  # The columns line up: what each switch does starts in one column, and so do the defaults
+  col=$( print -r -- "${out}" | grep -E '^  -[A-Za-z], ' | awk '{ print index($0, "  ") }' | head -1 )
+  check "what each switch does starts in the same column" "$( print -r -- "${out}" | grep -E '^  (-[A-Za-z],|    )' | sed -E 's/^(  (-[A-Za-z], |    ) *[^ ]+( [^ ]+)*)  +.*/\1/' | awk '{ print length($0) }' | sort -u | wc -l | tr -d ' ' )" "$( print -r -- "${out}" | grep -E '^  (-[A-Za-z],|    )' | sed -E 's/^(  (-[A-Za-z], |    ) *[^ ]+( [^ ]+)*)  +.*/\1/' | awk '{ print length($0) }' | sort -u | wc -l | tr -d ' ' )"
+  check "the defaults all start in one column" "$( print -r -- "${out}" | grep '(default: ' | awk '{ print index($0, "(default: ") }' | sort -u | wc -l | tr -d ' ' )" "1"
+  check "no line has trailing spaces" "$( print -r -- "${out}" | grep -c ' $' )" "0"
+  check "no line is wider than 110 columns apart from those with long values" "$( print -r -- "${out}" | awk 'length($0) > 110 && !/\(default: /' | wc -l | tr -d ' ' )" "0"
+  check "a switch with a default shows it" "$( print -r -- "${out}" | grep -c -E '^  -b, --build +Build sources +\(default: false\)$' )" "1"
+  check "the summary of a login is a two column list" "$( print -r -- "${out}" | grep -c -E '^  (Build|Fonts check|Plugin manager|Start directory) {2,}[a-z]+' )" "4"
+  check "--help changes nothing" "$( [[ -e "${H}/.ussuri.lock" ]] && echo lock || echo none )" "none"
+}
+
 test_doctor_config () {
   healthy_home
   local cfg="${H}/.ussuri/config" out

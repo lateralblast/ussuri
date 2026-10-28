@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.7.2
+# Version: 1.7.3
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1637,96 +1637,126 @@ execute_from_file () {
   done
 }
 
-# Priny help information
+# Help information. One row of the help: the short switch (if it has one), the long one with its value, what it does and, if it has
+# one, what it is now (the default for a login or the value from your config and the switches before --help).
+# printf is a builtin, so the columns line up without starting anything
+
+help_row () {
+  local flags
+  if [[ -n "$1" ]]; then
+    flags="$1, $2"
+  else
+    flags="    $2"
+  fi
+  if [[ -n "$4" ]]; then
+    printf '  %-31s %-46s (default: %s)\n' "${flags}" "$3" "$4"
+  else
+    printf '  %-31s %s\n' "${flags}" "$3"
+  fi
+}
+
+help_heading () {
+  printf '\n%s\n' "$1"
+}
+
+help_value () {
+  printf '  %-26s %s\n' "$1" "$2"
+}
 
 print_help () {
   set_defaults
-  cat <<-HELP
+  printf '\nUsage: %s [OPTIONS...]\n\n' "${SCRIPT_FILE}"
+  print -r -- "With no switches it runs as a login script. With switches it is a command line tool"
+  print -r -- "that does only what you ask. A default on a row is the current value of what the switch"
+  print -r -- "sets: from your config or the environment, or the built in one."
 
-  Usage: ${SCRIPT_FILE} [OPTIONS...]
+  help_heading "Look, without changing anything"
+  help_row "-h" "--help"           "Print this usage"
+  help_row "-V" "--version"        "Print the version"
+  help_row "-e" "--changelog"      "Print the changelog"
+  help_row "-x" "--doctor"         "Check the environment (read only)"
+  help_row "-Y" "--fix"            "With --doctor: repair the safe problems"
+  help_row "-G" "--drift [WHAT]"   "Report drift: settings, packages or all"
+  help_row "-a" "--adopt"          "With --drift: add installed packages to your list"
+  help_row "-j" "--timing"         "Run as a login and time each step of it"
 
-  When run manually with switches:
+  help_heading "Install, update and undo"
+  help_row "-I" "--install"        "Install as ~/.zshrc (the old one is kept)"
+  help_row "-U" "--update"         "Update the script and its files"          "${DO_UPDATE_CHECK}"
+  help_row "-C" "--check"          "Check for a newer version"                "${DO_VERSION_CHECK}"
+  help_row "-B" "--backups"        "List the .zshrc backups"
+  help_row "-R" "--rollback [N]"   "Restore .zshrc backup N"                  "newest"
+  help_row "-X" "--uninstall"      "Restore the .zshrc from before ussuri"
+  help_row "-J" "--defaults-undo [N|list]" "Undo a run of defaults changes"   "newest"
+  help_row "-u" "--unlink"         "Unlink the dotfiles"
 
-    -h|--help         Print usage
-    -V|--version      Print version
-    -e|--changelog    Print changelog
-    -A|--doall        Do all function (where set to true)
-    -i|--inline       Set inline defaults when not running inline mode
-    -I|--install      Installs ${SCRIPT_NAME} as: ${HOME_DIR}/.zshrc
-    -b|--build        Build sources       (default: ${DO_BUILD})
-    -c|--confirm      Confirm commands    (default: ${DO_CONFIRM})
-    -C|--check        Check for updates   (default: ${DO_VERSION_CHECK})
-    -d|--debug        Enable debug        (default: ${DO_DEBUG})
-    -D|--default(s)   Set defaults        (default: ${DO_DEFAULTS_CHECK})
-    -E|--prompt NAME  Prompt engine       (default: ${PROMPT_ENGINE}: p10k, posh or none)
-    -f|--font(s)      Install font(s)     (default: ${DO_FONTS_CHECK})
-    -F|--force        Force action        (default: ${DO_FORCE})
-    -g|--gopath       Set GOPATH          (default: ${GO_HOME})
-    -G|--drift [settings|packages|all]  Report what differs from the defaults and the package lists (read only)
-    -k|--config       Create config file  (${CONFIG_FILE})
-    --set NAME VALUE  Save a setting in the config file, for every new shell
-    --unset NAME      Remove a setting from the config file
-    --get [NAME]      Show a setting (default: all) and where it comes from
-    -K|--edit         Edit the config in \$EDITOR, and check it before it is kept
-    -H|--host NAME    Machine for hosts/NAME (default: ${MACHINE}); with --set, --unset or --edit it picks that machine's config
-    -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
-    -l|--location     Set start dir       (default: ${START_DIR})
-    -B|--backups      List .zshrc backups
-    -R|--rollback [N] Restore a backup    (default: newest)
-    -X|--uninstall    Restore the .zshrc from before ussuri
-    -L|--dotfiles     Link dotfiles       (default: ${DO_DOTFILES_CHECK})
-    -M|--profile NAME Profile for dotfiles, packages and plugins (default: ${PROFILE:-none}); with --set, --unset or --edit it picks that profile's config
-    -u|--unlink       Unlink dotfiles
-    -m|--manager      Plugin manager      (default: ${PLUGIN_MANAGER})
-    -n|--notheme      No zsh theme        (default: ${DO_ZSH_THEME})
-    -N|--noenv        Ignore environment  (default: ${DO_ENV_SETUP})
-    -o|--ohmyposh     Install oh my posh  (default: ${DO_POSH_CHECK})
-    -O|--ohmyzsh      Install oh my zsh   (default: ${DO_ZOSH_CHECK})
-    -p|--pyenv        Do pyenv check      (default: ${DO_PYENV_CHECK})
-    -P|--package(s)   Do packages check   (default: ${DO_PACKAGE_CHECK})
-    -r|--rbenv        Do rbenv check      (default: ${DO_RBENV_CHECK})
-    -s|--sudoers      Do sudoers check    (default: ${DO_SUDOERS_CHECK})
-    -S|--sudoersentry Set sudoers entry   (default: ${SUDOERS_ENTRY})
-    -t|--dryrun       Dry run mode        (default: ${DO_DRYRUN})
-    -T|--p10k         Do p10k config      (default: ${DO_P10K_CHECK})
-    -U|--update       Update the script   (default: ${DO_UPDATE_CHECK})
-    -v|--verbose      Verbose output      (default: ${DO_VERBOSE})
-    -y|--yes          Answer yes, no prompts (default: ${ASSUME_YES})
-    -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
-    -x|--doctor       Check environment   (read only; with --fix, repairs the safe problems)
-    -Y|--fix          With --doctor: repair what can be repaired safely (permissions, a missing p10k config, leftover temp files, a broken config)
-    -j|--timing       Run as a login and time each step of it
-    -a|--adopt        With --drift: add the packages that are installed but in no list to your local list, asking about each
-    -z|--zinit        Do zinit check      (default: ${DO_ZINIT_CHECK})
-    -Z|--zshtheme     Set zsh theme       (default: ${ZSH_THEME})
-HELP
-SET_ENV_FORCE="true" set_inline_defaults
-cat <<-INLINE
+  help_heading "Settings (${CONFIG_FILE})"
+  help_row "-k" "--config"         "Create the config file"
+  help_row ""   "--set NAME VALUE" "Save a setting, for every new shell"
+  help_row ""   "--unset NAME"     "Remove a setting"
+  help_row ""   "--get [NAME]"     "Show a setting (or all) and where it is from"
+  help_row "-K" "--edit"           "Edit the config in \$EDITOR, checked first"
+  help_row "-M" "--profile NAME"   "Profile; with --set/--unset/--edit its file"  "${PROFILE:-none}"
+  help_row "-H" "--host NAME"      "Machine; with --set/--unset/--edit its file"  "${MACHINE}"
 
-  Defaults when run inline (i.e. as login script):
+  help_heading "Set up"
+  help_row "-A" "--doall"          "Do everything that is enabled"
+  help_row "-i" "--inline"         "Use the login (inline) defaults"
+  help_row "-b" "--build"          "Build sources"                            "${DO_BUILD}"
+  help_row "-D" "--defaults"       "Set the system defaults"                  "${DO_DEFAULTS_CHECK}"
+  help_row "-E" "--prompt NAME"    "Prompt engine: p10k, posh or none"        "${PROMPT_ENGINE}"
+  help_row "-f" "--fonts"          "Install the fonts"                        "${DO_FONTS_CHECK}"
+  help_row "-L" "--dotfiles"       "Link the dotfiles"                        "${DO_DOTFILES_CHECK}"
+  help_row "-m" "--manager NAME"   "Plugin manager: zinit or oh-my-zsh"       "${PLUGIN_MANAGER}"
+  help_row "-n" "--notheme"        "Do not use a zsh theme"
+  help_row "-N" "--noenv"          "Do not set up the tools' environment"
+  help_row "-o" "--ohmyposh"       "Install oh my posh"                       "${DO_POSH_CHECK}"
+  help_row "-O" "--ohmyzsh"        "Install oh my zsh"                        "${DO_ZOSH_CHECK}"
+  help_row "-p" "--pyenv"          "Do the pyenv check"                       "${DO_PYENV_CHECK}"
+  help_row "-P" "--packages"       "Do the packages check"                    "${DO_PACKAGE_CHECK}"
+  help_row "-r" "--rbenv"          "Do the rbenv check"                       "${DO_RBENV_CHECK}"
+  help_row "-s" "--sudoers"        "Do the sudoers check"                     "${DO_SUDOERS_CHECK}"
+  help_row "-S" "--sudoersentry ENTRY" "Set the sudoers entry"                    "${SUDOERS_ENTRY}"
+  help_row "-T" "--p10k"           "Do the p10k config"                       "${DO_P10K_CHECK}"
+  help_row "-W" "--tool NAME"      "Install fnm, rustup, uv, mise or atuin"
+  help_row "-z" "--zinit"          "Do the zinit check"                       "${DO_ZINIT_CHECK}"
+  help_row "-Z" "--zshtheme NAME"  "Set the zsh theme"                        "${ZSH_THEME}"
+  help_row "-g" "--gopath DIR"     "Set GOPATH"                               "${GO_HOME}"
+  help_row "-l" "--location DIR"   "Set the start directory"                  "${START_DIR}"
 
-    Do build mode         ${DO_BUILD}
-    Do confirm mode       ${DO_CONFIRM}
-    Do update check       ${DO_UPDATE_CHECK}
-    Do debug mode         ${DO_DEBUG}
-    Do defaults check:    ${DO_DEFAULTS_CHECK}
-    Do fonts check:       ${DO_FONTS_CHECK}
-    Do package check:     ${DO_PACKAGE_CHECK}
-    Do zinit check:       ${DO_ZINIT_CHECK}
-    Do pyenv check:       ${DO_PYENV_CHECK}
-    Do rbenv check:       ${DO_RBENV_CHECK}
-    Do p10k check         ${DO_P10K_CHECK}
-    Do oh-my-posh check:  ${DO_POSH_CHECK}
-    Do oh-my-zsh check:   ${DO_ZOSH_CHECK}
-    Do verbose mode       ${DO_VERBOSE}
-    Do sudoers check:     ${DO_SUDOERS_CHECK}
-    Do PKGCONFIG check:   ${DO_PKGCONFIG_CHECK}
-    Do CPPFLAGS check:    ${DO_CPPFLAGS_CHECK}
-    Do LDFLAGS check:     ${DO_LDFLAGS_CHECK}
-    Plugin Manager:       ${PLUGIN_MANAGER}
-    Start Directory:      ${START_DIR}
+  help_heading "How it runs"
+  help_row "-t" "--dryrun"         "Show the commands, run none"              "${DO_DRYRUN}"
+  help_row "-v" "--verbose"        "Verbose output"                           "${DO_VERBOSE}"
+  help_row "-c" "--confirm"        "Confirm each command"                     "${DO_CONFIRM}"
+  help_row "-y" "--yes"            "Answer yes, no prompts"                   "${ASSUME_YES}"
+  help_row "-d" "--debug"          "Debug output (set -x)"                    "${DO_DEBUG}"
+  help_row "-F" "--force"          "Force: clear the lock, ignore the stamps" "${DO_FORCE}"
 
-INLINE
+  print
+  print -r -- "Short switches can be bundled (-vt). Several have other long names, listed in the README."
+  SET_ENV_FORCE="true" set_inline_defaults
+  help_heading "What a login does with no switches"
+  help_value "Build"               "${DO_BUILD}"
+  help_value "Confirm"             "${DO_CONFIRM}"
+  help_value "Update check"        "${DO_UPDATE_CHECK}"
+  help_value "Debug"               "${DO_DEBUG}"
+  help_value "Verbose"             "${DO_VERBOSE}"
+  help_value "Defaults check"      "${DO_DEFAULTS_CHECK}"
+  help_value "Fonts check"         "${DO_FONTS_CHECK}"
+  help_value "Package check"       "${DO_PACKAGE_CHECK}"
+  help_value "zinit check"         "${DO_ZINIT_CHECK}"
+  help_value "pyenv check"         "${DO_PYENV_CHECK}"
+  help_value "rbenv check"         "${DO_RBENV_CHECK}"
+  help_value "p10k check"          "${DO_P10K_CHECK}"
+  help_value "oh-my-posh check"    "${DO_POSH_CHECK}"
+  help_value "oh-my-zsh check"     "${DO_ZOSH_CHECK}"
+  help_value "Sudoers check"       "${DO_SUDOERS_CHECK}"
+  help_value "PKGCONFIG check"     "${DO_PKGCONFIG_CHECK}"
+  help_value "CPPFLAGS check"      "${DO_CPPFLAGS_CHECK}"
+  help_value "LDFLAGS check"       "${DO_LDFLAGS_CHECK}"
+  help_value "Plugin manager"      "${PLUGIN_MANAGER}"
+  help_value "Start directory"     "${START_DIR}"
+  print
 }
 
 # Install script as .zshrc

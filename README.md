@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.7.2
+Current Version: 1.7.3
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -148,85 +148,7 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
 ## Usage
 
 ```
-  Usage: ./ussuri.zsh [OPTIONS...]
 
-  When run manually with switches:
-
-    -h|--help         Print usage
-    -V|--version      Print version
-    -e|--changelog    Print changelog
-    -A|--doall        Do all function (where set to true)
-    -i|--inline       Set inline defaults when not running inline mode
-    -I|--install      Installs ussuri as: ~/.zshrc
-    -b|--build        Build sources       (default: false)
-    -c|--confirm      Confirm commands    (default: false)
-    -C|--check        Check for updates   (default: false)
-    -d|--debug        Enable debug        (default: false)
-    -D|--default(s)   Set defaults        (default: false)
-    -E|--prompt NAME  Prompt engine       (default: p10k: p10k, posh or none)
-    -f|--font(s)      Install font(s)     (default: false)
-    -F|--force        Force action        (default: false)
-    -g|--gopath       Set GOPATH          (default: ~/go)
-    -G|--drift [settings|packages|all]  Report what differs from the defaults and the package lists (read only)
-    -k|--config       Create config file  (~/.ussuri/config)
-    --set NAME VALUE  Save a setting in the config file, for every new shell
-    --unset NAME      Remove a setting from the config file
-    --get [NAME]      Show a setting (default: all) and where it comes from
-    -K|--edit         Edit the config in $EDITOR, and check it before it is kept
-    -H|--host NAME    Machine for hosts/NAME (default: laptop); with --set, --unset or --edit it picks that machine's config
-    -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
-    -l|--location     Set start dir       (default: none)
-    -B|--backups      List .zshrc backups
-    -R|--rollback [N] Restore a backup    (default: newest)
-    -X|--uninstall    Restore the .zshrc from before ussuri
-    -L|--dotfiles     Link dotfiles       (default: false)
-    -M|--profile NAME Profile for dotfiles, packages and plugins (default: none); with --set, --unset or --edit it picks that profile's config
-    -u|--unlink       Unlink dotfiles
-    -m|--manager      Plugin manager      (default: zinit)
-    -n|--notheme      No zsh theme        (default: true)
-    -N|--noenv        Ignore environment  (default: true)
-    -o|--ohmyposh     Install oh my posh  (default: false)
-    -O|--ohmyzsh      Install oh my zsh   (default: false)
-    -p|--pyenv        Do pyenv check      (default: false)
-    -P|--package(s)   Do packages check   (default: false)
-    -r|--rbenv        Do rbenv check      (default: false)
-    -s|--sudoers      Do sudoers check    (default: false)
-    -S|--sudoersentry Set sudoers entry   (default: ALL=(ALL) NOPASSWD:ALL)
-    -t|--dryrun       Dry run mode        (default: false)
-    -T|--p10k         Do p10k config      (default: false)
-    -U|--update       Update the script   (default: false)
-    -v|--verbose      Verbose output      (default: false)
-    -y|--yes          Answer yes, no prompts (default: false)
-    -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
-    -x|--doctor       Check environment   (read only; with --fix, repairs the safe problems)
-    -Y|--fix          With --doctor: repair what can be repaired safely (permissions, a missing p10k config, leftover temp files, a broken config)
-    -j|--timing       Run as a login and time each step of it
-    -a|--adopt        With --drift: add the packages that are installed but in no list to your local list, asking about each
-    -z|--zinit        Do zinit check      (default: false)
-    -Z|--zshtheme     Set zsh theme       (default: robbyrussell)
-
-  Defaults when run inline (i.e. as login script):
-
-    Do build mode         false
-    Do confirm mode       false
-    Do update check       false
-    Do debug mode         false
-    Do defaults check:    true
-    Do fonts check:       true
-    Do package check:     false
-    Do zinit check:       true
-    Do pyenv check:       true
-    Do rbenv check:       true
-    Do p10k check         true
-    Do oh-my-posh check:  false
-    Do oh-my-zsh check:   false
-    Do verbose mode       false
-    Do sudoers check:     false
-    Do PKGCONFIG check:   true
-    Do CPPFLAGS check:    true
-    Do LDFLAGS check:     true
-    Plugin Manager:       zinit
-    Start Directory:      none
 ```
 
 The switches by what they are for:

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.3] - 2026-10-29
+
+### Changed
+
+- --help is laid out as a table: the switches in groups (look without changing anything, install update and undo, settings, set up, how it runs), each row a short switch, a long one with its value, what it does and, where it has one, its current value in a column of its own, with a summary of what a login does at the end. Every row is made by one function (help_row, so the columns cannot drift apart as lines are added) with printf, a builtin. The wording was tidied: the typos are gone, -n and -N no longer show a default that read the wrong way round, the values a switch takes are shown (--prompt NAME, --defaults-undo [N|list], --drift [WHAT]), and the switches added since the old layout (--set, --unset, --get, --edit, --host, --fix, --adopt, --timing) are in their groups. The README's usage block is the script's own output again
+
 ## [1.7.2] - 2026-10-29
 
 ### Added

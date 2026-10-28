@@ -115,6 +115,8 @@ Decided against: fast-syntax-highlighting (alternative to the one already loaded
 
 - [x] **Q8. Startup cost: --timing and the no-forks test** (1.7.2, 2026-10-29) `-j|--timing` times each step of a login (`phase NAME COMMAND`, which is only the call unless timing is on) and reports the slowest. `tests/smoke.zsh login_starts` uses logging wrappers for about 30 utilities and checks that a steady state login starts none, on macOS and on Linux (it passed first time: no forks to fix). Measured once against the real `defaults` in a scratch home (a dry run): the defaults step is 1.3 s the first time, which is the cost the stamp avoids; the rest of a login was about 30 ms. Not done: a time budget in the tests (timing on a shared runner is too noisy to fail on), counting processes inside the script itself (zsh has no way to see its own forks), and timing what zinit defers after the prompt.
 
+- [x] **Q9. A tidy --help** (1.7.3, 2026-10-29) Grouped, aligned in columns (switch, what it does, default), one `help_row` per switch, README block regenerated from the real output. Checked by tests that every switch is in it and that the defaults line up in one column. The wording of a few descriptions changed, so anything that greps `--help` for the old text would need updating (the tests that read the defaults in it still pass).
+
 ## Housekeeping when a fix ships
 
 Bump `# Version:` in `ussuri.zsh`, `Current Version` in `README.md`, and add a `CHANGELOG.md` entry (single digits per component, per CLAUDE.md).
