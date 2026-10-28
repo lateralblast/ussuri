@@ -1586,6 +1586,16 @@ test_forgit () {
   check "turbo: the last line is still the one that runs compinit after everything else" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit' )" "1"
 }
 
+test_you_should_use () {
+  local list name
+  for name in zinit.zsh zinit-turbo.zsh; do
+    list="${ROOT}/files/zinit/${name}"
+    check "${name}: loads zsh-you-should-use" "$( grep -c 'zinit light MichaelAquilina/zsh-you-should-use' "${list}" )" "1"
+  done
+  check "turbo: loaded after the prompt like the other plugins" "$( grep -c -E 'ice wait lucid; zinit light MichaelAquilina/zsh-you-should-use' "${ROOT}/files/zinit/zinit-turbo.zsh" )" "1"
+  check "turbo: compinit is still the last line" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit' )" "1"
+}
+
 test_zoxide () {
   new_home
   local f state

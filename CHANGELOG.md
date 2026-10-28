@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.7] - 2026-10-29
+
+### Added
+
+- zsh-you-should-use (MichaelAquilina/zsh-you-should-use) in both plugin lists: when you type a command that has an alias, it reminds you of the alias (typing `git status` with `gst` defined prints `You should use: "gst"`). It reads the aliases at the time you run a command, so the order it loads in does not matter, and it works with the Oh My Zsh git snippet and forgit's renamed aliases. Its own settings (YSU_MESSAGE_POSITION, YSU_HARDCORE, YSU_IGNORED_ALIASES...) are read from your environment. It is not turned off by a ussuri setting: remove its line from `~/.ussuri/files/zinit/*.zsh`, or set `YSU_MODE=ALL`/`BESTMATCH` to change what it reports. Checked in a throwaway shell with the real plugin: with `alias gst="git status"` set, `git status` prints the reminder. Not checked in a full ussuri login with zinit's turbo loading
+
 ## [1.6.6] - 2026-10-28
 
 ### Added

@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.6.6
+Current Version: 1.6.7
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -446,10 +446,14 @@ rather than in the shipped copy.
 The zinit plugin lists are `files/zinit/zinit-turbo.zsh` (the default: the prompt appears first and the other plugins load just after it, about
 75 ms sooner) and `files/zinit/zinit.zsh` (`ZINIT_TURBO=false`: everything loads before the prompt). Both load the same plugins in the same order:
 powerlevel10k (only when it is the prompt engine), zsh-syntax-highlighting, zsh-completions, zsh-autosuggestions, fzf-tab,
-zsh-history-substring-search, forgit and a set of Oh My Zsh snippets (git, sudo, archlinux, aws, kubectl, kubectx, command-not-found).
+zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh snippets (git, sudo, archlinux, aws, kubectl, kubectx, command-not-found).
 
 - **History search.** Type part of a command and press Up or Down to step through the history entries that contain it (the arrow keys are bound for
   both keypad modes).
+- **zsh-you-should-use** (https://github.com/MichaelAquilina/zsh-you-should-use) reminds you of an alias when you type the command it stands for: with
+  `gst` defined, typing `git status` prints `You should use: "gst"`. It reads your aliases as you run each command, so it knows the git snippet's and
+  your own, and forgit's renamed ones. Set `YSU_IGNORED_ALIASES=(l ll)`, `YSU_MESSAGE_POSITION=after` or `YSU_HARDCORE=1` (refuse the long form) in the
+  config, or remove its line from the plugin lists to drop it.
 - **forgit** (https://github.com/wfxr/forgit) gives interactive git commands driven by fzf: add, log, diff, checkout, stash, rebase and more, with
   previews. It defines short aliases, and 16 of them (`ga`, `gd`, `gco`, `gcb`, `gss`, `glo`...) have the same name as aliases in the Oh My Zsh git snippet,
   which would silently change what they do (`gcb` creates a branch, but forgit's `gcb` is an interactive picker). Those 16 are renamed with an `f` in front

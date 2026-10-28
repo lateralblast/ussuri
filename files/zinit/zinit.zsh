@@ -5,6 +5,7 @@ zinit light zsh-users/zsh-autosuggestions
 zinit light Aloxaf/fzf-tab
 zinit light zsh-users/zsh-history-substring-search
 bind_history_search
+zinit light MichaelAquilina/zsh-you-should-use
 # Add in snippets (one line each: they are run one line at a time)
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
