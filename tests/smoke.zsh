@@ -1274,6 +1274,62 @@ test_doctor_fix_layers () {
   EXTRA_ENV=()
 }
 
+# Wrappers that log every call to the ordinary utilities and then run the real one (the way startup cost is
+# measured: "no forks on a login" means none of these start). A subshell, $(...) or a builtin is not an
+# external command and does not show up here, which is the point: only the processes that cost time do
+
+make_spies () {
+  SPY="${TMP}/spy"
+  SPYLOG="${TMP}/spy.log"
+  rm -rf "${SPY}"; mkdir -p "${SPY}"; : > "${SPYLOG}"
+  local name real
+  for name in awk basename cat chmod cp cut date dirname env expr find getconf grep head hostname id ln ls mkdir \
+              mktemp mv readlink rm sed sleep sort stat tail tar tee touch tr uname uniq wc whoami xargs; do
+    real=$( env -i PATH=/usr/bin:/bin command -v "${name}" 2> /dev/null )
+    [[ -n "${real}" ]] || continue
+    print -r -- "#!/bin/sh" > "${SPY}/${name}"
+    print -r -- "echo \"${name} \$*\" >> ${SPYLOG}" >> "${SPY}/${name}"
+    print -r -- "exec ${real} \"\$@\"" >> "${SPY}/${name}"
+    chmod +x "${SPY}/${name}"
+  done
+}
+
+test_login_starts_no_processes () {
+  healthy_home
+  make_spies
+  # The first logins do the one off work (caches, stamps), so the quiet one is the third
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  : > "${SPYLOG}"
+  TEST_PATH_PREFIX="${SPY}:" run > /dev/null 2>&1
+  check "a steady state login starts none of the ordinary utilities" "$( cat "${SPYLOG}" )" ""
+  # The spies have teeth: the same wrappers see a utility that is run
+  : > "${SPYLOG}"
+  PATH="${SPY}:${PATH}" date > /dev/null
+  check "(and they log a utility when one is run)" "$( cat "${SPYLOG}" | cut -d' ' -f1 )" "date"
+  # And a login that has work to do (nothing cached or stamped yet) does start some, which is what the stamps and caches avoid
+  healthy_home
+  rm -f "${H}/.ussuri/defaults.stamp"
+  : > "${SPYLOG}"
+  TEST_PATH_PREFIX="${SPY}:" run > /dev/null 2>&1
+  check "a login with work to do (nothing stamped yet) does start some" "$( [[ -s "${SPYLOG}" ]] && echo yes || echo no )" "yes"
+  TEST_PATH_PREFIX=""
+}
+
+test_linux_login_starts_no_processes () {
+  new_home
+  make_spies
+  print -r -- 'ID=ubuntu' > "${TMP}/os-release"; print -r -- 'ID_LIKE=debian' >> "${TMP}/os-release"
+  EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" )
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  : > "${SPYLOG}"
+  TEST_PATH_PREFIX="${SPY}:" run > /dev/null 2>&1
+  check "a steady state Linux login starts none either" "$( cat "${SPYLOG}" )" ""
+  EXTRA_ENV=()
+  TEST_PATH_PREFIX=""
+}
+
 test_doctor_config () {
   healthy_home
   local cfg="${H}/.ussuri/config" out
