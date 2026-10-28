@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.6.9
+Current Version: 1.7.1
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -59,7 +59,7 @@ What it manages:
 
 It is careful about what it does to your machine: everything with a side effect honours `--dryrun` and `--confirm`, nothing is deleted
 without a copy being kept, downloaded installers can be checked against a checksum, and the read-only commands (`--doctor`, `--drift`,
-`--help`, `--version`) change nothing. See [Security notes](#security-notes).
+`--help`, `--version`) change nothing unless you add `--fix` or `--adopt`. See [Security notes](#security-notes).
 
 ## Quick start
 
@@ -152,13 +152,15 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
     --set NAME VALUE  Save a setting in the config file, for every new shell
     --unset NAME      Remove a setting from the config file
     --get [NAME]      Show a setting (default: all) and where it comes from
+    -K|--edit         Edit the config in $EDITOR, and check it before it is kept
+    -H|--host NAME    Machine for hosts/NAME (default: laptop); with --set, --unset or --edit it picks that machine's config
     -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -l|--location     Set start dir       (default: none)
     -B|--backups      List .zshrc backups
     -R|--rollback [N] Restore a backup    (default: newest)
     -X|--uninstall    Restore the .zshrc from before ussuri
     -L|--dotfiles     Link dotfiles       (default: false)
-    -M|--profile NAME Profile for dotfiles, packages and plugins (default: none, machine: laptop)
+    -M|--profile NAME Profile for dotfiles, packages and plugins (default: none); with --set, --unset or --edit it picks that profile's config
     -u|--unlink       Unlink dotfiles
     -m|--manager      Plugin manager      (default: zinit)
     -n|--notheme      No zsh theme        (default: true)
@@ -176,7 +178,9 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
     -v|--verbose      Verbose output      (default: false)
     -y|--yes          Answer yes, no prompts (default: false)
     -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
-    -x|--doctor       Check environment   (read only)
+    -x|--doctor       Check environment   (read only; with --fix, repairs the safe problems)
+    -Y|--fix          With --doctor: repair what can be repaired safely (permissions, a missing p10k config, leftover temp files, a broken config)
+    -a|--adopt        With --drift: add the packages that are installed but in no list to your local list, asking about each
     -z|--zinit        Do zinit check      (default: false)
     -Z|--zshtheme     Set zsh theme       (default: robbyrussell)
 
@@ -210,8 +214,9 @@ The switches by what they are for:
 |---|---|
 | Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back, `-U` update, `-C` check for a newer version |
 | Looking without touching (read only) | `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
-| Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all |
+| Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all, `-K` edit the config, `-H NAME` a machine |
 | What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
+| Repairing and recording | `-Y` with `--doctor` repairs the safe problems, `-a` with `--drift` adds installed packages to your local list |
 | Undoing | `-J [N]` undo a run of defaults changes, `-u` unlink dotfiles, `-R`/`-X` restore a `.zshrc` |
 | How it runs | `-t` dry run, `-v` verbose, `-c` confirm, `-y` yes, `-F` force, `-d` debug, `-N` no environment setup, `-b` build language versions |
 | Choosing | `-M NAME` profile, `-m` plugin manager, `-Z` zsh theme, `-n` no theme, `-O` oh-my-zsh, `-g` GOPATH, `-l` start directory, `-S` sudoers entry |
@@ -226,7 +231,7 @@ Notes on the switches:
 - **Mistakes:** a switch that is missing its value, or an unknown switch, prints the usage and exits with status 1.
 - **Exit statuses:** `--doctor` is 0, or 1 if anything failed. `--drift` is 0 for none, 1 for drift, 2 if there was nothing to compare with.
   `--defaults-undo`, `--rollback` and `--uninstall` are 0, or 1 if there was nothing (or no such backup or run) to act on. `--set`, `--unset` and
-  `--get` are 0, or 1 if a name or value was refused.
+  `--get` are 0, or 1 if a name or value was refused; `--edit` is 0, or 1 if the edit was refused.
 
 ## Configuration
 
@@ -267,6 +272,51 @@ the new value applies from the next shell. The file is created from the template
   your own lines and comments are left alone. Several `--set` and `--unset` in one run are written together.
 - **Safe to run at any time:** the file is written to a copy and renamed into place, under the lock, so a shell that starts at that moment reads
   the old file or the new one. The previous file is kept as `~/.ussuri/config.<date>` (the newest ten). `--dryrun` shows what would be written.
+
+### Settings for one profile or machine
+
+A profile (`PROFILE`) or a machine (`MACHINE`, the short hostname by default) can have settings of its own, in files next to the config that are
+sourced after it, so a work laptop can differ from a home one without a separate script:
+
+```
+~/.ussuri/config                              every machine
+~/.ussuri/profiles/work/local.config          machines using the work profile
+~/.ussuri/hosts/mybox/local.config            just the machine called mybox
+```
+
+The profile is then the machine, so a later one wins, and the command line wins over all of them. They are plain files of `NAME=value` lines, like the
+config, and `--doctor` checks them the same way (a syntax error, or being writable by others). Choose the file a change goes in with `-M` or `-H`:
+
+```
+./ussuri.zsh --set ZSH_THEME agnoster --profile work      # profiles/work/local.config (made if it is not there)
+./ussuri.zsh --unset DO_VERBOSE --host mybox              # hosts/mybox/local.config
+./ussuri.zsh --edit --profile work                        # the same, in your editor
+./ussuri.zsh --get ZSH_THEME                              # the value in force here, and which file it came from
+```
+
+One limit: which profile and machine apply is decided when the config is read, so it is the `PROFILE` and `MACHINE` of the environment or the
+config. `-M` and `-H` choose the file to change, and for packages, plugins and dotfiles they choose the layers for that run, but they do not pull in that
+profile's settings for the run. A name that could point somewhere else (a slash, or starting with a dot) is refused. The previous copy of a file is kept
+in `~/.ussuri` as `config-profile-<name>.<date>` or `config-host-<name>.<date>` (the newest ten each).
+
+### Editing the config
+
+```
+./ussuri.zsh --edit
+```
+
+Opens a copy of the config in `$VISUAL`, `$EDITOR` or `vi` (arguments are fine: `VISUAL="code -w"`), and replaces the config only if what you saved is
+valid zsh, so a slip cannot leave every new shell with a broken config. A syntax error leaves the config as it was and your edit in `config.rejected` to fix.
+A name that is not one of ussuri's settings is reported, but kept, as it may be one of your own. The old file is backed up, as with `--set`, and with no
+config you start from the template. `--dryrun` shows what would run.
+
+### Completion
+
+Tab completion for the script is in `~/.ussuri/files/completions/_ussuri`, and a login puts that directory on the `fpath` before `compinit` runs, so
+`ussuri.zsh --se<TAB>` gives `--set`, and after it the settings, with `true` and `false` offered for a true/false setting and the engines for
+`PROMPT_ENGINE`. It also completes profile and machine names from the layers you have, and tool and plugin manager names. It is replaced by `--update`
+and `--install` with the rest of `files/`. It completes `ussuri.zsh` and `ussuri`; for another name, `compdef _ussuri thename`. A shell that ran
+`compinit` before the file was there picks it up on the next start (delete `~/.zcompdump*` if it does not).
 
 ### Settings
 
@@ -621,6 +671,21 @@ What is in a list but not installed is drift (exit status 1), which `-P` would i
 machine that only has extras is not drift (exit status 0). On macOS a name in the formula list that is installed as a cask counts as installed, as it does for `-P`.
 Exit status 2 means there was nothing to compare (no supported package manager, or its tool is not installed).
 
+**Adopting what is installed.** The packages that are installed but in no list are what you would add to a local list to keep, so `--adopt` does that:
+
+```
+./ussuri.zsh --drift packages --adopt
+Add zzz-extra to local.brew? [y/n] (a adds all that are left, q stops): y
+```
+
+It asks about each (`y`, `n`, `a` to add this and all that are left, `q` to stop), or add `--yes` to add them all, or `--dryrun` to see what would be
+added. A formula goes in `local.brew`, a cask in `local.cask`, a tap in `local.tap`, and on Linux a package in the `local.<ext>` of your package manager,
+next to the shipped list. `--profile NAME` or `--host NAME` puts them in that profile's or machine's list instead (see [Local files, profiles and
+machines](#local-files-profiles-and-machines)). A name is added under a line saying where it came from, never twice, and what was in the list is kept.
+The list is backed up in `~/.ussuri` first (`packages-<ext>.<date>`, the newest ten) and replaced in one rename, under the lock. Nothing is installed or
+removed: the packages are installed already, and listing them means a new machine gets them with `-P`. It needs a terminal to ask on, so without `--yes`
+or `--dryrun` it refuses when there is none.
+
 ## Languages and tools
 
 - **rbenv and pyenv** (`-r`, `-p`, on by default for a login): installed from git, their environment set up (with the init output cached). `-b` (or `-r`/`-p`, which imply it)
@@ -757,7 +822,24 @@ itself, or, if you had none, it moves ussuri's aside. Either way the `.zshrc` be
 
 Checks the shell, tools, install (the `.zshrc` version, support files, the lists and the local ones), config, profile and machine, lock, components, fonts, backups and state (defaults stamp, journal, init cache, PATH, the update
 hint), and prints `ok`, `warn` or `FAIL` for each. A warning is something that will probably fix itself on the next login or is worth a look, a failure is something that will not. It exits non-zero if there are
-any failures, and it never changes anything (a missing directory is reported, not recreated).
+any failures, and it never changes anything (a missing directory is reported, not recreated). Some of what it finds can be repaired, and it says so at the
+end.
+
+```
+./ussuri.zsh --doctor --fix --dryrun     # what it would repair
+./ussuri.zsh --doctor --fix              # repair it
+```
+
+`--fix` repairs only what is small, local and reversible, and checks afterwards that each repair worked (the totals and the exit status are updated):
+
+- **A config file that others can write** (the config and the profile and machine files are executed on every shell): `chmod go-w`.
+- **A config file with a syntax error:** the newest backup that is valid zsh is put back, and the broken file is kept beside it as `<name>.broken`. If there is no valid
+  backup it is left alone and stays a failure.
+- **A missing `~/.p10k.zsh`:** copied from the shipped one in `~/.ussuri/files/p10k`.
+- **A temp file left by a `--set`, `--edit` or `--adopt` that did not finish:** removed once it is over 10 minutes old, as one that is newer may be in use.
+
+It never installs anything, fetches anything, deletes a file of yours or touches a backup. Without `--fix`, `--doctor` changes nothing at all. It takes the lock,
+so it will not run alongside another ussuri run, and `--dryrun` and `--confirm` are honoured.
 
 ## Security notes
 
@@ -765,7 +847,7 @@ any failures, and it never changes anything (a missing directory is reported, no
 - Every path, name and version that goes into a command is quoted, and values read back from the defaults journal and the dotfile names are never evaluated. Profile and machine names and prompt segment names are validated.
 - `--update` refuses an archive with an unsafe path or a wrong checksum, never deletes anything, and keeps a copy of every file it replaces.
 - Anything that contacts the network on a login (the update hint) is off by default, runs in the background and never blocks. `--drift`, `--doctor`, `--help` and `--version` change nothing.
-- `~/.ussuri/config` is executed on every shell, so it should be writable only by you. `--set` saves a value quoted and never runs it, and replaces the file with one rename. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
+- `~/.ussuri/config` is executed on every shell, so it should be writable only by you. `--set` saves a value quoted and never runs it, and replaces the file with one rename. The profile and machine files (`profiles/<name>/local.config`, `hosts/<name>/local.config`) are executed the same way and are checked by `--doctor` the same way. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
 - What the script writes outside `~/.ussuri` and your dotfiles is what you enable: the OS X defaults and Transmission blocklist, GNOME settings, packages, language managers, a sudoers file, and `~/.zshrc` itself. Each has an undo
   or a backup, except installed packages.
 
@@ -798,10 +880,13 @@ real systems.
 ~/.p10k.zsh                   your powerlevel10k config (copied from files/p10k on install if it is missing)
 ~/.ussuri.lock                the lock (a directory, present only while a run holds it)
 ~/.ussuri/
-  config                      your settings (--config creates it, --set and --unset edit it)
-  config.<date>               the newest ten copies of it from before a --set or --unset
+  config                      your settings (--config creates it, --set, --unset and --edit change it)
+  config.<date>               the newest ten copies of it from before a change (config-profile-<name>.<date>, config-host-<name>.<date> for the others)
+  packages-<ext>.<date>       the newest ten copies of a local package list from before --adopt (packages-brew-profile-work.<date> for a profile's)
+  profiles/<name>/local.config  settings for a profile, sourced after config (--set --profile)
+  hosts/<name>/local.config   settings for a machine, sourced after that (--set --host)
   files/                      the shipped lists, copied from the repository (replaced by --update and --install)
-    packages/  zinit/  p10k/  local.* files in here are yours and are never touched
+    packages/  zinit/  p10k/  completions/  local.* files in here are yours and are never touched
   files.bak/<date>/           files --update replaced
   .zshrc.<date>               backups of ~/.zshrc (--backups lists them)
   dotfiles/  dotfile-backups/ your dotfile layers, and what linking moved aside

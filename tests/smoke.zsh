@@ -948,6 +948,332 @@ test_config_get () {
   check "a switch after --get is not taken as a name" "$( print -r -- "${out}" | grep -c 'PROMPT_TWO_LINE=true' )" "1"
 }
 
+test_config_layers () {
+  new_home
+  local cfg="${H}/.ussuri/config" prof="${H}/.ussuri/profiles/work/local.config" host="${H}/.ussuri/hosts/mybox/local.config" out
+  mkdir -p "${H}/.ussuri/profiles/work" "${H}/.ussuri/hosts/mybox"
+  print -r -- 'ZSH_THEME=base' > "${cfg}"
+  print -r -- 'ZSH_THEME=work-theme' > "${prof}"
+  print -r -- 'ZSH_THEME=host-theme' > "${host}"
+  check "no profile: the config alone" "$( run --get ZSH_THEME 2>&1 )" "ZSH_THEME=base  (config: ${cfg})"
+  EXTRA_ENV=( PROFILE=work )
+  check "a profile's config is read on top of it" "$( run --get ZSH_THEME 2>&1 )" "ZSH_THEME=work-theme  (config: ${prof})"
+  EXTRA_ENV=( PROFILE=work MACHINE=mybox )
+  check "and the machine's on top of that" "$( run --get ZSH_THEME 2>&1 )" "ZSH_THEME=host-theme  (config: ${host})"
+  check "a command line switch still wins over all of them" "$( run -Z from-switch --help 2>&1 | grep -c 'from-switch' )" "1"
+  EXTRA_ENV=( PROFILE=other )
+  check "a profile with no file is just the config" "$( run --get ZSH_THEME 2>&1 )" "ZSH_THEME=base  (config: ${cfg})"
+  print -r -- 'PROFILE=work' > "${cfg}"
+  EXTRA_ENV=()
+  check "PROFILE in the config picks the profile's file" "$( run --get ZSH_THEME 2>&1 )" "ZSH_THEME=work-theme  (config: ${prof})"
+  print -r -- 'ZSH_THEME=base' > "${cfg}"
+  EXTRA_ENV=( PROFILE=../escape )
+  out=$( run --get ZSH_THEME 2>&1 )
+  check "a profile name that could leave the directory is refused" "$( print -r -- "${out}" | grep -c "Ignoring PROFILE" )" "1"
+  EXTRA_ENV=()
+  # The paths --set writes to are the ones that are read
+  load_function local_layer_files
+  LOCAL_LAYERS=(); local_layer_files "${H}/.ussuri" config layers; check "'layers' leaves out the every machine file" "${#LOCAL_LAYERS}" "0"
+  PROFILE=work MACHINE=mybox; local_layer_files "${H}/.ussuri" config layers
+  check "and gives the profile then the machine file" "${LOCAL_LAYERS[*]}" "${prof} ${host}"
+  unset PROFILE MACHINE LOCAL_LAYERS
+}
+
+test_config_set_layers () {
+  new_home
+  local cfg="${H}/.ussuri/config" prof="${H}/.ussuri/profiles/work/local.config" host="${H}/.ussuri/hosts/newbox/local.config" out
+  print -r -- 'ZSH_THEME=base' > "${cfg}"
+  run --set ZSH_THEME work-theme --profile work > /dev/null 2>&1
+  check "--set with --profile writes that profile's file" "$( grep -c '^ZSH_THEME=work-theme$' "${prof}" )" "1"
+  check "and not the config" "$( cat "${cfg}" )" "ZSH_THEME=base"
+  check "a new file starts with a header, not the whole template" "$( grep -c '^# ussuri settings for profile-work' "${prof}" )" "1"
+  check "so it is a handful of lines" "$( wc -l < "${prof}" | tr -d ' ' )" "5"
+  check "and is valid zsh" "$( zsh -n "${prof}" && echo valid || echo invalid )" "valid"
+  run --set DO_VERBOSE true --host newbox > /dev/null 2>&1
+  check "--set with --host writes that machine's file" "$( grep -c '^DO_VERBOSE=true$' "${host}" )" "1"
+  run --set DO_VERBOSE false --profile work > /dev/null 2>&1
+  check "the file is backed up under its own name, not the config's" "$( nfiles "${H}/.ussuri/config-profile-work.*" )" "1"
+  check "the config has no backup from that" "$( nfiles "${H}/.ussuri/config.*" )" "0"
+  out=$( run --set DO_VERBOSE true --profile work --host newbox 2>&1 ); check "both layers at once is refused" "$( print -r -- "${out}" | grep -c 'choose one' )" "1"
+  out=$( run --set DO_VERBOSE true --profile '../x' 2>&1 ); check "a profile name that is not usable is refused" "$( print -r -- "${out}" | grep -c 'not usable' )" "1"
+  check "and nothing was written outside" "$( [[ -e "${H}/.ussuri/profiles/../x" || -e "${H}/.ussuri/x" ]] && echo written || echo clean )" "clean"
+  run --unset DO_VERBOSE --profile work > /dev/null 2>&1
+  check "--unset with --profile removes it from that file" "$( grep -c '^DO_VERBOSE=' "${prof}" )" "0"
+  run --set ZSH_THEME x --host newbox --dryrun > /dev/null 2>&1
+  check "--dryrun writes nothing to a layer" "$( grep -c 'ZSH_THEME' "${host}" )" "0"
+  EXTRA_ENV=( PROFILE=work MACHINE=mybox )
+  chmod 666 "${prof}"
+  out=$( run --doctor 2>&1 )
+  check "--doctor warns about a layer that others can write" "$( print -r -- "${out}" | grep -c 'warn.*local.config is writable by others' )" "1"
+  chmod 600 "${prof}"; print -r -- 'if [ then' > "${prof}"
+  out=$( run --doctor 2>&1 )
+  check "and about one that has a syntax error" "$( print -r -- "${out}" | grep -c 'FAIL.*local.config has a syntax error' )" "1"
+  EXTRA_ENV=()
+}
+
+test_config_edit () {
+  new_home
+  local cfg="${H}/.ussuri/config" out ed="${TMP}/editor.sh"
+  print -r -- 'ZSH_THEME=base' > "${cfg}"
+  print -r -- '#!/bin/sh' > "${ed}"; print -r -- 'echo "DO_VERBOSE=true" >> "$1"' >> "${ed}"; chmod +x "${ed}"
+  out=$( EXTRA_ENV=( EDITOR="${ed}" ); run --edit 2>&1 )
+  check "--edit keeps a valid edit" "$( grep -c '^DO_VERBOSE=true$' "${cfg}" )" "1"
+  check "and says it applies to new shells" "$( print -r -- "${out}" | grep -c 'applies to new shells' )" "1"
+  check "the file from before is backed up" "$( nfiles "${H}/.ussuri/config.*" )" "1"
+  check "no temporary copy is left" "$( nfiles "${cfg}.edit.*" )" "0"
+  print -r -- '#!/bin/sh' > "${ed}"; print -r -- 'echo "NOT_A_SETTING=1" >> "$1"' >> "${ed}"
+  out=$( EXTRA_ENV=( EDITOR="${ed}" ); run --edit 2>&1 )
+  check "a name ussuri does not list is noted, but kept" "$( print -r -- "${out}" | grep -c 'NOT_A_SETTING is not a setting' )" "1"
+  check "and is in the file" "$( grep -c '^NOT_A_SETTING=1$' "${cfg}" )" "1"
+  print -r -- '#!/bin/sh' > "${ed}"; print -r -- 'echo "if [ then" >> "$1"' >> "${ed}"
+  local before=$( cat "${cfg}" )
+  out=$( EXTRA_ENV=( EDITOR="${ed}" ); run --edit 2>&1 ); local rc=$?
+  check "an edit with a syntax error is refused" "${rc}" "1"
+  check "the config is untouched" "$( cat "${cfg}" )" "${before}"
+  check "and the edit is kept to fix" "$( grep -c 'if \[ then' "${cfg}.rejected" )" "1"
+  print -r -- '#!/bin/sh' > "${ed}"; print -r -- 'true' >> "${ed}"
+  out=$( EXTRA_ENV=( EDITOR="${ed}" ); run --edit 2>&1 )
+  check "an editor that changes nothing changes nothing" "$( print -r -- "${out}" | grep -c 'No changes' )" "1"
+  print -r -- '#!/bin/sh' > "${ed}"; print -r -- 'echo "$@" > '"${TMP}"'/editor.args' >> "${ed}"
+  EXTRA_ENV=( VISUAL="${ed} -w" EDITOR=unused ); run --edit > /dev/null 2>&1
+  check "\$VISUAL beats \$EDITOR, and its arguments are kept" "$( cut -d' ' -f1 "${TMP}/editor.args" )" "-w"
+  EXTRA_ENV=( EDITOR="${ed}" ); run --edit --dryrun > /dev/null 2>&1
+  check "--edit --dryrun leaves the config alone" "$( cat "${cfg}" )" "${before}"
+  rm -f "${cfg}"
+  print -r -- '#!/bin/sh' > "${ed}"; print -r -- 'echo "DO_VERBOSE=true" >> "$1"' >> "${ed}"
+  EXTRA_ENV=( EDITOR="${ed}" ); run --edit > /dev/null 2>&1
+  check "with no config the editor starts from the template" "$( grep -c 'Behaviour' "${cfg}" )" "1"
+  EXTRA_ENV=( EDITOR="${ed}" ); run --edit --profile work > /dev/null 2>&1
+  check "--edit --profile edits that profile's file" "$( grep -c '^DO_VERBOSE=true$' "${H}/.ussuri/profiles/work/local.config" )" "1"
+  EXTRA_ENV=()
+}
+
+test_completion () {
+  local file="${ROOT}/files/completions/_ussuri" names short
+  check "the completion is valid zsh" "$( zsh -n "${file}" && echo valid || echo invalid )" "valid"
+  # The settings it offers are the ones in the config template
+  names=$( sed -n '/^print_config_template () {/,/^CONFIG$/p' "${SRC}" | grep -o -E '^#?[A-Z][A-Z0-9_]*=' | tr -d '#=' | sort -u | tr '\n' ' ' )
+  check "it lists the settings in the config template, no more and no fewer" "$( sed -n '/^  names=($/,/^  )$/p' "${file}" | grep -E '^    [A-Z]' | tr -d ' ' | sort -u | tr '\n' ' ' )" "${names}"
+  check "and the true/false ones" "$( grep -E '^    [A-Z_|0-9]+\) compadd true false' "${file}" | tr -d ' )' | sed 's/compadd.*//' | tr '|' '\n' | sort | tr '\n' ' ' )" "$( sed -n '/^print_config_template () {/,/^CONFIG$/p' "${SRC}" | grep -E '^#?[A-Z][A-Z0-9_]*=(true|false)( |$)' | grep -o -E '^#?[A-Z][A-Z0-9_]*' | tr -d '#' | sort -u | tr '\n' ' ' )"
+  # Every switch the script takes is offered
+  local missing=""
+  for short in ${(k)LONG_SWITCHES}; do :; done
+  for long in $( sed -n '/typeset -A LONG_SWITCHES=(/,/^    )/p' "${SRC}" | grep -o -E -- '--[a-z0-9-]+' | sort -u ); do
+    grep -q -F -e "${long}" "${file}" || missing+="${long} "
+  done
+  check "every long switch of the script is in it" "${missing}" ""
+  # And it works when used: tab on a prefix
+  if command -v python3 > /dev/null; then
+    local dir="${TMP}/comp"
+    mkdir -p "${dir}"
+    complete_line () {
+      python3 - "${ROOT}/files/completions" "$1" <<'PY'
+import os, pty, sys, time, select, re
+d, line = sys.argv[1], sys.argv[2]
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ.update(TERM="dumb", HOME=os.environ.get("TMPDIR", "/tmp"))
+    os.execvp("zsh", ["zsh", "-f", "-i"])
+buf = b""
+def pump(t):
+    global buf
+    end = time.time() + t
+    while time.time() < end:
+        r, _, _ = select.select([fd], [], [], 0.1)
+        if r:
+            try: buf += os.read(fd, 65536)
+            except OSError: return
+def send(c, t):
+    os.write(fd, c.encode()); pump(t)
+pump(1)
+send("fpath=( %s $fpath ); PS1='> '; autoload -Uz compinit && compinit -u -d /dev/null; zstyle ':completion:*' menu no; unsetopt list_ambiguous; compdef _ussuri ussuri.zsh\n" % d, 2)
+buf = b""
+send(line + "\t", 1.5)
+send("\x03", 0.3)
+txt = re.sub(rb"\x1b\[[0-9;?]*[a-zA-Z]", b"", buf).decode(errors="replace")
+print(" ".join([l for l in txt.replace("\r", "\n").splitlines() if l.strip()][:3]))
+os.write(fd, b"exit\n")
+PY
+    }
+    check "tab completes a switch: --se becomes --set" "$( complete_line 'ussuri.zsh --se' | grep -c 'ussuri.zsh --set' )" "1"
+    check "tab offers the settings after --set" "$( complete_line 'ussuri.zsh --set PROMPT_T' | grep -c 'PROMPT_TWO_LINE' )" "1"
+    check "tab offers true and false for a true/false setting" "$( complete_line 'ussuri.zsh --set PROMPT_TWO_LINE ' | grep -c 'false  *true\|true  *false' )" "1"
+    check "and the engines for PROMPT_ENGINE" "$( complete_line 'ussuri.zsh --set PROMPT_ENGINE ' | grep -c 'posh' )" "1"
+  fi
+}
+
+test_completion_on_the_fpath () {
+  new_home
+  local out
+  load_function add_completions_dir
+  local WORK_DIR="${H}/.ussuri" saved=( ${fpath} )
+  add_completions_dir
+  check "the completions directory is put on the fpath" "${fpath[1]}" "${H}/.ussuri/files/completions"
+  add_completions_dir
+  check "once, however often it runs" "$( print -l ${fpath} | grep -c -F "${H}/.ussuri/files/completions" )" "1"
+  fpath=( ${saved} )
+  WORK_DIR="${H}/nowhere"; add_completions_dir
+  check "nothing is added when there is no such directory" "${fpath[1]}" "${saved[1]}"
+  fpath=( ${saved} )
+  check "a login copies it with the other support files" "$( [[ -f "${H}/.ussuri/files/completions/_ussuri" ]] && echo yes || echo no )" "yes"
+}
+
+adopt_home () {
+  layered_home
+  AF="${H}/.ussuri/files/packages"
+  # zzz-extra is installed (a leaf) but in no list, other-app is an installed cask and example/tap an added tap that are not either
+  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
+  printf '%s\n' zzz-extra git > "${TMP}/leaves.txt"
+  print -r -- "other-app" > "${TMP}/casks.txt"
+  print -r -- "example/tap" > "${TMP}/taps.txt"
+  print -r -- "wanted-app" > "${AF}/local.cask"
+  : > "${LOG}"
+}
+
+test_drift_adopt () {
+  adopt_home
+  local out rc before after
+  before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  out=$( run --drift packages --adopt --dryrun 2>&1 )
+  after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  check "--adopt --dryrun says what it would add" "$( print -r -- "${out}" | grep -c -E "Would add to .*local.(brew|cask|tap): (zzz-extra|other-app|example/tap)" )" "3"
+  check "and changes nothing" "${after}" "${before}"
+  out=$( run --drift packages --adopt 2>&1 ); rc=$?
+  check "without a terminal or --yes it refuses, as it can't ask" "${rc}" "1"
+  check "and says why" "$( print -r -- "${out}" | grep -c 'needs a terminal' )" "1"
+  check "and writes nothing" "$( [[ -e "${AF}/local.brew" ]] && echo written || echo none )" "none"
+  out=$( run --drift packages --adopt --yes 2>&1 ); rc=$?
+  check "--yes adds the formula to local.brew" "$( grep -c '^zzz-extra$' "${AF}/local.brew" )" "1"
+  check "the cask to local.cask" "$( grep -c '^other-app$' "${AF}/local.cask" )" "1"
+  check "the tap to local.tap" "$( grep -c '^example/tap$' "${AF}/local.tap" )" "1"
+  check "what was in the list is kept" "$( grep -c '^wanted-app$' "${AF}/local.cask" )" "1"
+  check "with a line saying where the rest came from" "$( grep -c '^# added by ussuri --drift --adopt' "${AF}/local.cask" )" "1"
+  check "the list from before is backed up" "$( nfiles "${H}/.ussuri/packages-cask.*" )" "1"
+  check "no temporary file is left" "$( nfiles "${AF}/local.*.tmp.*" )" "0"
+  check "it says how many it added" "$( print -r -- "${out}" | grep -c '3 added' )" "1"
+  out=$( run --drift packages 2>&1 )
+  check "after that --drift no longer calls them extras" "$( print -r -- "${out}" | grep -c 'but not in your lists' )" "0"
+  out=$( run --drift packages --adopt --yes 2>&1 )
+  check "adopting again finds nothing to add" "$( print -r -- "${out}" | grep -c 'Nothing to adopt' )" "1"
+  check "and does not duplicate a line" "$( grep -c '^zzz-extra$' "${AF}/local.brew" )" "1"
+  check "the lists still read as zsh-free plain lines, one name each" "$( grep -v -E '^#' "${AF}/local.brew" | wc -l | tr -d ' ' )" "1"
+}
+
+test_drift_adopt_layers () {
+  adopt_home
+  run --drift packages --adopt --yes --profile work > /dev/null 2>&1
+  check "--profile adds to that profile's list" "$( grep -c '^zzz-extra$' "${AF}/profiles/work/local.brew" )" "1"
+  check "and not the common one" "$( [[ -e "${AF}/local.brew" ]] && echo written || echo none )" "none"
+  adopt_home
+  run --drift packages --adopt --yes --host newbox > /dev/null 2>&1
+  check "--host adds to that machine's list, which it makes" "$( grep -c '^zzz-extra$' "${AF}/hosts/newbox/local.brew" )" "1"
+  adopt_home
+  local out
+  out=$( run --drift packages --adopt --yes --profile work --host box 2>&1 ); check "both at once is refused" "$( print -r -- "${out}" | grep -c 'choose one' )" "1"
+  out=$( run --drift settings --adopt --yes 2>&1 ); check "--adopt is for packages" "$( print -r -- "${out}" | grep -c 'for packages' )" "1"
+  out=$( run --adopt 2>&1 ); check "--adopt alone is refused" "$( print -r -- "${out}" | grep -c -- '--adopt goes with --drift' )" "1"
+}
+
+test_drift_adopt_asks () {
+  command -v python3 > /dev/null || return
+  adopt_home
+  local out
+  out=$( run_on_tty n --drift packages --adopt 2>&1 )
+  check "answering n to every question adds nothing" "$( [[ -e "${AF}/local.brew" ]] && echo written || echo none )" "none"
+  check "and it asked about each" "$( print -r -- "${out}" | grep -c 'Add .* to local' )" "3"
+  adopt_home
+  run_on_tty y --drift packages --adopt > /dev/null 2>&1
+  check "answering y adds them" "$( grep -c '^zzz-extra$' "${AF}/local.brew" )" "1"
+  adopt_home
+  out=$( run_on_tty a --drift packages --adopt 2>&1 )
+  check "answering a adds it and all that are left, without asking again" "$( print -r -- "${out}" | grep -c 'Add .* to local' )" "1"
+  check "and they are all added" "$( cat "${AF}"/local.brew "${AF}"/local.cask "${AF}"/local.tap 2> /dev/null | grep -c -E '^(zzz-extra|other-app|example/tap)$' )" "3"
+  adopt_home
+  run_on_tty q --drift packages --adopt > /dev/null 2>&1
+  check "answering q stops and adds nothing" "$( [[ -e "${AF}/local.brew" ]] && echo written || echo none )" "none"
+}
+
+test_doctor_fix () {
+  healthy_home
+  local cfg="${H}/.ussuri/config" out rc before after
+  print -r -- 'ZSH_THEME=good' > "${cfg}"
+  run --set ZSH_THEME better > /dev/null 2>&1
+  # Break things: a syntax error in the config (it has a good backup from the line above), loose permissions, a stale temp file, no p10k config
+  print -r -- 'if [ then' > "${cfg}"; chmod 666 "${cfg}"
+  print -r -- stale > "${cfg}.tmp.123"; touch -t 202001010000 "${cfg}.tmp.123"
+  print -r -- fresh > "${cfg}.tmp.456"
+  rm -f "${H}/.p10k.zsh"
+  before=$( cd "${H}" && find . -type f | sort | xargs ls -l 2> /dev/null | md5 2> /dev/null || find . -type f | sort | md5sum )
+  out=$( run --doctor 2>&1 ); rc=$?
+  after=$( cd "${H}" && find . -type f | sort | xargs ls -l 2> /dev/null | md5 2> /dev/null || find . -type f | sort | md5sum )
+  check "--doctor alone changes nothing" "${after}" "${before}"
+  check "and says some of it can be repaired" "$( print -r -- "${out}" | grep -c 'can be repaired safely' )" "1"
+  check "a syntax error is a failure" "${rc}" "1"
+  out=$( run --doctor --fix --dryrun 2>&1 )
+  after=$( cd "${H}" && find . -type f | sort | xargs ls -l 2> /dev/null | md5 2> /dev/null || find . -type f | sort | md5sum )
+  check "--fix --dryrun changes nothing" "${after}" "${before}"
+  check "but lists what it would do" "$( print -r -- "${out}" | grep -c '^  would ' )" "4"
+  out=$( run --doctor --fix 2>&1 ); rc=$?
+  check "--fix puts back the newest valid backup" "$( cat "${cfg}" )" "ZSH_THEME=good"
+  check "keeping the broken one" "$( grep -c 'if \[ then' "${cfg}.broken" )" "1"
+  check "makes the config not writable by others" "$( ls -l "${cfg}" | cut -c9 )" "-"
+  check "removes a stale temp file" "$( [[ -e "${cfg}.tmp.123" ]] && echo there || echo gone )" "gone"
+  check "but not one that may still be in use" "$( [[ -e "${cfg}.tmp.456" ]] && echo there || echo gone )" "there"
+  check "copies a missing p10k config" "$( [[ -f "${H}/.p10k.zsh" ]] && echo yes || echo no )" "yes"
+  check "says what it fixed" "$( print -r -- "${out}" | grep -c '^  fixed ' )" "4"
+  check "and the failure is gone, so the exit status is 0" "${rc}" "0"
+  check "the totals are updated" "$( print -r -- "${out}" | tail -1 | grep -c ' 0 failures' )" "1"
+  out=$( run --doctor --fix 2>&1 )
+  check "a second --fix has nothing left to repair, bar the fresh temp file" "$( print -r -- "${out}" | grep -c '^  fixed ' )" "0"
+  out=$( run --fix 2>&1 ); check "--fix alone is refused" "$( print -r -- "${out}" | grep -c -- '--fix goes with --doctor' )" "1"
+}
+
+test_backup_pruning_keeps_other_files () {
+  new_home
+  local cfg="${H}/.ussuri/config" n
+  print -r -- 'ZSH_THEME=x' > "${cfg}"
+  print -r -- 'edit to fix' > "${cfg}.rejected"
+  print -r -- 'broken' > "${cfg}.broken"
+  for n in 01 02 03 04 05 06 07 08 09 10 11 12; do
+    print -r -- "old ${n}" > "${H}/.ussuri/config.${n}_01_2026_00_00_00"
+    touch -t 2026010${n:1}0000 "${H}/.ussuri/config.${n}_01_2026_00_00_00" 2> /dev/null
+  done
+  run --set DO_VERBOSE true > /dev/null 2>&1
+  check "only the newest ten backups are kept" "$( nfiles "${H}/.ussuri/config.[0-9][0-9]_[0-9][0-9]_[0-9][0-9][0-9][0-9]_*" )" "10"
+  check "a rejected edit beside the config is not counted as one, or removed" "$( cat "${cfg}.rejected" )" "edit to fix"
+  check "nor a broken copy" "$( cat "${cfg}.broken" )" "broken"
+}
+
+test_doctor_fix_without_backup () {
+  healthy_home
+  local cfg="${H}/.ussuri/config" out rc
+  print -r -- 'if [ then' > "${cfg}"
+  out=$( run --doctor --fix 2>&1 ); rc=$?
+  check "a broken config with no valid backup is not touched" "$( cat "${cfg}" )" "if [ then"
+  check "it is not offered as a repair" "$( print -r -- "${out}" | grep -c 'put the newest valid backup' )" "0"
+  check "and is still a failure" "${rc}" "1"
+  print -r -- 'if [ also broken' > "${H}/.ussuri/config.01_01_2026_00_00_00"
+  out=$( run --doctor --fix 2>&1 )
+  check "a backup that is itself broken is not used" "$( print -r -- "${out}" | grep -c 'put the newest valid backup' )" "0"
+  print -r -- 'ZSH_THEME=old' > "${H}/.ussuri/config.02_01_2026_00_00_00"; touch -t 202601010000 "${H}/.ussuri/config.01_01_2026_00_00_00"; touch -t 202601020000 "${H}/.ussuri/config.02_01_2026_00_00_00"
+  run --doctor --fix > /dev/null 2>&1
+  check "the newest valid one is" "$( cat "${cfg}" )" "ZSH_THEME=old"
+}
+
+test_doctor_fix_layers () {
+  healthy_home
+  local prof="${H}/.ussuri/profiles/work/local.config" out
+  mkdir -p "${H}/.ussuri/profiles/work"
+  print -r -- 'ZSH_THEME=work' > "${prof}"
+  EXTRA_ENV=( PROFILE=work )
+  run --set ZSH_THEME better --profile work > /dev/null 2>&1
+  print -r -- 'if [ then' > "${prof}"; chmod 666 "${prof}"
+  out=$( run --doctor --fix 2>&1 )
+  check "a broken profile file is put back from its own backups" "$( grep -c '^ZSH_THEME=work$' "${prof}" )" "1"
+  check "and made not writable by others" "$( ls -l "${prof}" | cut -c9 )" "-"
+  EXTRA_ENV=()
+}
+
 test_doctor_config () {
   healthy_home
   local cfg="${H}/.ussuri/config" out

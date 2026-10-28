@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.1] - 2026-10-29
+
+### Added
+
+- --drift --adopt (-a): adds the packages that are installed but in no list to your local list, asking about each one (y, n, a for all that are left, q to stop), or without asking with --yes, or only showing with --dryrun. Taps go in local.tap, formulae in local.brew, casks in local.cask, and on Linux packages in the local.<ext> of the package manager; -M or -H puts them in that profile's or machine's list. A name already in the list is not added again, what was there is kept, a line says where the rest came from, and the list is backed up (packages-<ext>.<date>, newest ten) and replaced in one rename under the lock. Nothing is installed or removed. Without a terminal and without --yes or --dryrun it refuses. It is refused with --drift settings and without --drift
+- --doctor --fix (-Y): repairs what is small, local and reversible, checking afterwards that each repair worked and updating the totals and the exit status: a config, profile or machine file that others can write (chmod go-w); one with a syntax error, by putting back the newest backup that is valid zsh and keeping the broken file as <name>.broken (left alone, and still a failure, if there is none); a missing ~/.p10k.zsh, copied from files/p10k; and a temp file a --set, --edit or --adopt left behind once it is 10 minutes old. It installs nothing, fetches nothing and removes none of your files. --doctor without --fix still changes nothing, and says how many problems --fix could repair. --dryrun lists what it would do; it needs the lock. --fix is refused without --doctor
+
+### Fixed
+
+- The backups of the config were found and pruned with the glob config.*, which also matches config.rejected, config.broken and temp files beside it, so a rejected edit could be taken for a backup, or removed when there were more than ten. Only names with the date suffix are backups now
+
+## [1.7.0] - 2026-10-29
+
+### Added
+
+- Settings for one profile or machine: profiles/<PROFILE>/local.config and hosts/<MACHINE>/local.config next to the config, sourced after it (the profile, then the machine, so the machine wins, and the command line wins over all). They use the same layout as the package and plugin layers (local_layer_files gained a third argument, layers, that leaves out the every machine file, and it and check_layer_name now live above the config block because the config is read before the rest of the script). Two file checks and no processes when there are none. PROFILE and MACHINE are those of the environment or the config: -M and -H come after the config is read, so they choose the file to change but do not pull in that profile's settings for the run. A profile or machine name that could leave the directory is refused
+- -H|--host NAME: the machine for hosts/NAME, as -M is for the profile. With --set, --unset or --edit, -M or -H picks the file that is changed (profiles/<name>/local.config or hosts/<name>/local.config, started from a short header when it is new); both at once, or a name that is not usable, is refused. Backups of those files are config-profile-<name>.<date> and config-host-<name>.<date>, the newest ten of each, apart from the config's own. --get names the file that a value comes from, the last of the config and its layers to set it, and --get with no name includes names only a layer sets. --doctor checks the layer files (syntax, and writable by others)
+- -K|--edit: opens a copy of the config (or a layer, with -M or -H) in $VISUAL, $EDITOR or vi, and replaces the file only if the result is valid zsh. A syntax error leaves it as it was and the edit in <file>.rejected; a name that is not one of ussuri's settings is noted but kept; an edit that changes nothing changes nothing; the old file is backed up; a missing config starts from the template. The editor may have arguments. --dryrun shows what would run. Tested with editor scripts, not an interactive editor
+- Tab completion for the script (files/completions/_ussuri, put on the fpath at login by add_completions_dir, which does one directory test and no processes): the switches with their descriptions, the settings after --set, --unset and --get, true and false for a true/false setting, the engines for PROMPT_ENGINE, profile and machine names from the layers there are, and the tools, plugin managers and engines the other switches take. Checked in a real terminal (a pseudo terminal with compinit): --se completes to --set, PROMPT_T to the two PROMPT_T settings, and the values to true and false. The tests fail if its list of settings or switches goes out of step with the script
+
+### Changed
+
+- A bug found on the way: add_completions_dir first used typeset -U fpath, which inside a function makes a local copy, so the fpath was not changed. It is typeset -gU
+
 ## [1.6.9] - 2026-10-29
 
 ### Added
