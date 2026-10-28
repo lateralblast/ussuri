@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.7.1
+# Version: 1.7.2
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -26,6 +26,7 @@ HOSTNAME="${HOST}"
 typeset -U path
 
 zmodload zsh/datetime 2> /dev/null
+STARTUP_T0="${EPOCHREALTIME}"
 if (( $+builtins[strftime] )); then
   strftime -s DATE '%a %d %b %Y %T %Z' "${EPOCHSECONDS}"
 else
@@ -71,6 +72,50 @@ local_layer_files () {
       LOCAL_LAYERS+=( "${f}" )
     fi
   done
+}
+
+# One step of a login. With --timing it is timed, otherwise this is the call and nothing else (no process, one
+# function call), so the steps of the login can be wrapped without costing anything: phase NAME COMMAND [ARGS]
+
+phase () {
+  if [[ "${DO_TIMING}" != "true" ]]; then
+    "${@[2,-1]}"
+    return
+  fi
+  local started="${EPOCHREALTIME}" result
+  "${@[2,-1]}"
+  result=$?
+  TIMING_NAMES+=( "$1" )
+  TIMING_SECONDS+=( $(( EPOCHREALTIME - started )) )
+  return ${result}
+}
+
+# The report of --timing: each step of the login that ran, in milliseconds on the shell's own clock, what the
+# steps do not account for (reading the config, the switches, the defaults, the lock), the total, and the slowest
+
+print_timing () {
+  [[ "${DO_TIMING}" == "true" ]] || return 0
+  if [[ -z "${STARTUP_T0}" ]]; then
+    print -r -- "--timing needs the zsh/datetime module, which is not available"
+    return 1
+  fi
+  local total=$(( (EPOCHREALTIME - STARTUP_T0) * 1000 )) steps=0 ms slowest="" slowest_ms=0 i
+  print -r -- "Startup timing (milliseconds, from the start of the script)"
+  for (( i = 1; i <= ${#TIMING_NAMES}; i++ )); do
+    ms=$(( TIMING_SECONDS[i] * 1000 ))
+    steps=$(( steps + ms ))
+    printf '  %-18s %8.1f\n' "${TIMING_NAMES[i]}" "${ms}"
+    if (( ms > slowest_ms )); then
+      slowest="${TIMING_NAMES[i]}"
+      slowest_ms=${ms}
+    fi
+  done
+  printf '  %-18s %8.1f\n' "everything else" $(( total - steps ))
+  printf '  %-18s %8.1f\n' "total" "${total}"
+  if [[ -n "${slowest}" ]]; then
+    printf 'Slowest: %s (%.1f ms)\n' "${slowest}" "${slowest_ms}"
+  fi
+  print -r -- "Plugins that zinit defers (turbo mode) load after the prompt and are not counted. Run it again for the cost of a normal login: the first run does the one off work."
 }
 
 if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
@@ -1650,6 +1695,7 @@ print_help () {
     -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
     -x|--doctor       Check environment   (read only; with --fix, repairs the safe problems)
     -Y|--fix          With --doctor: repair what can be repaired safely (permissions, a missing p10k config, leftover temp files, a broken config)
+    -j|--timing       Run as a login and time each step of it
     -a|--adopt        With --drift: add the packages that are installed but in no list to your local list, asking about each
     -z|--zinit        Do zinit check      (default: ${DO_ZINIT_CHECK})
     -Z|--zshtheme     Set zsh theme       (default: ${ZSH_THEME})
@@ -4304,6 +4350,9 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   CONFIG_UNSETS=()
   CONFIG_GETS=()
   DO_CONFIG_EDIT="false"
+  DO_TIMING="false"
+  TIMING_NAMES=()
+  TIMING_SECONDS=()
   DO_ADOPT="false"
   DO_FIX="false"
   PROFILE_SWITCH="false"
@@ -4337,6 +4386,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --set -Q          --unset -q         --get -w
       --host -H         --edit -K
       --adopt -a        --fix -Y
+      --timing -j
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -4392,7 +4442,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -4502,6 +4552,11 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
         -a)
           DO_ADOPT="true"
+          shift OPTS
+          ;;
+        -j)
+          DO_TIMING="true"
+          set_inline_defaults
           shift OPTS
           ;;
         -Y)
@@ -4786,7 +4841,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Do sudoers
 
   if [ "${DO_SUDOERS_CHECK}" = "true" ]; then
-    check_sudoers_config
+    phase sudoers check_sudoers_config
   fi
 
   # Do install
@@ -4801,7 +4856,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Do check defaults
 
   if [ "${DO_DEFAULTS_CHECK}" = "true" ]; then
-    check_defaults
+    phase defaults check_defaults
   fi
 
   # Do backups, rollback and uninstall
@@ -4838,7 +4893,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     exit
   fi
   if [ "${DO_DOTFILES_CHECK}" = "true" ]; then
-    check_dotfiles_config
+    phase dotfiles check_dotfiles_config
   fi
 
   # Do check for updates
@@ -4857,66 +4912,66 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   if is_osx; then
     if [ "${DO_BREW_CHECK}" = "true" ]; then
-      check_brew_config
+      phase brew check_brew_config
     fi
   fi
 
   # Do package check
 
   if [ "${DO_PACKAGE_CHECK}" = "true" ]; then
-    check_package_config
+    phase packages check_package_config
   fi
 
   # Do font(s) check
 
   if [ "${DO_FONTS_CHECK}" = "true" ]; then
-    check_fonts_config
+    phase fonts check_fonts_config
   fi
 
   if [ "${DO_POSH_CHECK}" = "true" ]; then
-    check_posh_config
+    phase posh check_posh_config
   fi
 
   # Do zinit checks
 
   if [ "${DO_ZINIT_CHECK}" = "true" ]; then
-    check_zinit_config
+    phase zinit check_zinit_config
   fi
 
   # Do pyenv checks
 
   if [ "${DO_PYENV_CHECK}" = "true" ]; then
-    check_pyenv_config
+    phase pyenv check_pyenv_config
   fi
 
   # Do rbenv checks
 
   if [ "${DO_RBENV_CHECK}" = "true" ]; then
-    check_rbenv_config
+    phase rbenv check_rbenv_config
   fi
 
   # Do language and tool managers (fnm, rustup, uv, mise, atuin)
 
   if [ "${DO_TOOLS_CHECK}" = "true" ]; then
-    check_tools_config
+    phase tools check_tools_config
   fi
 
   # Do zoxide (after the plugin lists, which provide compdef for its completions)
 
   if [ "${DO_ZOXIDE_CHECK}" = "true" ]; then
-    check_zoxide_config
+    phase zoxide check_zoxide_config
   fi
 
   # Do Powerlevel10k config
 
   if [ "${DO_P10K_CHECK}" = "true" ]; then
-    check_p10k_config
+    phase p10k check_p10k_config
   fi
 
   # Do oh-my-zsh config
 
   if [ "${DO_ZOSH_CHECK}" = "true" ]; then
-    check_zosh_config
+    phase zosh check_zosh_config
   fi
 
   # Handle zsh theme
@@ -4934,7 +4989,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Update package list
 
   if [ "${DO_UPDATE_LIST}" = "true" ]; then
-    update_package_list
+    phase package-list update_package_list
   fi
 
   # Remove lock file
@@ -4944,24 +4999,24 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Do LDFLAGS check
 
   if [ "${DO_LDFLAGS_CHECK}" = "true" ]; then
-    check_ldflags_config
+    phase ldflags check_ldflags_config
   fi
 
   # Do PKGCONFIG check
 
   if [ "${DO_PKGCONFIG_CHECK}" = "true" ]; then
-    check_pkgconfig_config
+    phase pkgconfig check_pkgconfig_config
   fi
 
   # Do CPPFLAGS check
 
   if [ "${DO_CPPFLAGS_CHECK}" = "true" ]; then
-    check_cppflags_config
+    phase cppflags check_cppflags_config
   fi
 
   # Say if there is a newer version (off unless UPDATE_HINT=true)
 
-  check_update_hint
+  phase update-hint check_update_hint
 
   # Change to start directory
 
@@ -4974,6 +5029,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       cd "${INIT_DIR}"
     fi
   fi
+
+  # --timing: the report, last, so it covers everything above
+
+  print_timing
 else
   release_lock
 fi

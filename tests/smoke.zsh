@@ -1330,6 +1330,29 @@ test_linux_login_starts_no_processes () {
   TEST_PATH_PREFIX=""
 }
 
+test_timing () {
+  healthy_home
+  local out
+  out=$( run --timing 2>&1 )
+  check "--timing prints the report" "$( print -r -- "${out}" | grep -c '^Startup timing' )" "1"
+  check "with a line for each step of the login that ran" "$( print -r -- "${out}" | grep -c -E '^  (defaults|zinit|pyenv|rbenv|p10k|ldflags|pkgconfig|cppflags) +[0-9]+\.[0-9]$' )" "8"
+  check "and what the steps do not cover" "$( print -r -- "${out}" | grep -c -E '^  everything else +[0-9]+\.[0-9]$' )" "1"
+  check "and the total" "$( print -r -- "${out}" | grep -c -E '^  total +[0-9]+\.[0-9]$' )" "1"
+  check "and the slowest step" "$( print -r -- "${out}" | grep -c -E '^Slowest: [a-z0-9-]+ \([0-9]+\.[0-9] ms\)$' )" "1"
+  check "the steps and the rest add up to the total" "$( print -r -- "${out}" | awk '/^  total/ {t=$2} /^  [a-z]/ && !/total/ {s+=$NF} END {d=s-t; if (d<0) d=-d; print (d < 0.6) ? "yes" : "no"}' )" "yes"
+  check "nothing is timed on a normal login" "$( run 2>&1 | grep -c 'Startup timing' )" "0"
+  check "--timing --dryrun works too" "$( run --timing --dryrun 2>&1 | grep -c '^Startup timing' )" "1"
+  check "the short switch is the same" "$( run -j 2>&1 | grep -c '^Startup timing' )" "1"
+  # phase on its own: the call and its status, and the time only when asked for
+  load_function phase
+  local result
+  result=$( DO_TIMING=false; TIMING_NAMES=(); f () { print -r -- "ran $*"; return 3 }; phase step f a b; print -r -- "rc=$? timed=${#TIMING_NAMES}" )
+  check "phase just runs the command, with its arguments and its status, when not timing" "${result}" "ran a b
+rc=3 timed=0"
+  result=$( zmodload zsh/datetime; DO_TIMING=true; TIMING_NAMES=(); TIMING_SECONDS=(); f () { return 4 }; phase step f; print -r -- "rc=$? timed=${#TIMING_NAMES} name=${TIMING_NAMES[1]} seconds=$(( TIMING_SECONDS[1] >= 0 ))" )
+  check "and records the step and keeps the status when timing" "${result}" "rc=4 timed=1 name=step seconds=1"
+}
+
 test_doctor_config () {
   healthy_home
   local cfg="${H}/.ussuri/config" out

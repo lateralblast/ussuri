@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.7.1
+Current Version: 1.7.2
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -115,6 +115,26 @@ is tracked in `~/.ussuri` and skipped otherwise: the OS X defaults (a stamp, `DE
 `brew shellenv`, `mise activate` and `zoxide init` (a cache, rebuilt when the tool changes; `DO_CACHE_INIT=false` turns it off), and the package
 lists (a checksum, so only a changed list is reprocessed). Anything that touches the network on a login is opt-in and runs in the background.
 
+**Measuring it.** `./ussuri.zsh --timing` runs the login path (as `-i` does) and prints how long each step took, on the shell's own clock, with no
+processes started to measure it:
+
+```
+Startup timing (milliseconds, from the start of the script)
+  defaults              0.4
+  zinit                 0.2
+  pyenv                 0.2
+  zoxide                3.5
+  everything else      27.2
+  total                31.8
+Slowest: zoxide (3.5 ms)
+```
+
+Run it twice: the first run does the one off work (the defaults, the caches), which is what the stamps and caches exist to avoid. "Everything else" is what is
+not a step of its own: reading the config and its layers, the switches, the defaults and the lock. Plugins that zinit loads after the prompt (turbo mode) are
+not counted. Outside a run of `--timing` the steps are called through one small function and nothing else, so it costs a function call each. The rule that a
+login starts no processes is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of the ordinary utilities (`date`,
+`dirname`, `grep`, `sed`, `awk`, `find`, `cat`...), runs a steady state login on macOS and on Linux, and fails if any of them was started.
+
 **Locking.** Steps that install or change things take a lock (`~/.ussuri.lock`, a directory, taken atomically and considered stale after 10
 minutes), so several shells opened at once don't race. A shell that doesn't get the lock skips those steps. `--force` clears the lock and
 ignores the stamps.
@@ -180,6 +200,7 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
     -W|--tool NAME    Install a tool      (fnm, rustup, uv, mise or atuin)
     -x|--doctor       Check environment   (read only; with --fix, repairs the safe problems)
     -Y|--fix          With --doctor: repair what can be repaired safely (permissions, a missing p10k config, leftover temp files, a broken config)
+    -j|--timing       Run as a login and time each step of it
     -a|--adopt        With --drift: add the packages that are installed but in no list to your local list, asking about each
     -z|--zinit        Do zinit check      (default: false)
     -Z|--zshtheme     Set zsh theme       (default: robbyrussell)
@@ -216,6 +237,7 @@ The switches by what they are for:
 | Looking without touching (read only) | `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
 | Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all, `-K` edit the config, `-H NAME` a machine |
 | What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
+| Measuring | `-j` run as a login and time each step of it |
 | Repairing and recording | `-Y` with `--doctor` repairs the safe problems, `-a` with `--drift` adds installed packages to your local list |
 | Undoing | `-J [N]` undo a run of defaults changes, `-u` unlink dotfiles, `-R`/`-X` restore a `.zshrc` |
 | How it runs | `-t` dry run, `-v` verbose, `-c` confirm, `-y` yes, `-F` force, `-d` debug, `-N` no environment setup, `-b` build language versions |
