@@ -1,0 +1,158 @@
+#compdef ussuri.zsh ussuri
+
+# Completion for ussuri.zsh: its switches, and for --set, --unset and --get the settings it knows (and the
+# values a true/false setting or PROMPT_ENGINE takes). Profile and machine names are the layers that exist in
+# ~/.ussuri. The list of settings is the one in the config template (print_config_template in ussuri.zsh) and
+# the switches are those of the script: tests/smoke.zsh fails if either goes out of step with this file.
+
+_ussuri_settings () {
+  local -a names
+  names=(
+    ASSUME_YES
+    ATUIN_BIND_UP
+    ATUIN_IMPORT
+    BREW_INSTALL_SHA256
+    DEFAULTS_MAX_AGE
+    DO_CACHE_INIT
+    DO_DEFAULTS_CHECK
+    DO_DOTFILES_CHECK
+    DO_FONTS_CHECK
+    DO_GNOME_DEFAULTS
+    DO_HISTORY
+    DO_PACKAGE_CHECK
+    DO_SUDOERS_CHECK
+    DO_VERBOSE
+    FNM_INSTALL_SHA256
+    FNM_NODE
+    GO_HOME
+    HISTORY_SIZE
+    INSTALL_ATUIN
+    INSTALL_FNM
+    INSTALL_FONTS
+    INSTALL_MISE
+    INSTALL_OZSH
+    INSTALL_P10K
+    INSTALL_POSH
+    INSTALL_PYENV
+    INSTALL_RBENV
+    INSTALL_RUSTUP
+    INSTALL_UV
+    INSTALL_ZINIT
+    INSTALL_ZOXIDE
+    MACHINE
+    MISE_INSTALL_SHA256
+    MISE_TOOLS
+    POSH_INSTALL_SHA256
+    PROFILE
+    PROMPT_ENGINE
+    PROMPT_TOP_ELEMENTS
+    PROMPT_TOP_RIGHT_ELEMENTS
+    PROMPT_TWO_LINE
+    PYENV_REF
+    PYTHON_VER
+    RBENV_REF
+    RUBY_VER
+    RUSTUP_INSTALL_SHA256
+    RUSTUP_TOOLCHAIN_WANTED
+    SHARE_HISTORY
+    START_DIR
+    TRANSMISSION_BLOCKLIST_URL
+    UPDATE_HINT
+    UPDATE_SHA256
+    UV_INSTALL_SHA256
+    UV_PYTHON
+    ZINIT_REF
+    ZINIT_TURBO
+    ZSH_THEME
+  )
+  _describe -t settings 'setting' names
+}
+
+# Values worth offering for the setting just typed: true or false for the ones that are, the engines for PROMPT_ENGINE
+_ussuri_values () {
+  local name="${words[CURRENT-1]}"
+  case "${name}" in
+    PROMPT_ENGINE) compadd p10k posh none ;;
+    ASSUME_YES|ATUIN_BIND_UP|ATUIN_IMPORT|DO_CACHE_INIT|DO_DEFAULTS_CHECK|DO_DOTFILES_CHECK|DO_FONTS_CHECK|DO_GNOME_DEFAULTS|DO_HISTORY|DO_PACKAGE_CHECK|DO_SUDOERS_CHECK|DO_VERBOSE|INSTALL_ATUIN|INSTALL_FNM|INSTALL_FONTS|INSTALL_MISE|INSTALL_OZSH|INSTALL_P10K|INSTALL_POSH|INSTALL_PYENV|INSTALL_RBENV|INSTALL_RUSTUP|INSTALL_UV|INSTALL_ZINIT|INSTALL_ZOXIDE|PROMPT_TWO_LINE|SHARE_HISTORY|UPDATE_HINT|ZINIT_TURBO) compadd true false ;;
+    *) _message 'value' ;;
+  esac
+}
+
+# Profile and machine names that have a layer anywhere under ~/.ussuri
+_ussuri_profiles () {
+  local -a found
+  found=( ${HOME}/.ussuri/{,dotfiles/,files/packages/,files/zinit/}profiles/*(N/:t) )
+  compadd -a -- found
+}
+
+_ussuri_hosts () {
+  local -a found
+  found=( ${HOME}/.ussuri/{,dotfiles/,files/packages/,files/zinit/}hosts/*(N/:t) )
+  compadd -a -- found
+}
+
+# Zsh themes are the files of the oh-my-zsh themes directory, when there is one
+_ussuri_themes () {
+  local -a found
+  found=( ${HOME}/.oh-my-zsh/themes/*.zsh-theme(N:t:r) )
+  compadd -a -- found
+}
+
+_ussuri () {
+  _arguments -s -S \
+    '(-A --doall)'{-A,--doall}'[do everything that is enabled]' \
+    '(-B --backups)'{-B,--backups}'[list the .zshrc backups]' \
+    '(-b --build --compile)'{-b,--build,--compile}'[build language versions]' \
+    '(-C --check)'{-C,--check}'[check for a newer version]' \
+    '(-c --confirm)'{-c,--confirm}'[confirm each command]' \
+    '(-D --default --defaults)'{-D,--default,--defaults}'[apply the system defaults]' \
+    '(-d --debug)'{-d,--debug}'[turn on debug output]' \
+    '(-E --prompt --engine)'{-E,--prompt,--engine}'[prompt engine]:engine:(p10k posh none)' \
+    '(-e --changes --changelog)'{-e,--changes,--changelog}'[print the changelog]' \
+    '(-F --force)'{-F,--force}'[force the action]' \
+    '(-f --font --fonts)'{-f,--font,--fonts}'[install the fonts]' \
+    '(-G --drift)'{-G,--drift}'[report drift from the defaults and package lists]:: :(settings packages all)' \
+    '(-g --gopath --gohome)'{-g,--gopath,--gohome}'[set GOPATH]:directory:_files -/' \
+    '(-H --host)'{-H,--host}'[machine name (hosts/NAME)]:machine:_ussuri_hosts' \
+    '(-h --help --usage)'{-h,--help,--usage}'[print usage]' \
+    '(-I --install)'{-I,--install}'[install as ~/.zshrc]' \
+    '(-i --inline)'{-i,--inline}'[use the inline (login) defaults]' \
+    '(-J --defaults-undo)'{-J,--defaults-undo}'[undo a run of defaults changes]:: :(list 1 2 3)' \
+    '(-K --edit)'{-K,--edit}'[edit the config]' \
+    '(-k --config)'{-k,--config}'[create the config file]' \
+    '(-L --dotfiles)'{-L,--dotfiles}'[link the dotfiles]' \
+    '(-l --location --startdir)'{-l,--location,--startdir}'[set the start directory]:directory:_files -/' \
+    '(-M --profile)'{-M,--profile}'[profile (profiles/NAME)]:profile:_ussuri_profiles' \
+    '(-m --manager --plugin)'{-m,--manager,--plugin}'[plugin manager]:manager:(zinit oh-my-zsh)' \
+    '(-N --noenv)'{-N,--noenv}'[do not set up the environment]' \
+    '(-n --notheme)'{-n,--notheme}'[no zsh theme]' \
+    '(-O --ohmyzsh --zosh)'{-O,--ohmyzsh,--zosh}'[install oh my zsh]' \
+    '(-o --ohmyposh --posh)'{-o,--ohmyposh,--posh}'[install oh my posh]' \
+    '(-P --package --packages)'{-P,--package,--packages}'[do the packages check]' \
+    '(-p --pyenv)'{-p,--pyenv}'[do the pyenv check]' \
+    '(-Q --set)'{-Q,--set}'[save a setting in the config]:setting:_ussuri_settings:value:_ussuri_values' \
+    '(-q --unset)'{-q,--unset}'[remove a setting from the config]:setting:_ussuri_settings' \
+    '(-R --rollback)'{-R,--rollback}'[restore a .zshrc backup]:: :(1 2 3)' \
+    '(-r --rbenv)'{-r,--rbenv}'[do the rbenv check]' \
+    '(-S --sudoersentry)'{-S,--sudoersentry}'[set the sudoers entry]:sudoers entry:' \
+    '(-s --sudoers)'{-s,--sudoers}'[do the sudoers check]' \
+    '(-T --p10k)'{-T,--p10k}'[do the p10k config]' \
+    '(-t --test --dryrun)'{-t,--test,--dryrun}'[dry run: show commands, run none]' \
+    '(-U --update)'{-U,--update}'[update the script]' \
+    '(-u --unlink)'{-u,--unlink}'[unlink the dotfiles]' \
+    '(-V --version)'{-V,--version}'[print the version]' \
+    '(-v --verbose)'{-v,--verbose}'[verbose output]' \
+    '(-W --tool)'{-W,--tool}'[install a tool]:tool:(fnm rustup uv mise atuin)' \
+    '(-w --get)'{-w,--get}'[show a setting and where it comes from]:: :_ussuri_settings' \
+    '(-X --uninstall)'{-X,--uninstall}'[restore the .zshrc from before ussuri]' \
+    '(-x --doctor)'{-x,--doctor}'[check the environment (read only)]' \
+    '(-y --yes --assume-yes --assumeyes)'{-y,--yes,--assume-yes,--assumeyes}'[answer yes, no prompts]' \
+    '(-Z --zshtheme)'{-Z,--zshtheme}'[set the zsh theme]:theme:_ussuri_themes' \
+    '(-z --zinit)'{-z,--zinit}'[do the zinit check]' \
+    '(-j --timing)'{-j,--timing}'[run as a login and time each step of it]' \
+    '(-a --adopt)'{-a,--adopt}'[with --drift: add installed packages to your local list]' \
+    '(-Y --fix)'{-Y,--fix}'[with --doctor: repair what can be repaired safely]' \
+    '*:: :_nothing'
+}
+
+_ussuri "$@"
