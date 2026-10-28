@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.8] - 2026-10-29
+
+### Added
+
+- Oh My Zsh alias snippets for what the machine has, in both plugin lists, so zsh-you-should-use has more to remind you of: brew (if `brew` is on the PATH), docker and docker-compose (if the command is), systemd (on Linux, if systemctl is), debian (apt aliases, on Debian, Ubuntu, Mint and anything else like debian) and dnf (on Fedora and its derivatives). Each is checked once, as the list is read. Each snippet was loaded in a throwaway zinit with the real plugin: all six load without errors and define aliases (brew 42, docker 46, docker-compose 31, systemd 129, debian 33, dnf 19). Existing installs get them with --update or --install
+
+### Not added
+
+- OMZP::macos: as a zinit snippet it sources two files that are not downloaded with it (music and spotify) and prints two errors on every shell. The svn ice that fetches the whole plugin needs Subversion, which is not installed here and which GitHub no longer serves. Its functions (ofd, cdf, pfd...) are not loaded
+
 ## [1.6.7] - 2026-10-29
 
 ### Added

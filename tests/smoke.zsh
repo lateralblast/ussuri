@@ -1596,6 +1596,52 @@ test_you_should_use () {
   check "turbo: compinit is still the last line" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit' )" "1"
 }
 
+test_tool_snippets () {
+  new_home
+  print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"
+  local turbo row osid like want snip tool
+  local have_docker="no"
+  # The script puts /usr/local/bin and friends on the PATH itself, so a docker installed there counts
+  [[ -n "$( env -i PATH=/usr/local/bin:/usr/local/sbin:/opt/local/bin:/opt/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin sh -c 'command -v docker' )" ]] && have_docker="host"
+  # A guarded line is tested with the tool stubbed in and then without it
+  stub docker "exit 0"
+  stub docker-compose "exit 0"
+  stub systemctl "exit 0"
+  for turbo in true false; do
+    : > "${LOG}"
+    EXTRA_ENV=( ZINIT_TURBO="${turbo}" )
+    run --zinit > /dev/null 2>&1
+    for snip in brew docker docker-compose; do
+      check "turbo=${turbo}: ${snip} snippet when the command exists (macOS)" "$( grep -c "snippet OMZP::${snip}\$" "${LOG}" )" "1"
+    done
+    check "turbo=${turbo}: no systemd snippet on macOS, though systemctl is there" "$( grep -c 'OMZP::systemd' "${LOG}" )" "0"
+    check "turbo=${turbo}: no debian or dnf snippet on macOS" "$( grep -c -E 'OMZP::(debian|dnf)' "${LOG}" )" "0"
+    check "turbo=${turbo}: no macos snippet (it needs files a snippet does not fetch)" "$( grep -c 'OMZP::macos' "${LOG}" )" "0"
+    # OS release (ID|ID_LIKE|snippet that loads|snippet that does not)
+    for row in 'ubuntu|debian|debian|dnf' 'linuxmint|ubuntu debian|debian|dnf' 'fedora||dnf|debian' 'rocky|rhel fedora|dnf|debian' 'arch||none|debian'; do
+      osid="${row%%|*}"; like="${${row#*|}%%|*}"; want="${${row#*|*|}%%|*}"; snip="${row##*|}"
+      print -r -- "ID=${osid}" > "${TMP}/os-release"
+      [[ -n "${like}" ]] && print -r -- "ID_LIKE=\"${like}\"" >> "${TMP}/os-release"
+      : > "${LOG}"
+      EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ZINIT_TURBO="${turbo}" )
+      run --zinit > /dev/null 2>&1
+      [[ "${want}" != none ]] && check "turbo=${turbo}: ${want} snippet on ${osid}${like:+ (like ${like})}" "$( grep -c "snippet OMZP::${want}\$" "${LOG}" )" "1"
+      check "turbo=${turbo}: no ${snip} snippet on ${osid}" "$( grep -c "OMZP::${snip}\$" "${LOG}" )" "0"
+      check "turbo=${turbo}: systemd snippet on ${osid} (systemctl is there)" "$( grep -c 'snippet OMZP::systemd$' "${LOG}" )" "1"
+    done
+  done
+  rm -f "${STUBS}/docker" "${STUBS}/docker-compose" "${STUBS}/systemctl"
+  : > "${LOG}"
+  EXTRA_ENV=( ZINIT_TURBO=true )
+  run --zinit > /dev/null 2>&1
+  [[ "${have_docker}" == no ]] && check "no docker snippet when docker is not there" "$( grep -c 'OMZP::docker$' "${LOG}" )" "0"
+  check "brew is still loaded (its stub is there)" "$( grep -c 'snippet OMZP::brew$' "${LOG}" )" "1"
+  EXTRA_ENV=()
+  for tool in zinit.zsh zinit-turbo.zsh; do
+    check "${tool}: every guarded snippet is on one line with its guard" "$( grep -c -E '^if .*; then .*snippet OMZP::(brew|docker|docker-compose|systemd|debian|dnf); fi$' "${ROOT}/files/zinit/${tool}" )" "6"
+  done
+}
+
 test_zoxide () {
   new_home
   local f state
