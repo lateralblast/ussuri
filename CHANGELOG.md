@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.2] - 2026-10-29
+
+### Added
+
+- -j|--timing: runs the login path (as -i does) and prints how long each step took, in milliseconds on the shell's own clock (EPOCHREALTIME, no process is started to measure it), in the order they ran, then what the steps do not cover (reading the config and its layers, the switches, the defaults, the lock), the total from the start of the script, and the slowest step. The steps are the ones the login already ran: defaults, brew, packages, fonts, posh, zinit, pyenv, rbenv, tools, zoxide, p10k, zosh, ldflags, pkgconfig, cppflags, the package list, the update hint, dotfiles, sudoers. Each is now called through phase, which is the call and nothing else (one function call, no process) unless --timing is on. Plugins deferred by zinit's turbo mode load after the prompt and are not counted
+- A test that the rule "a login starts no processes" holds: logging wrappers go in front of the ordinary utilities (awk, basename, cat, cp, cut, date, dirname, find, grep, head, ls, mkdir, mv, readlink, rm, sed, sort, stat, tail, tar, touch, tr, uname, wc and others), and a steady state login, the third in a sandbox, must start none of them, on macOS and on Linux. The same wrappers are checked to log a utility that is run, and a login with work to do (nothing stamped) is checked to start some, so the test cannot pass by watching nothing. It does not see a subshell or a builtin, which are not processes of these kinds, nor a command that is not on the list
+
 ## [1.7.1] - 2026-10-29
 
 ### Added
