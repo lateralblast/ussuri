@@ -1642,6 +1642,32 @@ test_tool_snippets () {
   done
 }
 
+test_common_aliases () {
+  local list name out
+  for name in zinit.zsh zinit-turbo.zsh; do
+    list="${ROOT}/files/zinit/${name}"
+    check "${name}: loads common-aliases" "$( grep -c 'zinit snippet OMZP::common-aliases$' "${list}" )" "1"
+  done
+  check "turbo: the marks run as the snippet's atinit and atload, in its own deferred step" "$( grep -c -E 'ice wait lucid atinit"mark_aliases" atload"ignore_new_aliases"; zinit snippet OMZP::common-aliases$' "${ROOT}/files/zinit/zinit-turbo.zsh" )" "1"
+  check "eager: marks the aliases before the snippet and ignores the new ones after it" "$( grep -B1 -A1 'zinit snippet OMZP::common-aliases$' "${ROOT}/files/zinit/zinit.zsh" | grep -v '^--' | tr '\n' ' ' )" "mark_aliases zinit snippet OMZP::common-aliases ignore_new_aliases "
+  load_function mark_aliases
+  load_function ignore_new_aliases
+  out=$( typeset -ga ALIASES_MARK GALIASES_MARK
+    alias before="echo before"; alias -g BG="| cat"
+    YSU_IGNORED_ALIASES=( mine ); YSU_IGNORED_GLOBAL_ALIASES=( MYG )
+    mark_aliases
+    alias ll="ls -l"; alias l="ls"; alias -g HH="| head"
+    ignore_new_aliases
+    local -a plain=( ${(o)YSU_IGNORED_ALIASES} ) global=( ${(o)YSU_IGNORED_GLOBAL_ALIASES} )
+    print -r -- "${plain}|${global}" )
+  check "only the aliases added after the mark are ignored, yours are kept, and global ones are handled too" "${out}" "l ll mine|HH MYG"
+  out=$( typeset -ga ALIASES_MARK GALIASES_MARK
+    mark_aliases
+    ignore_new_aliases
+    print -r -- "${#YSU_IGNORED_ALIASES}|${#YSU_IGNORED_GLOBAL_ALIASES}" )
+  check "nothing new, nothing ignored" "${out}" "0|0"
+}
+
 test_zoxide () {
   new_home
   local f state

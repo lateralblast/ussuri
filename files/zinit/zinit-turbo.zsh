@@ -16,6 +16,9 @@ zinit ice wait lucid; zinit light MichaelAquilina/zsh-you-should-use
 zinit ice wait lucid; zinit snippet OMZP::git
 zinit ice wait lucid; zinit snippet OMZP::sudo
 if os_is_like arch; then zinit ice wait lucid; zinit snippet OMZP::archlinux; fi
+# common-aliases: many short aliases (l, ll, la, H, T, G...). zsh-you-should-use is told to leave them alone,
+# or it would mention them all the time. The aliases still work
+zinit ice wait lucid atinit"mark_aliases" atload"ignore_new_aliases"; zinit snippet OMZP::common-aliases
 # Aliases for what this machine has, each checked once as this list is read: brew, docker and docker-compose if the
 # command is on the PATH, systemd where systemctl is (Linux), and the apt (debian, ubuntu, mint...) and dnf (fedora)
 # ones on those distributions. OMZP::macos is not loaded: it sources two more files (music, spotify) that a zinit
