@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.6.5
+# Version: 1.6.6
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1447,8 +1447,8 @@ print_help () {
     -h|--help         Print usage
     -V|--version      Print version
     -e|--changelog    Print changelog
-    -A|--doall        Do all fuction (where set to true)
-    -i|--inline       Set inline defaults when not runing inline mode
+    -A|--doall        Do all function (where set to true)
+    -i|--inline       Set inline defaults when not running inline mode
     -I|--install      Installs ${SCRIPT_NAME} as: ${HOME_DIR}/.zshrc
     -b|--build        Build sources       (default: ${DO_BUILD})
     -c|--confirm      Confirm commands    (default: ${DO_CONFIRM})
@@ -1461,6 +1461,9 @@ print_help () {
     -g|--gopath       Set GOPATH          (default: ${GO_HOME})
     -G|--drift [settings|packages|all]  Report what differs from the defaults and the package lists (read only)
     -k|--config       Create config file  (${CONFIG_FILE})
+    --set NAME VALUE  Save a setting in the config file, for every new shell
+    --unset NAME      Remove a setting from the config file
+    --get [NAME]      Show a setting (default: all) and where it comes from
     -J|--defaults-undo [N|list]  Undo the Nth newest run of defaults changes (default: newest)
     -l|--location     Set start dir       (default: ${START_DIR})
     -B|--backups      List .zshrc backups
@@ -3091,6 +3094,213 @@ init_config () {
   fi
 }
 
+# Change a setting in the config file (--set, --unset, --get). The config is what the script sources at the
+# top of every login, so a setting saved there applies from the next shell with no edit to the script (which
+# --update replaces). Names are the settings the template lists (--force allows any other upper case name),
+# a value is written quoted and is never evaluated here, and the file is replaced with one rename so a shell
+# starting at that moment reads the old file or the new one, never half of one
+
+typeset -ga CONFIG_NEW_LINES CONFIG_PRESET
+typeset -gA CONFIG_EXAMPLE
+
+# The settings the template lists, with the example value it shows for each
+
+load_config_names () {
+  local line
+  CONFIG_EXAMPLE=()
+  for line in "${(@f)$( print_config_template )}"; do
+    if [[ "${line}" =~ '^#?([A-Z][A-Z0-9_]*)=([^ #]*)' ]]; then
+      CONFIG_EXAMPLE[${match[1]}]="${match[2]}"
+    fi
+  done
+}
+
+# Is this a setting name we will write, and a value it accepts? Prints why not
+
+check_config_setting () {
+  local name="$1" value="$2" example
+  if [[ ! "${name}" =~ '^[A-Z][A-Z0-9_]*$' ]]; then
+    print -u2 -r -- "Error:          '${name}' is not a setting name (upper case letters, digits and underscores)"
+    return 1
+  fi
+  [ "${DO_FORCE}" = "true" ] && return 0
+  if (( ! ${+CONFIG_EXAMPLE[${name}]} )); then
+    print -u2 -r -- "Error:          '${name}' is not a setting ussuri knows (--config lists them, --force sets it anyway)"
+    return 1
+  fi
+  example="${CONFIG_EXAMPLE[${name}]}"
+  if [[ "${name}" == PROMPT_ENGINE && ! "${value}" == (p10k|posh|none) ]]; then
+    print -u2 -r -- "Error:          PROMPT_ENGINE is p10k, posh or none, not '${value}'"
+    return 1
+  fi
+  if [[ "${example}" == (true|false) && ! "${value}" == (true|false) ]]; then
+    print -u2 -r -- "Error:          ${name} is true or false, not '${value}'"
+    return 1
+  fi
+  return 0
+}
+
+write_config_lines () {
+  print -r -l -- "${CONFIG_NEW_LINES[@]}" > "$1"
+}
+
+# Keep the newest ten copies of the config from before a change
+
+backup_config () {
+  local backup="${WORK_DIR}/config.${DATE_SUFFIX}" n=0 old
+  while [ -e "${backup}" ]; do
+    n=$(( n + 1 ))
+    backup="${WORK_DIR}/config.${DATE_SUFFIX}_${n}"
+  done
+  verbose_message "${CONFIG_FILE} to ${backup}" "save"
+  execute_command "cp -p ${(q)CONFIG_FILE} ${(q)backup}"
+  old=( ${WORK_DIR}/config.*(Nom[11,-1]) )
+  if (( ${#old} )) && [ ! "${DO_DRYRUN}" = "true" ]; then
+    rm -f -- "${old[@]}"
+  fi
+}
+
+config_get () {
+  local name="$1" file="${CONFIG_FILE}" value
+  local -a lines=()
+  if [[ ! "${name}" =~ '^[A-Z][A-Z0-9_]*$' ]]; then
+    print -u2 -r -- "Error:          '${name}' is not a setting name (upper case letters, digits and underscores)"
+    return 1
+  fi
+  [ -r "${file}" ] && lines=( "${(@f)$(<${file})}" )
+  value="${(P)name}"
+  if (( ${lines[(I)${name}=*]} )); then
+    print -r -- "${name}=${(q)value}  (config: ${file})"
+  elif (( ${CONFIG_PRESET[(Ie)${name}]} )); then
+    print -r -- "${name}=${(q)value}  (environment)"
+  elif [ -n "${value}" ]; then
+    print -r -- "${name}=${(q)value}  (default)"
+  else
+    print -r -- "${name} is not set"
+  fi
+}
+
+# --get with no name: every setting the template lists, and any other the config sets, with its value and
+# where that comes from
+
+config_get_all () {
+  local line name file="${CONFIG_FILE}" result=0
+  local -a names=( ${(ko)CONFIG_EXAMPLE} )
+  if [ -r "${file}" ]; then
+    for line in "${(@f)$(<${file})}"; do
+      [[ "${line}" =~ '^([A-Z][A-Z0-9_]*)=' ]] && names+=( "${match[1]}" )
+    done
+  fi
+  for name in ${(u)names}; do
+    config_get "${name}" || result=1
+  done
+  return ${result}
+}
+
+# Apply every --set and --unset to the config in one go (one backup, one write)
+
+config_edit () {
+  local file="${CONFIG_FILE}" arg name value quoted line i changed="false"
+  local -a lines=() before removed
+  load_config_names
+  if [ -e "${file}" ]; then
+    if [ ! -f "${file}" ] || [ ! -w "${file}" ] || [ ! -r "${file}" ]; then
+      print -u2 -r -- "Error:          ${file} is not a file you can read and write"
+      return 1
+    fi
+    lines=( "${(@f)$(<${file})}" )
+    (( ${#lines} == 1 )) && [[ -z "${lines[1]}" ]] && lines=()
+  else
+    lines=( "${(@f)$( print_config_template )}" )
+    changed="true"
+  fi
+  before=( "${lines[@]}" )
+  for arg in "${CONFIG_SETS[@]}"; do
+    if [[ "${arg}" != *=* ]]; then
+      print -u2 -r -- "Error:          --set needs a name and a value: --set ${arg} VALUE (--unset ${arg} removes it)"
+      return 1
+    fi
+    name="${arg%%=*}"
+    value="${arg#*=}"
+    check_config_setting "${name}" "${value}" || return 1
+    if [[ "${value}" == *$'\n'* ]]; then
+      print -u2 -r -- "Error:          the value of ${name} has a line break in it"
+      return 1
+    fi
+    quoted="${(q)value}"
+    [[ "${quoted}" == *\\* ]] && quoted="${(qq)value}"
+    line="${name}=${quoted}"
+    # The last active line is the one that counts when the file is sourced, so it is the one replaced. Failing
+    # that the line goes in under the commented example, so the explanation stays with it, or at the end
+    i=${lines[(I)${name}=*]}
+    if (( i )); then
+      lines[i]="${line}"
+    else
+      i=${lines[(i)\#${name}=*]}
+      if (( i <= ${#lines} )); then
+        lines[i+1,i]=( "${line}" )
+      else
+        lines+=( "${line}" )
+      fi
+    fi
+    print -r -- "${name}=${quoted} will be saved in ${file}"
+  done
+  for name in "${CONFIG_UNSETS[@]}"; do
+    if [[ ! "${name}" =~ '^[A-Z][A-Z0-9_]*$' ]]; then
+      print -u2 -r -- "Error:          '${name}' is not a setting name (upper case letters, digits and underscores)"
+      return 1
+    fi
+    removed=( "${(@M)lines:#${name}=*}" )
+    lines=( "${(@)lines:#${name}=*}" )
+    if (( ${#removed} )); then
+      print -r -- "${name} will be removed from ${file}"
+    else
+      print -r -- "${name} is not set in ${file}"
+    fi
+  done
+  [[ "${(F)lines}" == "${(F)before}" && "${changed}" == false ]] && {
+    print -r -- "Nothing to change in ${file}"
+    return 0
+  }
+  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+    print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
+    return 1
+  fi
+  check_dir_exists "${file:h}"
+  [ -e "${file}" ] && backup_config
+  CONFIG_NEW_LINES=( "${lines[@]}" )
+  local tmp="${file}.tmp.$$"
+  [ -e "${file}" ] && execute_command "cp -p ${(q)file} ${(q)tmp}"
+  execute_command "write_config_lines ${(q)tmp}"
+  execute_command "mv -f ${(q)tmp} ${(q)file}"
+  if [ "${DO_DRYRUN}" = "true" ]; then
+    print -r -- "Would write ${file}"
+  elif [ -e "${tmp}" ]; then
+    rm -f -- "${tmp}"
+    print -u2 -r -- "Error:          ${file} was not changed"
+    return 1
+  else
+    print -r -- "Saved in ${file}, it applies to new shells"
+  fi
+  return 0
+}
+
+run_config_commands () {
+  local name result=0
+  load_config_names
+  for name in "${CONFIG_GETS[@]}"; do
+    if [[ "${name}" == all ]]; then
+      config_get_all || result=1
+    else
+      config_get "${name}" || result=1
+    fi
+  done
+  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )); then
+    config_edit || result=1
+  fi
+  return ${result}
+}
+
 # Doctor: read only checks of the environment, to answer "why isn't this working?"
 # Prints ok/warn/FAIL lines and exits non-zero if there are any failures. A warning is something
 # that will probably fix itself on the next login or is worth a look, a failure is something
@@ -3641,6 +3851,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Arguments are parsed before set_defaults so switches (e.g. --dryrun) are
   # known before anything with side effects runs, and set_env won't override them
 
+  CONFIG_SETS=()
+  CONFIG_UNSETS=()
+  CONFIG_GETS=()
+
   if (( $# )); then
 
     # Long switches are translated to their short form, then zparseopts validates everything
@@ -3666,6 +3880,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --tool -W         --yes -y           --assume-yes -y
       --prompt -E       --engine -E        --defaults-undo -J
       --assumeyes -y
+      --set -Q          --unset -q         --get -w
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -3679,8 +3894,28 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       ARG="${LONG_SWITCHES[${ARG}]:-${ARG}}"
       SWITCHES+=( "${ARG}" )
       case "${ARG}" in
-        -g|-l|-m|-M|-S|-W|-E|-Z)
+        -g|-l|-m|-M|-S|-W|-E|-Z|-q)
           SWITCH_VALUE="true"
+          ;;
+        -w)
+          # Which setting is optional, no name means all of them
+          if [[ -z "${@[ARG_INDEX+1]}" || "${@[ARG_INDEX+1]}" == -* ]]; then
+            SWITCHES+=( all )
+          else
+            SWITCH_VALUE="true"
+          fi
+          ;;
+        -Q)
+          # --set NAME VALUE (or NAME=VALUE): the two words travel on as one NAME=VALUE value
+          if [[ "${@[ARG_INDEX+1]}" =~ '^[A-Za-z0-9_]+=' ]]; then
+            SWITCHES+=( "${@[ARG_INDEX+1]}" )
+            (( ARG_INDEX += 1 ))
+          elif (( ARG_INDEX + 2 <= $# )); then
+            SWITCHES+=( "${@[ARG_INDEX+1]}=${@[ARG_INDEX+2]}" )
+            (( ARG_INDEX += 2 ))
+          else
+            SWITCH_VALUE="true"
+          fi
           ;;
         -G)
           # What to report on is optional, no value means everything
@@ -3701,7 +3936,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- A b B c C d D e E: f F g: G: h i I J: k l: L M: n m: N o O P p r R: s S: t T u U v V W: x X y z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- A b B c C d D e E: f F g: G: h i I J: k l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y z Z: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -3782,6 +4017,18 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
         -L)
           DO_DOTFILES_CHECK="true"
           shift OPTS
+          ;;
+        -Q)
+          CONFIG_SETS+=( "${OPTS[2]}" )
+          shift 2 OPTS
+          ;;
+        -q)
+          CONFIG_UNSETS+=( "${OPTS[2]}" )
+          shift 2 OPTS
+          ;;
+        -w)
+          CONFIG_GETS+=( "${OPTS[2]}" )
+          shift 2 OPTS
           ;;
         -M)
           PROFILE="${OPTS[2]}"
@@ -3933,6 +4180,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           ;;
       esac
     done
+    # --get tells a value somebody set from one the defaults below fill in, so note what is set before them
+    if (( ${#CONFIG_GETS} )); then
+      CONFIG_PRESET=( ${(k)parameters} )
+    fi
   else
     set_inline_defaults
   fi
@@ -4014,6 +4265,15 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     init_config
     release_lock
     exit
+  fi
+
+  # Do --set, --unset and --get
+
+  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} + ${#CONFIG_GETS} )); then
+    run_config_commands
+    CONFIG_STATUS=$?
+    release_lock
+    exit ${CONFIG_STATUS}
   fi
 
   # Set Go PATH

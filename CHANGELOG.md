@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.6] - 2026-10-28
+
+### Added
+
+- --set NAME VALUE, --unset NAME and --get NAME: change a setting for every new shell without editing the script (which --update replaces). They edit ~/.ussuri/config, the file the script already sources at the top of each login, and never the script. --set NAME=VALUE and several --set/--unset in one run also work. Names are the settings the config template lists (--force allows any other upper case name), true/false settings and PROMPT_ENGINE check their value, and a value is written quoted and never evaluated (a value holding $(...) or backticks is saved as text). A new setting goes in under its commented example in the template so the explanation stays; an existing active line is replaced in place; your own lines and comments are kept. The file is written to a temporary copy (keeping its permissions) and renamed, under the lock, so a shell starting at that moment never reads half of it, and the previous file is kept as ~/.ussuri/config.<date> (newest ten). --dryrun shows what would be written. --get says whether the value comes from the config, the environment or the built in default (and shows that default); with no name it lists every setting the template knows, plus any others the config sets, with value and source
+- A few notes in the README on the prompt settings and which segments suit the top line
+
 ## [1.6.5] - 2026-10-27
 
 ### Added

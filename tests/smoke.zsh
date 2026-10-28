@@ -859,6 +859,95 @@ test_config_command () {
   check "the shipped long and short switches are the same" "$( run -k 2>&1 | grep -c 'exists' )" "1"
 }
 
+test_config_set () {
+  new_home
+  local cfg="${H}/.ussuri/config" out
+  rm -f "${cfg}"
+  run --set PROMPT_TOP_ELEMENTS "context os_icon" --dryrun > /dev/null 2>&1
+  check "--set --dryrun writes nothing" "$( [[ -e "${cfg}" ]] && echo created || echo not-created )" "not-created"
+  out=$( run --set PROMPT_TOP_ELEMENTS "context os_icon" 2>&1 )
+  check "--set creates the config from the template" "$( grep -c 'Behaviour' "${cfg}" )" "1"
+  check "and saves the value quoted" "$( grep -c "^PROMPT_TOP_ELEMENTS='context os_icon'\$" "${cfg}" )" "1"
+  check "under the commented example, so its explanation stays" "$( grep -A1 '^#PROMPT_TOP_ELEMENTS=' "${cfg}" | grep -c '^PROMPT_TOP_ELEMENTS=' )" "1"
+  check "the config is still valid zsh" "$( zsh -n "${cfg}" && echo valid || echo invalid )" "valid"
+  check "and the next run reads it" "$( run --get PROMPT_TOP_ELEMENTS 2>&1 )" "PROMPT_TOP_ELEMENTS=context\\ os_icon  (config: ${cfg})"
+  check "it says it applies to new shells" "$( print -r -- "${out}" | grep -c 'applies to new shells' )" "1"
+  run --set PROMPT_TOP_ELEMENTS context > /dev/null 2>&1
+  check "setting it again replaces the line" "$( grep -c '^PROMPT_TOP_ELEMENTS=' "${cfg}" )" "1"
+  check "with the new value" "$( grep '^PROMPT_TOP_ELEMENTS=' "${cfg}" )" "PROMPT_TOP_ELEMENTS=context"
+  run --set PROMPT_TWO_LINE=false > /dev/null 2>&1
+  check "NAME=VALUE works too" "$( grep -c '^PROMPT_TWO_LINE=false$' "${cfg}" )" "1"
+  run --set PROMPT_ENGINE none --set DO_VERBOSE false > /dev/null 2>&1
+  check "several in one run" "$( grep -c -E '^(PROMPT_ENGINE=none|DO_VERBOSE=false)$' "${cfg}" )" "2"
+  check "one backup of the config from before" "$( nfiles "${H}/.ussuri/config.*" | awk '{print ($1 >= 1) ? "yes" : "no"}' )" "yes"
+  check "no temporary file is left" "$( nfiles "${cfg}.tmp.*" )" "0"
+  run --unset PROMPT_TWO_LINE > /dev/null 2>&1
+  check "--unset removes the line" "$( grep -c '^PROMPT_TWO_LINE=' "${cfg}" )" "0"
+  check "and leaves the others" "$( grep -c '^PROMPT_TOP_ELEMENTS=context$' "${cfg}" )" "1"
+  check "and the commented example" "$( grep -c '^#PROMPT_TWO_LINE=' "${cfg}" )" "1"
+  out=$( run --unset PROMPT_TWO_LINE 2>&1 )
+  check "unsetting what is not set says so" "$( print -r -- "${out}" | grep -c 'is not set' )" "1"
+}
+
+test_config_set_safety () {
+  new_home
+  local cfg="${H}/.ussuri/config" out marker="${TMP}/injected"
+  rm -f "${cfg}" "${marker}"
+  out=$( run --set PROMPT_TOP_ELEMENTS 'x$(touch '"${marker}"')`touch '"${marker}"'`;touch '"${marker}"'' 2>&1 )
+  run --get PROMPT_TOP_ELEMENTS > /dev/null 2>&1
+  check "a value with shell syntax in it is never run" "$( [[ -e "${marker}" ]] && echo run || echo safe )" "safe"
+  check "it is read back as it was typed" "$( run --get PROMPT_TOP_ELEMENTS 2>&1 | grep -c 'touch' )" "1"
+  out=$( run --set 'NOT_A_SETTING' x 2>&1 ); check "an unknown name is refused" "$?" "1"
+  check "with a reason" "$( print -r -- "${out}" | grep -c 'not a setting ussuri knows' )" "1"
+  run --set NOT_A_SETTING x > /dev/null 2>&1
+  check "and not written" "$( grep -c 'NOT_A_SETTING' "${cfg}" 2> /dev/null )" "0"
+  run --force --set MY_OWN_SETTING x > /dev/null 2>&1
+  check "--force allows another upper case name" "$( grep -c '^MY_OWN_SETTING=x$' "${cfg}" )" "1"
+  out=$( run --set 'lower' x 2>&1 ); check "a name that is not upper case is refused even with --force" "$( print -r -- "${out}" | grep -c 'not a setting name' )" "1"
+  out=$( run --set DO_VERBOSE maybe 2>&1 ); check "true/false settings refuse other values" "$( print -r -- "${out}" | grep -c 'true or false' )" "1"
+  out=$( run --set PROMPT_ENGINE ohmyposh 2>&1 ); check "the prompt engine is checked" "$( print -r -- "${out}" | grep -c 'p10k, posh or none' )" "1"
+  out=$( run --set PROMPT_TOP_ELEMENTS 2>&1 ); check "a name with no value is refused" "$( print -r -- "${out}" | grep -c 'needs a name and a value' )" "1"
+  out=$( run --set PROMPT_TOP_ELEMENTS $'a\nb' 2>&1 ); check "a line break is refused" "$( print -r -- "${out}" | grep -c 'line break' )" "1"
+  run --set PROMPT_TOP_ELEMENTS "-x -y" > /dev/null 2>&1
+  check "a value that looks like a switch is a value" "$( grep -c "^PROMPT_TOP_ELEMENTS='-x -y'\$" "${cfg}" )" "1"
+  print -r -- "# my notes" > "${cfg}"
+  print -r -- "DO_BUILD=true" >> "${cfg}"
+  run --set PROMPT_TWO_LINE false > /dev/null 2>&1
+  check "your own lines and comments are kept" "$( grep -c -E '^(# my notes|DO_BUILD=true)$' "${cfg}" )" "2"
+  check "and a setting not in the file is added at the end" "$( tail -1 "${cfg}" )" "PROMPT_TWO_LINE=false"
+  chmod 600 "${cfg}"
+  run --set DO_VERBOSE false > /dev/null 2>&1
+  check "the file keeps its permissions" "$( ls -l "${cfg}" | cut -c1-10 )" "-rw-------"
+  local before=$( cat "${cfg}" )
+  mkdir -p "${H}/.ussuri.lock"
+  out=$( run --set DO_VERBOSE true 2>&1 ); check "it does not write while another run holds the lock" "$( print -r -- "${out}" | grep -c 'holds the lock' )" "1"
+  check "and the config is untouched" "$( cat "${cfg}" )" "${before}"
+  rmdir "${H}/.ussuri.lock" 2> /dev/null
+}
+
+test_config_get () {
+  new_home
+  local cfg="${H}/.ussuri/config" out
+  rm -f "${cfg}"
+  out=$( run --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "--get on a setting nobody has set shows its default" "$( print -r -- "${out}" | grep -c 'PROMPT_TOP_ELEMENTS=context  (default)' )" "1"
+  out=$( EXTRA_ENV=( PROMPT_TOP_ELEMENTS=time ); run --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "from the environment" "$( print -r -- "${out}" | grep -c 'PROMPT_TOP_ELEMENTS=time  (environment)' )" "1"
+  print -r -- "PROMPT_TOP_ELEMENTS=os_icon" > "${cfg}"
+  out=$( EXTRA_ENV=( PROMPT_TOP_ELEMENTS=time ); run --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "the config wins over the environment, as it does on a login" "$( print -r -- "${out}" | grep -c "PROMPT_TOP_ELEMENTS=os_icon  (config: ${cfg})" )" "1"
+  check "--get changes nothing" "$( cat "${cfg}" )" "PROMPT_TOP_ELEMENTS=os_icon"
+  check "a bad name is refused" "$( run --get 'lower' > /dev/null 2>&1; echo $? )" "1"
+  print -r -- "MY_OWN_SETTING=x" > "${cfg}"
+  out=$( run --get 2>&1 )
+  check "--get with no name lists the settings" "$( print -r -- "${out}" | grep -c '^PROMPT_TWO_LINE=true  (default)$' )" "1"
+  check "including one only the config sets" "$( print -r -- "${out}" | grep -c "^MY_OWN_SETTING=x  (config: ${cfg})$" )" "1"
+  check "one line each" "$( print -r -- "${out}" | grep -c -v -E '^[A-Z][A-Z0-9_]*(=.*  \(.*\)| is not set)$' )" "0"
+  check "and it changes nothing" "$( cat "${cfg}" )" "MY_OWN_SETTING=x"
+  out=$( run --get --dryrun 2>&1 )
+  check "a switch after --get is not taken as a name" "$( print -r -- "${out}" | grep -c 'PROMPT_TWO_LINE=true' )" "1"
+}
+
 test_doctor_config () {
   healthy_home
   local cfg="${H}/.ussuri/config" out
