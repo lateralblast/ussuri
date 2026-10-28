@@ -10,6 +10,16 @@ zinit light MichaelAquilina/zsh-you-should-use
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 if os_is_like arch; then zinit snippet OMZP::archlinux; fi
+# Aliases for what this machine has, each checked once as this list is read: brew, docker and docker-compose if the
+# command is on the PATH, systemd where systemctl is (Linux), and the apt (debian, ubuntu, mint...) and dnf (fedora)
+# ones on those distributions. OMZP::macos is not loaded: it sources two more files (music, spotify) that a zinit
+# snippet does not download, so it prints an error on every shell.
+if (( $+commands[brew] )); then zinit snippet OMZP::brew; fi
+if (( $+commands[docker] )); then zinit snippet OMZP::docker; fi
+if (( $+commands[docker-compose] )); then zinit snippet OMZP::docker-compose; fi
+if is_linux && (( $+commands[systemctl] )); then zinit snippet OMZP::systemd; fi
+if os_is_like debian; then zinit snippet OMZP::debian; fi
+if os_is_like fedora; then zinit snippet OMZP::dnf; fi
 zinit snippet OMZP::aws
 zinit snippet OMZP::kubectl
 zinit snippet OMZP::kubectx

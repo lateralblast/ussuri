@@ -16,6 +16,16 @@ zinit ice wait lucid; zinit light MichaelAquilina/zsh-you-should-use
 zinit ice wait lucid; zinit snippet OMZP::git
 zinit ice wait lucid; zinit snippet OMZP::sudo
 if os_is_like arch; then zinit ice wait lucid; zinit snippet OMZP::archlinux; fi
+# Aliases for what this machine has, each checked once as this list is read: brew, docker and docker-compose if the
+# command is on the PATH, systemd where systemctl is (Linux), and the apt (debian, ubuntu, mint...) and dnf (fedora)
+# ones on those distributions. OMZP::macos is not loaded: it sources two more files (music, spotify) that a zinit
+# snippet does not download, so it prints an error on every shell.
+if (( $+commands[brew] )); then zinit ice wait lucid; zinit snippet OMZP::brew; fi
+if (( $+commands[docker] )); then zinit ice wait lucid; zinit snippet OMZP::docker; fi
+if (( $+commands[docker-compose] )); then zinit ice wait lucid; zinit snippet OMZP::docker-compose; fi
+if is_linux && (( $+commands[systemctl] )); then zinit ice wait lucid; zinit snippet OMZP::systemd; fi
+if os_is_like debian; then zinit ice wait lucid; zinit snippet OMZP::debian; fi
+if os_is_like fedora; then zinit ice wait lucid; zinit snippet OMZP::dnf; fi
 zinit ice wait lucid; zinit snippet OMZP::aws
 zinit ice wait lucid; zinit snippet OMZP::kubectl
 zinit ice wait lucid; zinit snippet OMZP::kubectx

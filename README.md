@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.6.7
+Current Version: 1.6.8
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -450,6 +450,11 @@ zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh 
 
 - **History search.** Type part of a command and press Up or Down to step through the history entries that contain it (the arrow keys are bound for
   both keypad modes).
+- **Aliases for what the machine has.** Oh My Zsh snippets for brew, docker, docker-compose, systemd, apt (debian) and dnf are loaded only where they
+  apply: the command is on the `PATH` (brew, docker, docker-compose, `systemctl` for systemd), or the distribution is the one (`debian` and its
+  derivatives, `fedora` and its derivatives). They are checked once, when the list is read, so installing docker later is noticed on the next shell.
+  `OMZP::macos` is not loaded, as it needs two more files that a zinit snippet does not fetch. Add your own the same way in
+  `~/.ussuri/files/zinit/local.zsh`, for example `if (( $+commands[kubectl] )); then zinit snippet OMZP::kubectl; fi`.
 - **zsh-you-should-use** (https://github.com/MichaelAquilina/zsh-you-should-use) reminds you of an alias when you type the command it stands for: with
   `gst` defined, typing `git status` prints `You should use: "gst"`. It reads your aliases as you run each command, so it knows the git snippet's and
   your own, and forgit's renamed ones. Set `YSU_IGNORED_ALIASES=(l ll)`, `YSU_MESSAGE_POSITION=after` or `YSU_HARDCORE=1` (refuse the long form) in the
