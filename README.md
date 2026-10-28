@@ -268,7 +268,7 @@ True or false unless a value is given. Defaults are for a login shell.
 | `ZSH_THEME`, `DO_ZSH_THEME` | robbyrussell, true | the oh-my-zsh theme (`-Z`, `-n`) |
 | `SHARE_HISTORY`, `DO_HISTORY`, `HISTORY_SIZE` | true, true, 50000 | [history settings](#history) |
 | `PROMPT_ENGINE` | p10k | `p10k`, `posh` or `none` (`-E`) |
-| `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS` | true, context, none | the [two line prompt](#two-line-prompt) |
+| `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS` | true, context, none | the [two line prompt](#two-line-prompt) and its [settings](#prompt-settings) |
 | `INSTALL_ZOXIDE` | true | set zoxide up if it is installed |
 
 **Components** (installed and set up on a login when true)
@@ -365,6 +365,51 @@ it for a default user). It is applied after your `~/.p10k.zsh` is read, so it wo
 `p10k configure`; a config that already has more than one line is yours and is left alone. Names are limited to letters, digits and underscores,
 and one that is not is ignored with a warning. If your config has a transient prompt, old prompts still collapse to one line, and the frame
 characters are the ones in `~/.p10k.zsh` (`POWERLEVEL9K_MULTILINE_*`). `--doctor` says what the layout is.
+
+#### Prompt settings
+
+Set these in `~/.ussuri/config` (see [Configuration](#configuration)), the environment, or at the top of the script. `--config` writes them
+commented out.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PROMPT_ENGINE` | `p10k` | `p10k`, `posh` or `none`. Only that engine is installed and loaded. The settings below apply to `p10k` only |
+| `PROMPT_TWO_LINE` | `true` | `false` keeps a single line prompt: the config's own lines are left exactly as they are |
+| `PROMPT_TOP_ELEMENTS` | `context` | Space separated segments on the left of the top line, in the order given |
+| `PROMPT_TOP_RIGHT_ELEMENTS` | none | Space separated segments on the right of the top line, in the order given |
+
+The order of a line is the order of the words, first on the left. A segment named in either variable is removed from the bottom line, and a
+segment with nothing to show at that moment (no battery, no VPN, not in a project) is skipped rather than leaving a gap.
+
+```
+PROMPT_TOP_ELEMENTS="os_icon context"
+PROMPT_TOP_RIGHT_ELEMENTS="battery cpu_arch time"
+```
+
+#### Segments for the top line
+
+Any powerlevel10k segment name works. Some that suit the top line:
+
+| Segment | Shows | Notes |
+|---|---|---|
+| `context` | `user@hostname` | always shown on the top line, whatever the user |
+| `os_icon` | the operating system's icon | |
+| `time` | the current time | format: `POWERLEVEL9K_TIME_FORMAT` |
+| `battery` | charge and charging state | low threshold: `POWERLEVEL9K_BATTERY_LOW_THRESHOLD` |
+| `wifi` | SSID and link speed | recent macOS versions restrict where the SSID can be read from |
+| `ip` | address and bandwidth of one interface | set `POWERLEVEL9K_IP_INTERFACE`: the default pattern (`[ew].*`) matches Linux names, on macOS use `en0` or `en[0-9]+` |
+| `public_ip` | external address | makes a network request, so it is slow |
+| `vpn_ip` | VPN address, when a VPN interface is up | interfaces: `POWERLEVEL9K_VPN_IP_INTERFACE` |
+| `proxy` | system wide http/https/ftp proxy | |
+| `load`, `ram`, `swap`, `disk_usage` | system resources | warning levels, for example `POWERLEVEL9K_DISK_USAGE_WARNING_LEVEL` |
+| `cpu_arch` | `arm64` or `x86_64` | useful on Apple Silicon with Rosetta |
+| `node_version`, `go_version`, `rust_version`, `java_version`, `php_version`, `dotnet_version`, `terraform_version` | tool version | by default only inside a project (`POWERLEVEL9K_*_VERSION_PROJECT_ONLY`) |
+| `status`, `command_execution_time`, `kubecontext`, `aws`, `gcloud`, `azure` | as on the bottom line | |
+
+The full list is `LEFT_PROMPT_ELEMENTS` and `RIGHT_PROMPT_ELEMENTS` in `~/.p10k.zsh` (shipped as `files/p10k/p10k.zsh`), including the commented
+out ones. A segment's colours and options are in its own `[ segment: ... ]` block further down that file, as `POWERLEVEL9K_<SEGMENT>_*`
+variables, and they apply wherever the segment is shown. Because `files/` is replaced by `--update`, put such overrides in your own `~/.p10k.zsh`
+rather than in the shipped copy.
 
 ## Plugins
 
