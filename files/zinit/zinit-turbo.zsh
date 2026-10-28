@@ -11,6 +11,7 @@ zinit ice wait lucid; zinit light zsh-users/zsh-completions
 zinit ice wait lucid; zinit light zsh-users/zsh-autosuggestions
 zinit ice wait lucid; zinit light Aloxaf/fzf-tab
 zinit ice wait lucid atload"bind_history_search"; zinit light zsh-users/zsh-history-substring-search
+zinit ice wait lucid; zinit light MichaelAquilina/zsh-you-should-use
 # Add in snippets (one line each: they are run one line at a time)
 zinit ice wait lucid; zinit snippet OMZP::git
 zinit ice wait lucid; zinit snippet OMZP::sudo
