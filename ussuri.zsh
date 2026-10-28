@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.6.8
+# Version: 1.6.9
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -246,6 +246,28 @@ bind_history_search () {
   for key in '^[[B' '^[OB' "${terminfo[kcud1]}"; do
     [[ -n "${key}" ]] && bindkey "${key}" history-substring-search-down 2> /dev/null
   done
+  return 0
+}
+
+# Keep zsh-you-should-use quiet about the aliases a snippet adds (the plugin lists use these around
+# common-aliases, which has dozens of short ones that would be mentioned all the time): mark_aliases notes
+# the aliases there are, and ignore_new_aliases adds every alias and global alias that has appeared since to
+# YSU_IGNORED_ALIASES and YSU_IGNORED_GLOBAL_ALIASES, which the plugin reads each time it checks a command.
+# They can wrap any snippet or plugin in your own local.zsh
+
+typeset -ga ALIASES_MARK GALIASES_MARK
+
+mark_aliases () {
+  ALIASES_MARK=( ${(k)aliases} )
+  GALIASES_MARK=( ${(k)galiases} )
+}
+
+ignore_new_aliases () {
+  local -a now
+  now=( ${(k)aliases} )
+  YSU_IGNORED_ALIASES+=( ${now:|ALIASES_MARK} )
+  now=( ${(k)galiases} )
+  YSU_IGNORED_GLOBAL_ALIASES+=( ${now:|GALIASES_MARK} )
   return 0
 }
 

@@ -107,6 +107,8 @@ Decided against: fast-syntax-highlighting (alternative to the one already loaded
 
 - [x] **Q4. Alias snippets for what the machine has** (1.6.8, 2026-10-29) `OMZP::brew`, `docker`, `docker-compose` (if the command is on the PATH), `systemd` (Linux with systemctl), `debian` (debian, ubuntu, mint...) and `dnf` (fedora and derivatives), each guarded on one line in both lists, so zsh-you-should-use has aliases to remind you of. Each snippet was loaded in a throwaway zinit and defined aliases without errors. `OMZP::macos` was tried and left out: it sources `music` and `spotify`, which a snippet does not download, so it prints two errors on every shell (the svn ice that would fetch them needs Subversion, which is not here). Not checked: a full login with them under zinit turbo, and the "docker is not installed" case in the test is skipped on a host that has docker in `/usr/local/bin`, as this one does.
 
+- [x] **Q5. common-aliases, ignored by zsh-you-should-use** (1.6.9, 2026-10-29) `OMZP::common-aliases` in both lists, and `mark_aliases`/`ignore_new_aliases` so every alias and global alias it adds goes into `YSU_IGNORED_ALIASES`/`YSU_IGNORED_GLOBAL_ALIASES`. Verified with the real zinit and plugin in a throwaway shell, eager and turbo (pty): `ll` is not reminded, `git status` still is. Not checked: a full ussuri login. Side effect to know about: the snippet makes `rm`, `cp` and `mv` interactive (`-i`).
+
 ## Housekeeping when a fix ships
 
 Bump `# Version:` in `ussuri.zsh`, `Current Version` in `README.md`, and add a `CHANGELOG.md` entry (single digits per component, per CLAUDE.md).

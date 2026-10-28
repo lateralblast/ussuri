@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.9] - 2026-10-29
+
+### Added
+
+- OMZP::common-aliases in both plugin lists (l, ll, la, lt, grep, h, p, the global aliases H, T, G, L... and more), with zsh-you-should-use told to leave them alone so it is not noisy. mark_aliases and ignore_new_aliases (new, in the script) note the aliases there are before the snippet loads and add every alias and global alias that appeared since to YSU_IGNORED_ALIASES and YSU_IGNORED_GLOBAL_ALIASES, which the plugin reads each time it checks a command. In turbo mode they run as the snippet's atinit and atload, in the same deferred step as the snippet. The aliases themselves still work; your git, kubectl and other aliases are still reminded. They can wrap any snippet in your own local.zsh. Checked with the real zinit and the real plugin in a throwaway shell, both ways: eager, and turbo in a pseudo terminal. 36 aliases and 10 global aliases were ignored, typing `ll` gave no reminder and `git status` still gave `You should use: "gst"`. Note what the snippet itself does: it makes rm, cp and mv ask before overwriting (`-i`) and adds colour and directory exclusions to grep
+
 ## [1.6.8] - 2026-10-29
 
 ### Added
