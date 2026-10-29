@@ -20,17 +20,44 @@ Fund me here: https://ko-fi.com/richardatlateralblast
 - [Quick start](#quick-start)
 - [Installation](#installation)
 - [How it works](#how-it-works)
+  - [Measuring startup](#measuring-startup)
 - [Usage](#usage)
 - [Configuration](#configuration)
+  - [Changing a setting from the command line](#changing-a-setting-from-the-command-line)
+  - [Settings for one profile or machine](#settings-for-one-profile-or-machine)
+  - [Editing the config](#editing-the-config)
+  - [Completion](#completion)
+  - [Settings](#settings)
 - [Prompt](#prompt)
+  - [Two line prompt](#two-line-prompt)
+  - [Prompt settings](#prompt-settings)
+  - [Segments for the top line](#segments-for-the-top-line)
+  - [A different top line on one machine](#a-different-top-line-on-one-machine)
+  - [Looking at it: `--prompt-preview`](#looking-at-it---prompt-preview)
 - [Plugins](#plugins)
 - [History](#history)
+  - [atuin (optional)](#atuin-optional)
 - [PATH and build flags](#path-and-build-flags)
 - [Packages](#packages)
+  - [macOS: formulae, casks and taps](#macos-formulae-casks-and-taps)
+  - [Linux](#linux)
+  - [Local files, profiles and machines](#local-files-profiles-and-machines)
+  - [Unattended installs](#unattended-installs)
+  - [Installers and pinning](#installers-and-pinning)
+  - [Package drift](#package-drift)
 - [Languages and tools](#languages-and-tools)
 - [System settings](#system-settings)
+  - [macOS defaults](#macos-defaults)
+  - [Transmission blocklist](#transmission-blocklist)
+  - [Linux (GNOME)](#linux-gnome)
+  - [sudoers](#sudoers)
 - [Dotfiles](#dotfiles)
+  - [Dotfiles from a git repository](#dotfiles-from-a-git-repository)
 - [Maintenance](#maintenance)
+  - [Updating](#updating)
+  - [Backups, rollback and uninstall](#backups-rollback-and-uninstall)
+  - [Moving to a new machine: `--export` and `--import`](#moving-to-a-new-machine---export-and---import)
+  - [Doctor](#doctor)
 - [Security notes](#security-notes)
 - [Testing and CI](#testing-and-ci)
 - [Files and directories](#files-and-directories)
@@ -109,12 +136,25 @@ stays quiet when there is nothing to do.
 run behave like a login.
 
 **Staying fast.** The script runs on every new shell, so the normal path starts no other processes. Work that only needs doing now and then
-is tracked in `~/.ussuri` and skipped otherwise: the OS X defaults (a stamp, `DEFAULTS_MAX_AGE` days), the output of `rbenv init`, `pyenv init`,
-`brew shellenv`, `mise activate` and `zoxide init` (a cache, rebuilt when the tool changes; `DO_CACHE_INIT=false` turns it off), and the package
-lists (a checksum, so only a changed list is reprocessed). Anything that touches the network on a login is opt-in and runs in the background.
+is tracked in `~/.ussuri` and skipped otherwise: the OS X defaults (a stamp, `DEFAULTS_MAX_AGE` days), the output of `rbenv init`,
+`pyenv init`, `brew shellenv`, `mise activate` and `zoxide init` (a cache, rebuilt when the tool changes; `DO_CACHE_INIT=false` turns it
+off), and the package lists (a checksum, so only a changed list is reprocessed). Anything that touches the network on a login is opt-in and
+runs in the background. [Measuring startup](#measuring-startup) shows where the time goes.
 
-**Measuring it.** `./ussuri.zsh --timing` runs the login path (as `-i` does) and prints how long each step took, on the shell's own clock, with no
-processes started to measure it:
+**Locking.** Steps that install or change things take a lock (`~/.ussuri.lock`, a directory, taken atomically and considered stale after 10
+minutes), so several shells opened at once don't race. A shell that doesn't get the lock skips those steps. `--force` clears the lock and
+ignores the stamps.
+
+**Switch behaviour.** `--dryrun` shows each command without running it; `--verbose` logs them; `--confirm` asks before each; `--yes` answers
+the questions for you; `--debug` turns on `set -x`. Every side effect goes through one function, so these apply to all of them.
+
+**Settings.** Every default can be changed, in this order of precedence: the built in defaults, then the environment, then the
+[config file](#configuration), then command line switches.
+
+### Measuring startup
+
+`./ussuri.zsh --timing` runs the login path (as `-i` does) and prints how long each step took, on the shell's own clock, with no processes started
+to measure it:
 
 ```
 Startup timing (milliseconds, from the start of the script)
@@ -139,25 +179,20 @@ Inside the zinit step, by line of the plugin lists (slowest first, the 8 slowest
   zinit starting, reading the lists      17.1
 ```
 
-(Some steps are left out here; the output has a row for each that ran, in the order they ran. These figures are from one Mac, and vary by 10% or so from run to run.)
+(Some steps are left out here: the output has a row for each that ran, in the order they ran. These figures are from one Mac, and vary by 10% or so
+from run to run.)
 
-Run it twice: the first run does the one off work (the defaults, the caches), which is what the stamps and caches exist to avoid. The first rows are the start of the script
-in the pieces it can be cut into: the config and its layers, defining the functions (reading the script itself), the switches, `set_defaults`, and the rest of the set up before the steps.
-"Everything else" is what is left, the glue between steps. Under it, the zinit step is cut by line of the plugin lists, each line being one plugin: powerlevel10k is loaded before the
-prompt whatever turbo does, and in turbo mode the others only schedule their load, so they cost about a millisecond each. "zinit starting" is what is left of the step: sourcing zinit and reading the lists.
-Plugins that zinit loads after the prompt (turbo mode) are not counted. The marks are one array append each, and a normal run has no per line timing, so it costs nothing measurable. The rule that a
-login starts no processes is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of the ordinary utilities (`date`,
-`dirname`, `grep`, `sed`, `awk`, `find`, `cat`...), runs a steady state login on macOS and on Linux, and fails if any of them was started.
-
-**Locking.** Steps that install or change things take a lock (`~/.ussuri.lock`, a directory, taken atomically and considered stale after 10
-minutes), so several shells opened at once don't race. A shell that doesn't get the lock skips those steps. `--force` clears the lock and
-ignores the stamps.
-
-**Switch behaviour.** `--dryrun` shows each command without running it; `--verbose` logs them; `--confirm` asks before each; `--yes` answers
-the questions for you; `--debug` turns on `set -x`. Every side effect goes through one function, so these apply to all of them.
-
-**Settings.** Every default can be changed, in this order of precedence: the built in defaults, then the environment, then the
-[config file](#configuration), then command line switches.
+- **Run it twice.** The first run does the one off work (the defaults, the caches), which is what the stamps and caches exist to avoid.
+- **The first rows** cut the start of the script into the pieces it can be cut into: the config and its layers, defining the functions (reading the
+  script itself), the switches, `set_defaults`, and the rest of the set up before the steps.
+- **"Everything else"** is what is left: the glue between the steps.
+- **Inside the zinit step**, each line of the plugin lists is one plugin. Powerlevel10k is loaded before the prompt whatever turbo does; in turbo mode
+  the others only schedule their load, so they cost about a millisecond each. "zinit starting" is what is left of the step: sourcing zinit and reading
+  the lists. Plugins that zinit loads after the prompt (turbo mode) are not counted.
+- **What it costs when you are not timing:** the marks are one array append each and the per line timing is only done under `--timing`, so a normal
+  login pays nothing measurable for them.
+- **No processes** is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of the ordinary utilities (`date`,
+  `dirname`, `grep`, `sed`, `awk`, `find`, `cat`...), runs a steady state login on macOS and on Linux, and fails if any of them was started.
 
 ## Usage
 
@@ -277,7 +312,8 @@ Notes on the switches:
 - **Other long names:** most switches have more than one. The others are `--assume-yes` and `--assumeyes` (`--yes`), `--changes` (`--changelog`),
   `--compile` (`--build`), `--engine` (`--prompt`), `--fonts` (`--font`), `--gohome` (`--gopath`), `--packages` (`--package`), `--plugin`
   (`--manager`), `--posh` (`--ohmyposh`), `--startdir` (`--location`), `--test` (`--dryrun`), `--usage` (`--help`) and `--zosh` (`--ohmyzsh`).
-  `--set`, `--unset`, `--get`, `--prompt-preview`, `--export` and `--import` have no short form (they are `-Q`, `-q`, `-w`, `-4`, `-2` and `-3` inside, as every letter was taken).
+- **Long only:** `--set`, `--unset`, `--get`, `--prompt-preview`, `--export` and `--import` have no short form: every letter was taken, so inside
+  they are `-Q`, `-q`, `-w`, `-4`, `-2` and `-3`.
 - **Bundling and values:** short switches can be bundled (`-vt`). A switch that takes a value ignores a leading `-` in it.
 - **Mistakes:** a switch that is missing its value, or an unknown switch, prints the usage and exits with status 1.
 - **Exit statuses:** `--doctor` is 0, or 1 if anything failed. `--drift` is 0 for none, 1 for drift, 2 if there was nothing to compare with.
@@ -300,8 +336,8 @@ START_DIR=~/code
 ```
 
 changes the default for every shell without editing the script (which would then stop being updatable). It is executed, so keep it writable
-only by you; `--doctor` warns if it is not, and if it has a syntax error. `--config` never overwrites an existing file. Some defaults can also be declared at the top
-of the script itself. To change a setting without opening the file, see below.
+only by you; `--doctor` warns if it is not, and if it has a syntax error. `--config` never overwrites an existing file. Some defaults can
+also be declared at the top of the script itself. To change a setting without opening the file, see below.
 
 ### Changing a setting from the command line
 
@@ -345,10 +381,10 @@ config, and `--doctor` checks them the same way (a syntax error, or being writab
 ./ussuri.zsh --get ZSH_THEME                              # the value in force here, and which file it came from
 ```
 
-One limit: which profile and machine apply is decided when the config is read, so it is the `PROFILE` and `MACHINE` of the environment or the
-config. `-M` and `-H` choose the file to change, and for packages, plugins and dotfiles they choose the layers for that run, but they do not pull in that
-profile's settings for the run. A name that could point somewhere else (a slash, or starting with a dot) is refused. The previous copy of a file is kept
-in `~/.ussuri` as `config-profile-<name>.<date>` or `config-host-<name>.<date>` (the newest ten each).
+One limit: which profile and machine apply is decided when the config is read, so it is the `PROFILE` and `MACHINE` of the environment or
+the config. `-M` and `-H` choose the file to change, and for packages, plugins and dotfiles they choose the layers for that run, but they do
+not pull in that profile's settings for the run. A name that could point somewhere else (a slash, or starting with a dot) is refused. The
+previous copy of a file is kept in `~/.ussuri` as `config-profile-<name>.<date>` or `config-host-<name>.<date>` (the newest ten each).
 
 ### Editing the config
 
@@ -356,10 +392,10 @@ in `~/.ussuri` as `config-profile-<name>.<date>` or `config-host-<name>.<date>` 
 ./ussuri.zsh --edit
 ```
 
-Opens a copy of the config in `$VISUAL`, `$EDITOR` or `vi` (arguments are fine: `VISUAL="code -w"`), and replaces the config only if what you saved is
-valid zsh, so a slip cannot leave every new shell with a broken config. A syntax error leaves the config as it was and your edit in `config.rejected` to fix.
-A name that is not one of ussuri's settings is reported, but kept, as it may be one of your own. The old file is backed up, as with `--set`, and with no
-config you start from the template. `--dryrun` shows what would run.
+Opens a copy of the config in `$VISUAL`, `$EDITOR` or `vi` (arguments are fine: `VISUAL="code -w"`), and replaces the config only if what
+you saved is valid zsh, so a slip cannot leave every new shell with a broken config. A syntax error leaves the config as it was and your
+edit in `config.rejected` to fix. A name that is not one of ussuri's settings is reported, but kept, as it may be one of your own. The old
+file is backed up, as with `--set`, and with no config you start from the template. `--dryrun` shows what would run.
 
 ### Completion
 
@@ -452,8 +488,8 @@ each comes from.
 | `FNM_HOME`, `UV_BIN_DIR`, `MISE_BIN` | `~/.local/share/fnm`, `~/.local/bin`, `~/.local/bin/mise` |
 | `TORRENT_DIR`, `SCREENSHOT_LOCATION` | `~/Downloads/transmission`, `~/Pictures/Screenshots` |
 
-The other names `set_env` is called with in the script are internal state, not settings: the switches' own flags (such as `DO_DRIFT` or `DO_DOCTOR`) and working paths (such as
-`REQUIRED_FILE`, `INSTALLED_FILE` and `JOURNAL_FILE`). Don't set them.
+The other names `set_env` is called with in the script are internal state, not settings: the switches' own flags (such as `DO_DRIFT` or
+`DO_DOCTOR`) and working paths (such as `REQUIRED_FILE`, `INSTALLED_FILE` and `JOURNAL_FILE`). Don't set them.
 
 **Pinning and sources** (see [Installers and pinning](#installers-and-pinning))
 
@@ -475,8 +511,8 @@ shows the engine and warns if the other one has been switched on.
 
 ### Two line prompt
 
-With powerlevel10k the prompt is two lines: a configurable line on top, starting with `user@hostname`, the OS version and the architecture, and your existing line below it, as it
-was, with its right hand segments:
+With powerlevel10k the prompt is two lines: a configurable line on top, starting with `user@hostname`, the OS version and the architecture,
+and your existing line below it, as it was, with its right hand segments:
 
 ```
 ╭─░▒▓ alice@laptop  macOS 15.1  arm64                                   Fri 30 Oct 2026 ─╮
@@ -498,7 +534,7 @@ it for a default user). It is applied after your `~/.p10k.zsh` is read, so it wo
 and one that is not is ignored with a warning. If your config has a transient prompt, old prompts still collapse to one line, and the frame
 characters are the ones in `~/.p10k.zsh` (`POWERLEVEL9K_MULTILINE_*`). `--doctor` says what the layout is.
 
-#### Prompt settings
+### Prompt settings
 
 Set these in `~/.ussuri/config` (see [Configuration](#configuration)), with `--set` (for example `--set PROMPT_TOP_ELEMENTS "os_icon context"`),
 in the environment, or at the top of the script. `--config` writes them commented out.
@@ -511,43 +547,10 @@ in the environment, or at the top of the script. `--config` writes them commente
 | `PROMPT_TOP_RIGHT_ELEMENTS` | `date` | Space separated segments on the right of the top line, in the order given |
 
 The order of a line is the order of the words, first on the left. A segment named in either variable is removed from the bottom line, and a
-segment with nothing to show at that moment (no battery, no VPN, not in a project) is skipped rather than leaving a gap.
+segment with nothing to show at that moment (no battery, no VPN, not in a project) is skipped rather than leaving a gap. For example
+`PROMPT_TOP_RIGHT_ELEMENTS="battery cpu_arch time"` puts those three on the right of the top line, in that order.
 
-```
-PROMPT_TOP_ELEMENTS="os_icon context"
-PROMPT_TOP_RIGHT_ELEMENTS="battery cpu_arch time"
-```
-
-#### Looking at it: `--prompt-preview`
-
-```
-./ussuri.zsh --prompt-preview
-```
-
-Shows the layout your settings give, without opening a shell: each segment on the top line with the text it would show (for the ones whose text is known without a prompt: `context`, `os_version`,
-`cpu_arch`, `date`, `time`), its foreground and background colours, the contrast between them and a verdict, then the names on the bottom line (from your `~/.p10k.zsh`, which is read the way a login reads it,
-in a subshell). In a terminal each line is drawn in its own colours. The contrast is the WCAG ratio worked out from the xterm 256 colour table: `ok` is 3 to 1 or more, `low` is under that, `same` is the background's own
-colour, `default` is a colour powerlevel10k picks itself (it cannot be known without a prompt), and `unknown` is a name this powerlevel10k has no segment for (its source is searched, so a typo or an older version is
-found). It changes nothing.
-
-`--doctor` makes the same checks on the top line, so a colour that cannot be read, a segment that does not exist and a word that is not a segment name are warnings, with the setting that fixes each
-(for example `POWERLEVEL9K_TIME_FOREGROUND`). The bottom line is your own config's and is only listed.
-
-#### A different top line on one machine
-
-The top line is made from settings, so a profile or machine can have its own with the files that already exist for them. For a laptop that should show its battery and the AWS profile, and a work profile that
-should show the Kubernetes context:
-
-```
-./ussuri.zsh --set PROMPT_TOP_RIGHT_ELEMENTS "aws battery date" --host laptop
-./ussuri.zsh --set PROMPT_TOP_ELEMENTS "context kubecontext os_version cpu_arch" --profile work
-```
-
-These go in `~/.ussuri/hosts/laptop/local.config` and `~/.ussuri/profiles/work/local.config`, which are read after the main config. `battery`, `aws` and `kubecontext` show nothing when there is nothing to show
-(no battery, no profile, no cluster), so a segment left in the list on a machine that has none costs a blank, not a gap. `--prompt-preview` with `MACHINE=laptop` (or `-H laptop`) shows the result. `--set` also
-says how to get the change in the window you are in: `exec zsh`.
-
-#### Segments for the top line
+### Segments for the top line
 
 Any powerlevel10k segment name works. Some that suit the top line:
 
@@ -575,12 +578,46 @@ out ones. A segment's colours and options are in its own `[ segment: ... ]` bloc
 variables, and they apply wherever the segment is shown. Because `files/` is replaced by `--update`, put such overrides in your own `~/.p10k.zsh`
 rather than in the shipped copy.
 
+### A different top line on one machine
+
+The top line is made from settings, so a profile or machine can have its own with the files that already exist for them. For a laptop that
+should show its battery and the AWS profile, and a work profile that should show the Kubernetes context:
+
+```
+./ussuri.zsh --set PROMPT_TOP_RIGHT_ELEMENTS "aws battery date" --host laptop
+./ussuri.zsh --set PROMPT_TOP_ELEMENTS "context kubecontext os_version cpu_arch" --profile work
+```
+
+These go in `~/.ussuri/hosts/laptop/local.config` and `~/.ussuri/profiles/work/local.config`, which are read after the main config.
+`battery`, `aws` and `kubecontext` show nothing when there is nothing to show (no battery, no profile, no cluster), so a segment left in the
+list on a machine that has none costs a blank, not a gap. `--prompt-preview` with `MACHINE=laptop` (or `-H laptop`) shows the result.
+`--set` also says how to get the change in the window you are in: `exec zsh`.
+
+### Looking at it: `--prompt-preview`
+
+```
+./ussuri.zsh --prompt-preview
+```
+
+Shows the layout your settings give, without opening a shell: each segment on the top line with the text it would show (for the ones whose
+text is known without a prompt: `context`, `os_version`, `cpu_arch`, `date`, `time`), its foreground and background colours, the contrast
+between them and a verdict, then the names on the bottom line (from your `~/.p10k.zsh`, which is read the way a login reads it, in a
+subshell). In a terminal each line is drawn in its own colours. The contrast is the WCAG ratio worked out from the xterm 256 colour table:
+`ok` is 3 to 1 or more, `low` is under that, `same` is the background's own colour, `default` is a colour powerlevel10k picks itself (it
+cannot be known without a prompt), and `unknown` is a name this powerlevel10k has no segment for (its source is searched, so a typo or an
+older version is found). It changes nothing.
+
+`--doctor` makes the same checks on the top line, so a colour that cannot be read, a segment that does not exist and a word that is not a
+segment name are warnings, with the setting that fixes each (for example `POWERLEVEL9K_TIME_FOREGROUND`). The bottom line is your own
+config's and is only listed.
+
 ## Plugins
 
 The zinit plugin lists are `files/zinit/zinit-turbo.zsh` (the default: the prompt appears first and the other plugins load just after it, about
 75 ms sooner) and `files/zinit/zinit.zsh` (`ZINIT_TURBO=false`: everything loads before the prompt). Both load the same plugins in the same order:
 powerlevel10k (only when it is the prompt engine), zsh-syntax-highlighting, zsh-completions, zsh-autosuggestions, fzf-tab,
-zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh snippets (git, sudo, extract, copypath, copyfile, copybuffer, fancy-ctrl-z, archlinux, aws, kubectl, kubectx, command-not-found).
+zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh snippets (git, sudo, extract and the copy and Ctrl-Z helpers,
+command-not-found, aws, kubectl, kubectx, and the ones for what the machine has: see below).
 
 - **History search.** Type part of a command and press Up or Down to step through the history entries that contain it (the arrow keys are bound for
   both keypad modes).
@@ -589,76 +626,81 @@ zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh 
   derivatives, `fedora` and its derivatives). They are checked once, when the list is read, so installing docker later is noticed on the next shell.
   `OMZP::macos` is not loaded, as it needs two more files that a zinit snippet does not fetch. Add your own the same way in
   `~/.ussuri/files/zinit/local.zsh`, for example `if (( $+commands[kubectl] )); then zinit snippet OMZP::kubectl; fi`.
-- **extract, copypath, copyfile, copybuffer, fancy-ctrl-z** (`OMZP::...`) are small everyday helpers, no external tools. `extract FILE` (alias `x`)
-  unpacks most archive types (`-r` removes the archive afterwards, `-t DIR` unpacks elsewhere). `copypath [FILE]` puts an absolute path on the clipboard,
-  `copyfile FILE` its contents, and Ctrl-O (`copybuffer`) the line you are typing. Ctrl-Z on an empty line runs `fg`, and on a line with text puts it
-  aside and brings it back after the next command. The three copy ones call `clipcopy`, which is in an Oh My Zsh library file, so
-  `OMZL::clipboard.zsh` is loaded before them (it finds `pbcopy`, `wl-copy`, `xclip` or `xsel`; on a machine with none, they say so when used).
-  They cost nothing until used; to drop one, remove its line from the plugin lists.
-- **common-aliases** (`OMZP::common-aliases`) adds dozens of short aliases: `l`, `ll`, `la`, `lt`, `h` (history), `p` (`ps -f`), global ones such as `H` and `G`
-  (`| head`, `| grep`), and it makes `rm`, `cp` and `mv` ask before overwriting (`-i`) and `grep` add colour and skip VCS directories. The aliases work as
-  usual, but zsh-you-should-use is told to ignore them, so it does not mention them: `mark_aliases` and `ignore_new_aliases` (in the script) note what
-  aliases exist before the snippet and add every new one to `YSU_IGNORED_ALIASES` and `YSU_IGNORED_GLOBAL_ALIASES`. You can wrap any other snippet the same
-  way in `~/.ussuri/files/zinit/local.zsh` (turbo: `zinit ice wait lucid atinit"mark_aliases" atload"ignore_new_aliases"; zinit snippet OMZP::name`). To drop
-  common-aliases, remove its line from the lists (and `mark_aliases`/`ignore_new_aliases` around it in `zinit.zsh`).
-- **zsh-you-should-use** (https://github.com/MichaelAquilina/zsh-you-should-use) reminds you of an alias when you type the command it stands for: with
-  `gst` defined, typing `git status` prints `You should use: "gst"`. It reads your aliases as you run each command, so it knows the git snippet's and
-  your own, and forgit's renamed ones. Set `YSU_IGNORED_ALIASES=(l ll)`, `YSU_MESSAGE_POSITION=after` or `YSU_HARDCORE=1` (refuse the long form) in the
-  config, or remove its line from the plugin lists to drop it.
-- **forgit** (https://github.com/wfxr/forgit) gives interactive git commands driven by fzf: add, log, diff, checkout, stash, rebase and more, with
-  previews. It defines short aliases, and 16 of them (`ga`, `gd`, `gco`, `gcb`, `gss`, `glo`...) have the same name as aliases in the Oh My Zsh git snippet,
-  which would silently change what they do (`gcb` creates a branch, but forgit's `gcb` is an interactive picker). Those 16 are renamed with an `f` in front
-  (`fga`, `fgd`, `fgco`, `fgcb`, `fgss`, `fglo`...); your git aliases keep their meaning, and forgit's others (`gi`, `gat`, `gfu`...) keep their names.
-  `zsh tests/forgit-aliases.zsh` (needs the network) checks the renames against the current forgit and git snippet, and is worth running when either
-  is updated.
-- **zoxide** (https://github.com/ajeetdsouza/zoxide) is a smarter `cd`: `z foo` jumps to the directory you use most that matches foo, and `zi` picks
-  interactively with fzf. It only adds `z` and `zi`; it does not replace `cd`. It is in the package lists, so `-P` installs it (note that `-P` installs
-  every missing package in your lists, not only this one; to install just zoxide use your package manager, for example `brew install zoxide`). A login
-  sets it up only if it is installed, so nothing is downloaded on login, and its init output goes through the init cache. `INSTALL_ZOXIDE=false` leaves
-  it alone.
+- **extract, copypath, copyfile, copybuffer, fancy-ctrl-z** (`OMZP::...`) are small everyday helpers, no external tools. `extract FILE`
+  (alias `x`) unpacks most archive types (`-r` removes the archive afterwards, `-t DIR` unpacks elsewhere). `copypath [FILE]` puts an
+  absolute path on the clipboard, `copyfile FILE` its contents, and Ctrl-O (`copybuffer`) the line you are typing. Ctrl-Z on an empty line
+  runs `fg`, and on a line with text puts it aside and brings it back after the next command. The three copy ones call `clipcopy`, which is
+  in an Oh My Zsh library file, so `OMZL::clipboard.zsh` is loaded before them (it finds `pbcopy`, `wl-copy`, `xclip` or `xsel`; on a
+  machine with none, they say so when used). They cost nothing until used; to drop one, remove its line from the plugin lists.
+- **common-aliases** (`OMZP::common-aliases`) adds dozens of short aliases: `l`, `ll`, `la`, `lt`, `h` (history), `p` (`ps -f`), global ones
+  such as `H` and `G` (`| head`, `| grep`), and it makes `rm`, `cp` and `mv` ask before overwriting (`-i`) and `grep` add colour and skip
+  VCS directories. The aliases work as usual, but zsh-you-should-use is told to ignore them, so it does not mention them: `mark_aliases` and
+  `ignore_new_aliases` (in the script) note what aliases exist before the snippet and add every new one to `YSU_IGNORED_ALIASES` and
+  `YSU_IGNORED_GLOBAL_ALIASES`. You can wrap any other snippet the same way in `~/.ussuri/files/zinit/local.zsh` (turbo:
+  `zinit ice wait lucid atinit"mark_aliases" atload"ignore_new_aliases"; zinit snippet OMZP::name`). To drop common-aliases, remove its line
+  from the lists (and `mark_aliases`/`ignore_new_aliases` around it in `zinit.zsh`).
+- **zsh-you-should-use** (https://github.com/MichaelAquilina/zsh-you-should-use) reminds you of an alias when you type the command it stands
+  for: with `gst` defined, typing `git status` prints `You should use: "gst"`. It reads your aliases as you run each command, so it knows
+  the git snippet's and your own, and forgit's renamed ones. Set `YSU_IGNORED_ALIASES=(l ll)`, `YSU_MESSAGE_POSITION=after` or
+  `YSU_HARDCORE=1` (refuse the long form) in the config, or remove its line from the plugin lists to drop it.
+- **forgit** (https://github.com/wfxr/forgit) gives interactive git commands driven by fzf: add, log, diff, checkout, stash, rebase and
+  more, with previews. It defines short aliases, and 16 of them (`ga`, `gd`, `gco`, `gcb`, `gss`, `glo`...) have the same name as aliases in
+  the Oh My Zsh git snippet, which would silently change what they do (`gcb` creates a branch, but forgit's `gcb` is an interactive picker).
+  Those 16 are renamed with an `f` in front (`fga`, `fgd`, `fgco`, `fgcb`, `fgss`, `fglo`...); your git aliases keep their meaning, and
+  forgit's others (`gi`, `gat`, `gfu`...) keep their names. `zsh tests/forgit-aliases.zsh` (needs the network) checks the renames against
+  the current forgit and git snippet, and is worth running when either is updated.
+- **zoxide** (https://github.com/ajeetdsouza/zoxide) is a smarter `cd`: `z foo` jumps to the directory you use most that matches foo, and
+  `zi` picks interactively with fzf. It only adds `z` and `zi`; it does not replace `cd`. It is in the package lists, so `-P` installs it
+  (note that `-P` installs every missing package in your lists, not only this one; to install just zoxide use your package manager, for
+  example `brew install zoxide`). A login sets it up only if it is installed, so nothing is downloaded on login, and its init output goes
+  through the init cache. `INSTALL_ZOXIDE=false` leaves it alone.
 - **System specific snippets.** A line that only applies to some systems is written as a one line `if os_is_like arch; then ...; fi`: the Arch aliases
   load only on Arch and its derivatives.
-- **Your own plugins** go in `~/.ussuri/files/zinit/local.zsh` (same format, run after the shipped list, never overwritten), with profile and machine
-  layers; see [Local files, profiles and machines](#local-files-profiles-and-machines). A plugin added there loads after the shipped list's completions
-  step, so one that only ships completion files may need a restart to be picked up.
+- **Your own plugins** go in `~/.ussuri/files/zinit/local.zsh` (same format, run after the shipped list, never overwritten), with profile
+  and machine layers; see [Local files, profiles and machines](#local-files-profiles-and-machines). A plugin added there loads after the
+  shipped list's completions step, so one that only ships completion files may need a restart to be picked up.
 - **Other managers.** `-m oh-my-zsh` and `-O` use oh-my-zsh instead of zinit; `-Z` sets its theme.
 
 The lists are copied to `~/.ussuri/files` when installed, so a changed shipped list reaches an existing install with `--update` or `--install`.
 
 ## History
 
-A login shell keeps 50000 lines of history (macOS defaults to 2000, a bare zsh to 30) in the history file (`~/.zsh_history` unless `HISTFILE` is already
-set), shared between shells, and leaves out repeated commands, commands typed with a leading space (a way to keep one out of history) and extra blanks.
-Set `HISTORY_SIZE` to change the size, or `DO_HISTORY=false` to leave all of this to the system (`SHARE_HISTORY=false` turns sharing off separately).
+A login shell keeps 50000 lines of history (macOS defaults to 2000, a bare zsh to 30) in the history file (`~/.zsh_history` unless
+`HISTFILE` is already set), shared between shells, and leaves out repeated commands, commands typed with a leading space (a way to keep one
+out of history) and extra blanks. Set `HISTORY_SIZE` to change the size, or `DO_HISTORY=false` to leave all of this to the system
+(`SHARE_HISTORY=false` turns sharing off separately).
 
 ### atuin (optional)
 
-[atuin](https://atuin.sh) replaces Ctrl-R with a searchable database of your history (with directory, exit status and duration). It records every command, so it is off
-unless you ask: `--tool atuin` once, or `INSTALL_ATUIN=true` in the config. It is installed with Homebrew on macOS and with pacman or nix on Arch and NixOS, the
-package managers atuin's documentation lists; elsewhere it tells you to `cargo install atuin --locked`, and sets atuin up once it is there. Its official install script
-is never run, as it signs you up to Atuin Cloud. Its init output goes through the init cache (a cache for each set of flags, so changing an option takes effect
-at once).
+[atuin](https://atuin.sh) replaces Ctrl-R with a searchable database of your history (with directory, exit status and duration). It records
+every command, so it is off unless you ask: `--tool atuin` once, or `INSTALL_ATUIN=true` in the config. It is installed with Homebrew on
+macOS and with pacman or nix on Arch and NixOS, the package managers atuin's documentation lists; elsewhere it tells you to
+`cargo install atuin --locked`, and sets atuin up once it is there. Its official install script is never run, as it signs you up to Atuin
+Cloud. Its init output goes through the init cache (a cache for each set of flags, so changing an option takes effect at once).
 
 - The up arrow stays with history substring search; atuin gets Ctrl-R. `ATUIN_BIND_UP=true` gives atuin the up arrow as well.
 - Existing history is imported once, when building (`--tool atuin` or `--build`; `ATUIN_IMPORT=false` skips it).
-- **ussuri never syncs.** It does not register, log in or sync, so your history stays on this machine until you run `atuin register` or `atuin login` yourself.
+- **ussuri never syncs.** It does not register, log in or sync, so your history stays on this machine until you run `atuin register` or
+  `atuin login` yourself.
 
 ## PATH and build flags
 
-On a login the script adds `/usr/local/bin`, `/usr/local/sbin`, `/opt/local/bin`, `/opt/local/sbin`, `~/.local/bin` and `~/.cargo/bin` to `PATH` (once, with no
-repeats), sets up Homebrew's environment on macOS, and adds `GO_HOME` (and sets `GOPATH`) if that directory exists. It also exports `CPPFLAGS`, `LDFLAGS` and
-`PKG_CONFIG_PATH` pointing at the `include`, `lib` and `pkgconfig` directories that exist under `/usr`, `/usr/local`, `/opt/local` and Homebrew's prefix, so builds find
-Homebrew's headers and libraries without per-project flags. That makes native builds in your shell depend on what is linked there (a keg-only formula is not,
-and a different major version of a library than the system's may be picked up), so they are less hermetic. Turn it off with `DO_CPPFLAGS_CHECK=false`,
-`DO_LDFLAGS_CHECK=false` and `DO_PKGCONFIG_CHECK=false` in the config.
+On a login the script adds `/usr/local/bin`, `/usr/local/sbin`, `/opt/local/bin`, `/opt/local/sbin`, `~/.local/bin` and `~/.cargo/bin` to
+`PATH` (once, with no repeats), sets up Homebrew's environment on macOS, and adds `GO_HOME` (and sets `GOPATH`) if that directory exists. It
+also exports `CPPFLAGS`, `LDFLAGS` and `PKG_CONFIG_PATH` pointing at the `include`, `lib` and `pkgconfig` directories that exist under
+`/usr`, `/usr/local`, `/opt/local` and Homebrew's prefix, so builds find Homebrew's headers and libraries without per-project flags. That
+makes native builds in your shell depend on what is linked there (a keg-only formula is not, and a different major version of a library than
+the system's may be picked up), so they are less hermetic. Turn it off with `DO_CPPFLAGS_CHECK=false`, `DO_LDFLAGS_CHECK=false` and
+`DO_PKGCONFIG_CHECK=false` in the config.
 
 ## Packages
 
-`-P` (or `DO_PACKAGE_CHECK=true`) installs what is in the package lists for your system that is not installed. The lists are in `files/packages`:
-`macos.brew`, `macos.cask`, `macos.tap`, `ubuntu.apt`, `arch.pacman`, `endeavouros.pacman`, `fedora.dnf`, `alpine.apk` and `nix.nix`, one package per
-line, with `#` comments. Each package is installed on its own, so one that doesn't exist in your distribution's repositories only fails that package. A
-list is only reprocessed when it has changed (it is checksummed), or when you ask with `-P`, and it is only stamped as done once everything in it is installed, so
-failures are retried. Note that `-P` installs every missing package in the lists, which on a new machine is a lot.
+`-P` (or `DO_PACKAGE_CHECK=true`) installs what is in the package lists for your system that is not installed. The lists are in
+`files/packages`: `macos.brew`, `macos.cask`, `macos.tap`, `ubuntu.apt`, `arch.pacman`, `endeavouros.pacman`, `fedora.dnf`, `alpine.apk` and
+`nix.nix`, one package per line, with `#` comments. Each package is installed on its own, so one that doesn't exist in your distribution's
+repositories only fails that package. A list is only reprocessed when it has changed (it is checksummed), or when you ask with `-P`, and it
+is only stamped as done once everything in it is installed, so failures are retried. Note that `-P` installs every missing package in the
+lists, which on a new machine is a lot.
 
 ### macOS: formulae, casks and taps
 
@@ -669,9 +711,9 @@ files/packages/macos.cask    casks (applications and fonts), installed with brew
 ```
 
 The shipped `macos.tap` and `macos.cask` contain only comments, so nothing is installed or tapped by default. Put your own in
-`~/.ussuri/files/packages/local.tap`, `local.brew` and `local.cask` (see below). Each list has its own stamp. A package that is already installed
-(casks are in `brew list` too) or a tap that is already there (compared without regard to case) is skipped. brew install falls back to a cask for a name that is not a
-formula, so a cask named in the formula list works.
+`~/.ussuri/files/packages/local.tap`, `local.brew` and `local.cask` (see below). Each list has its own stamp. A package that is already
+installed (casks are in `brew list` too) or a tap that is already there (compared without regard to case) is skipped. brew install falls
+back to a cask for a name that is not a formula, so a cask named in the formula list works.
 
 ### Linux
 
@@ -685,16 +727,17 @@ The package manager is chosen from the distribution's os-release `ID` and `ID_LI
 | apk | Alpine | `alpine.apk` |
 | nix | NixOS (or any system with `PKG_MANAGER=nix`) | `nix.nix` |
 
-Set `PKG_MANAGER` to override it, such as `nix` on Ubuntu. Root is obtained with `sudo`, or `doas` if there is no sudo, or not at all if you are root, and
-nix is never run as root. apt gets its index refreshed once before the first install, and pacman is run with `-S --needed`, never `-Sy`. The dnf, apk and nix
-lists are a conservative subset of the apt one, so edit them to taste. The nix installed-package list is read from `nix profile list`, which changed format in
-Nix 2.20, so both are handled on a best effort basis.
+Set `PKG_MANAGER` to override it, such as `nix` on Ubuntu. Root is obtained with `sudo`, or `doas` if there is no sudo, or not at all if you
+are root, and nix is never run as root. apt gets its index refreshed once before the first install, and pacman is run with `-S --needed`,
+never `-Sy`. The dnf, apk and nix lists are a conservative subset of the apt one, so edit them to taste. The nix installed-package list is
+read from `nix profile list`, which changed format in Nix 2.20, so both are handled on a best effort basis.
 
 ### Local files, profiles and machines
 
-The shipped lists are replaced by updates and `--install`, so don't edit them. Your own additions go in files that are never touched, and one set of
-settings can differ per profile (work, personal) and per machine. A profile (`-M work`, or `PROFILE=work` in the config) and a machine name (`MACHINE`, the
-short hostname by default) add layers on top of the common ones, for packages, plugins and dotfiles alike. In `~/.ussuri/files`:
+The shipped lists are replaced by updates and `--install`, so don't edit them. Your own additions go in files that are never touched, and
+one set of settings can differ per profile (work, personal) and per machine. A profile (`-M work`, or `PROFILE=work` in the config) and a
+machine name (`MACHINE`, the short hostname by default) add layers on top of the common ones, for packages, plugins and dotfiles alike. In
+`~/.ussuri/files`:
 
 ```
 packages/local.brew                       every machine (local.cask, local.tap, local.apt, local.pacman, local.dnf, local.apk, local.nix likewise)
@@ -703,9 +746,9 @@ packages/hosts/mybox/local.brew           just the machine called mybox
 zinit/local.zsh, zinit/profiles/work/local.zsh, zinit/hosts/mybox/local.zsh      the same, for plugins
 ```
 
-and `~/.ussuri/dotfiles/{common,profiles/<name>,hosts/<machine>}` for [dotfiles](#dotfiles). Layers are applied in that order and later ones win. For
-packages a line `!name` takes a package out of what the earlier layers added (the shipped list included), matched exactly rather than as a pattern, and a later
-layer can put it back:
+and `~/.ussuri/dotfiles/{common,profiles/<name>,hosts/<machine>}` for [dotfiles](#dotfiles). Layers are applied in that order and later ones
+win. For packages a line `!name` takes a package out of what the earlier layers added (the shipped list included), matched exactly rather
+than as a pattern, and a later layer can put it back:
 
 ```
 # packages/profiles/work/local.brew
@@ -713,9 +756,10 @@ layer can put it back:
 !lftp
 ```
 
-Adding a package, or switching profile, is noticed on the next login, as every layer and the profile are part of the list's checksum. A profile or machine name is part of
-a file path, so one containing a slash or starting with a dot is refused with a warning. `--doctor` shows the profile, the machine and the local lists found.
-`DOTFILES_PROFILE` and `DOTFILES_HOST` (the older names) still override them for dotfiles alone.
+Adding a package, or switching profile, is noticed on the next login, as every layer and the profile are part of the list's checksum. A
+profile or machine name is part of a file path, so one containing a slash or starting with a dot is refused with a warning. `--doctor` shows
+the profile, the machine and the local lists found. `DOTFILES_PROFILE` and `DOTFILES_HOST` (the older names) still override them for
+dotfiles alone.
 
 ### Unattended installs
 
@@ -723,17 +767,19 @@ a file path, so one containing a slash or starting with a dot is refused with a 
 ./ussuri.zsh -P --yes
 ```
 
-Package installs are already unattended where the package manager allows it (apt, dnf and pacman are always run with `-y` or `--noconfirm`, and apk, nix and brew
-don't ask). `--yes` (or `ASSUME_YES=true`) also turns off what those flags don't cover: apt's debconf dialogs (`DEBIAN_FRONTEND=noninteractive`), the "Press RETURN" wait
-in the Homebrew installer (`NONINTERACTIVE=1`), and the script's own `--confirm` prompts, which are answered yes. It can't remove a password prompt: sudo, and Homebrew
-casks that run an installer, still ask for your password unless sudo is passwordless for you (`--sudoers` sets that up, see [System settings](#system-settings)).
+Package installs are already unattended where the package manager allows it (apt, dnf and pacman are always run with `-y` or `--noconfirm`,
+and apk, nix and brew don't ask). `--yes` (or `ASSUME_YES=true`) also turns off what those flags don't cover: apt's debconf dialogs
+(`DEBIAN_FRONTEND=noninteractive`), the "Press RETURN" wait in the Homebrew installer (`NONINTERACTIVE=1`), and the script's own `--confirm`
+prompts, which are answered yes. It can't remove a password prompt: sudo, and Homebrew casks that run an installer, still ask for your
+password unless sudo is passwordless for you (`--sudoers` sets that up, see [System settings](#system-settings)).
 
 ### Installers and pinning
 
-Installers (Homebrew, oh-my-posh, fnm, rustup, uv, mise) are downloaded to a file and then run, rather than piped into a shell. To verify them, set the expected
-SHA-256 before the script runs, for example `BREW_INSTALL_SHA256` (a mismatch is refused); without one they still run, with a notice. Git installs follow the
-latest by default; to pin the first clone to a branch, tag or commit set `ZINIT_REF`, `RBENV_REF`, `RUBY_BUILD_REF`, `PYENV_REF`, `NERD_FONTS_REF`, `ZOSH_REF` or
-`P10K_REF`. An existing install is never changed. The settings are listed in [Settings](#settings).
+Installers (Homebrew, oh-my-posh, fnm, rustup, uv, mise) are downloaded to a file and then run, rather than piped into a shell. To verify
+them, set the expected SHA-256 before the script runs, for example `BREW_INSTALL_SHA256` (a mismatch is refused); without one they still
+run, with a notice. Git installs follow the latest by default; to pin the first clone to a branch, tag or commit set `ZINIT_REF`,
+`RBENV_REF`, `RUBY_BUILD_REF`, `PYENV_REF`, `NERD_FONTS_REF`, `ZOSH_REF` or `P10K_REF`. An existing install is never changed. The settings
+are listed in [Settings](#settings).
 
 ### Package drift
 
@@ -741,8 +787,9 @@ latest by default; to pin the first clone to a branch, tag or commit set `ZINIT_
 ./ussuri.zsh --drift packages
 ```
 
-(`--drift` alone is settings and packages, each under a heading.) It compares what is installed with your package lists, every layer of them (local, profile,
-machine, with `!name` exclusions applied). It reads only, from live queries to the package manager and never the cached lists:
+(`--drift` alone is settings and packages, each under a heading.) It compares what is installed with your package lists, every layer of them
+(local, profile, machine, with `!name` exclusions applied). It reads only, from live queries to the package manager and never the cached
+lists:
 
 ```
 Packages (brew)
@@ -756,10 +803,11 @@ Packages (brew)
 1 packages from your lists are not installed (-P installs them); 59 installed ones are not in your lists (shown for information)
 ```
 
-What is in a list but not installed is drift (exit status 1), which `-P` would install. What is installed because you chose it (brew leaves and casks,
-`apt-mark showmanual`, `pacman -Qe`, dnf userinstalled, the apk world file) but is in no list is only shown, as that is what you would add to a local list to keep it, so a
-machine that only has extras is not drift (exit status 0). On macOS a name in the formula list that is installed as a cask counts as installed, as it does for `-P`.
-Exit status 2 means there was nothing to compare (no supported package manager, or its tool is not installed).
+What is in a list but not installed is drift (exit status 1), which `-P` would install. What is installed because you chose it (brew leaves
+and casks, `apt-mark showmanual`, `pacman -Qe`, dnf userinstalled, the apk world file) but is in no list is only shown, as that is what you
+would add to a local list to keep it, so a machine that only has extras is not drift (exit status 0). On macOS a name in the formula list
+that is installed as a cask counts as installed, as it does for `-P`. Exit status 2 means there was nothing to compare (no supported package
+manager, or its tool is not installed).
 
 **Adopting what is installed.** The packages that are installed but in no list are what you would add to a local list to keep, so `--adopt` does that:
 
@@ -768,21 +816,23 @@ Exit status 2 means there was nothing to compare (no supported package manager, 
 Add zzz-extra to local.brew? [y/n] (a adds all that are left, q stops): y
 ```
 
-It asks about each (`y`, `n`, `a` to add this and all that are left, `q` to stop), or add `--yes` to add them all, or `--dryrun` to see what would be
-added. A formula goes in `local.brew`, a cask in `local.cask`, a tap in `local.tap`, and on Linux a package in the `local.<ext>` of your package manager,
-next to the shipped list. `--profile NAME` or `--host NAME` puts them in that profile's or machine's list instead (see [Local files, profiles and
-machines](#local-files-profiles-and-machines)). A name is added under a line saying where it came from, never twice, and what was in the list is kept.
-The list is backed up in `~/.ussuri` first (`packages-<ext>.<date>`, the newest ten) and replaced in one rename, under the lock. Nothing is installed or
-removed: the packages are installed already, and listing them means a new machine gets them with `-P`. It needs a terminal to ask on, so without `--yes`
-or `--dryrun` it refuses when there is none.
+It asks about each (`y`, `n`, `a` to add this and all that are left, `q` to stop), or add `--yes` to add them all, or `--dryrun` to see what
+would be added. A formula goes in `local.brew`, a cask in `local.cask`, a tap in `local.tap`, and on Linux a package in the `local.<ext>` of
+your package manager, next to the shipped list. `--profile NAME` or `--host NAME` puts them in that profile's or machine's list instead (see
+[Local files, profiles and machines](#local-files-profiles-and-machines)). A name is added under a line saying where it came from, never
+twice, and what was in the list is kept. The list is backed up in `~/.ussuri` first (`packages-<ext>.<date>`, the newest ten) and replaced
+in one rename, under the lock. Nothing is installed or removed: the packages are installed already, and listing them means a new machine
+gets them with `-P`. It needs a terminal to ask on, so without `--yes` or `--dryrun` it refuses when there is none.
 
 ## Languages and tools
 
-- **rbenv and pyenv** (`-r`, `-p`, on by default for a login): installed from git, their environment set up (with the init output cached). `-b` (or `-r`/`-p`, which imply it)
-  builds a version: `RUBY_VER` and `PYTHON_VER`, by default the latest stable (found with `sort -V`, and only looked up when building). Only an installed version is made the
-  global one, and `local` is never used, as it writes a version file into whatever directory the shell started in.
-- **fnm, rustup, uv and mise** (and [atuin](#atuin-optional)) can be installed and set up too. They are off unless you ask, either once with `--tool NAME` or permanently with `INSTALL_<NAME>=true` in the
-  config (on a login they are then installed if missing and set up, and no versions are installed):
+- **rbenv and pyenv** (`-r`, `-p`, on by default for a login): installed from git, their environment set up (with the init output cached).
+  `-b` (or `-r`/`-p`, which imply it) builds a version: `RUBY_VER` and `PYTHON_VER`, by default the latest stable (found with `sort -V`, and
+  only looked up when building). Only an installed version is made the global one, and `local` is never used, as it writes a version file
+  into whatever directory the shell started in.
+- **fnm, rustup, uv and mise** (and [atuin](#atuin-optional)) can be installed and set up too. They are off unless you ask, either once with
+  `--tool NAME` or permanently with `INSTALL_<NAME>=true` in the config (on a login they are then installed if missing and set up, and no
+  versions are installed):
 
   ```
   fnm     Node          FNM_NODE=lts-latest                installed to ~/.local/share/fnm
@@ -794,33 +844,39 @@ or `--dryrun` it refuses when there is none.
 
   The version settings are only acted on when building (`--tool` or `--build`). The installers are told not to edit your shell files. mise's activation is cached like
   rbenv's; fnm's can't be, as it points at a directory made for each shell. fnm is offered rather than nvm because nvm's init costs hundreds of milliseconds per shell.
-- **Fonts** (`-f`): the Fira Code Nerd Font, as a Homebrew cask on macOS and from the nerd-fonts repository on Linux, as the prompt needs it for its icons.
+- **Fonts** (`-f`): the Fira Code Nerd Font, as a Homebrew cask on macOS and from the nerd-fonts repository on Linux, as the prompt needs it
+  for its icons.
 - **zoxide** and **forgit**: see [Plugins](#plugins).
 
 ## System settings
 
 ### macOS defaults
 
-A login (or `-D`, or `-A`) applies a set of OS X defaults, read first so that only what differs is written: Finder, Dock (including hot corners), screen capture, key repeat and other global
-settings, Safari, the App Store and software update, and a few apps' debug menus, with the Library folder unhidden. `TORRENT_DIR` and `SCREENSHOT_LOCATION` set two of the paths. The Dock,
-Finder and SystemUIServer are restarted if a change needs it. Reading about a hundred settings takes over a second, so on a login they are only applied when the script has changed since
-the last time, after `DEFAULTS_MAX_AGE` days, or when asked for (`-D`, `--force`), tracked by `~/.ussuri/defaults.stamp`. The list is in the script (`set_osx_*_defaults`).
+A login (or `-D`, or `-A`) applies a set of OS X defaults, read first so that only what differs is written: Finder, Dock (including hot
+corners), screen capture, key repeat and other global settings, Safari, the App Store and software update, and a few apps' debug menus, with
+the Library folder unhidden. `TORRENT_DIR` and `SCREENSHOT_LOCATION` set two of the paths. The Dock, Finder and SystemUIServer are restarted
+if a change needs it. Reading about a hundred settings takes over a second, so on a login they are only applied when the script has changed
+since the last time, after `DEFAULTS_MAX_AGE` days, or when asked for (`-D`, `--force`), tracked by `~/.ussuri/defaults.stamp`. The list is
+in the script (`set_osx_*_defaults`).
 
-**Undoing.** Every setting the script changes is recorded in `~/.ussuri/defaults.journal` (what it was before, with its type, or that it was not set, and what it was set to), once a read back
-shows the write took effect (a write that was declined, refused or ignored isn't recorded). A run is one apply.
+**Undoing.** Every setting the script changes is recorded in `~/.ussuri/defaults.journal` (what it was before, with its type, or that it was
+not set, and what it was set to), once a read back shows the write took effect (a write that was declined, refused or ignored isn't
+recorded). A run is one apply.
 
 ```
 ./ussuri.zsh --defaults-undo list
 ./ussuri.zsh --defaults-undo [N]
 ```
 
-`list` shows the runs, and `--defaults-undo` puts back the newest (or the Nth newest, 1 being the newest), each setting exactly as it was, with the same type, or deleted if it was not set. A
-setting you changed yourself since is left alone and reported, as is one whose previous value was an array or dictionary (those can't be put back from the journal). The Dock and Finder are
-restarted if needed. A run that has been undone is marked, so the next undo goes back one run. `--dryrun` shows what would be put back, and `--confirm` is honoured (and, as some may be declined,
-leaves the run to be undone again). Only changes made from version 1.5.7 on are recorded, and it covers OS X defaults, not the Linux GNOME settings or the Library folder's hidden flag.
+`list` shows the runs, and `--defaults-undo` puts back the newest (or the Nth newest, 1 being the newest), each setting exactly as it was,
+with the same type, or deleted if it was not set. A setting you changed yourself since is left alone and reported, as is one whose previous
+value was an array or dictionary (those can't be put back from the journal). The Dock and Finder are restarted if needed. A run that has
+been undone is marked, so the next undo goes back one run. `--dryrun` shows what would be put back, and `--confirm` is honoured (and, as
+some may be declined, leaves the run to be undone again). Only changes made from version 1.5.7 on are recorded, and it covers OS X defaults,
+not the Linux GNOME settings or the Library folder's hidden flag.
 
-**Drift.** `--drift settings` reads every setting the script would apply and prints the ones that differ, as actual -> expected and grouped by domain, then a summary. It writes nothing and exits 1 if
-there is drift:
+**Drift.** `--drift settings` reads every setting the script would apply and prints the ones that differ, as actual -> expected and grouped
+by domain, then a summary. It writes nothing and exits 1 if there is drift:
 
 ```
 com.apple.dock
@@ -832,21 +888,26 @@ com.apple.dock
 
 ### Transmission blocklist
 
-On macOS the script sets Transmission's blocklist to Bluetack's Level 1 list as served by iblocklist.com over HTTPS (the list Transmission itself used to ship, refreshed daily), with
-auto-update on. Set `TRANSMISSION_BLOCKLIST_URL` to use another one. The URL is checked before it is written, and an unreachable one is reported and not written, so it never replaces a working setting.
-Neither the list nor the service is endorsed by the Transmission developers, and Level 1 blocks the address ranges of organisations known for anti-filesharing activity, so decide for yourself whether you want it.
+On macOS the script sets Transmission's blocklist to Bluetack's Level 1 list as served by iblocklist.com over HTTPS (the list Transmission
+itself used to ship, refreshed daily), with auto-update on. Set `TRANSMISSION_BLOCKLIST_URL` to use another one. The URL is checked before
+it is written, and an unreachable one is reported and not written, so it never replaces a working setting. Neither the list nor the service
+is endorsed by the Transmission developers, and Level 1 blocks the address ranges of organisations known for anti-filesharing activity, so
+decide for yourself whether you want it.
 
 ### Linux (GNOME)
 
-On Linux, `--defaults` applies a short list of GNOME settings through `gsettings` (keyboard repeat, show hidden files and directories first in file choosers, list view in Files, button layout, privacy
-clean-up and so on), and `--drift` reports where they differ. A setting that doesn't exist on your desktop is skipped, and nothing is done without `gsettings` and a desktop session (without a session
-bus `gsettings` only writes to a throwaway store). Unlike on macOS these are not applied on every login unless you set `DO_GNOME_DEFAULTS=true`. The list is `apply_linux_defaults` in the script.
+On Linux, `--defaults` applies a short list of GNOME settings through `gsettings` (keyboard repeat, show hidden files and directories first
+in file choosers, list view in Files, button layout, privacy clean-up and so on), and `--drift` reports where they differ. A setting that
+doesn't exist on your desktop is skipped, and nothing is done without `gsettings` and a desktop session (without a session bus `gsettings`
+only writes to a throwaway store). Unlike on macOS these are not applied on every login unless you set `DO_GNOME_DEFAULTS=true`. The list is
+`apply_linux_defaults` in the script.
 
 ### sudoers
 
-`-s` (`DO_SUDOERS_CHECK`) installs a sudoers entry for your user, by default `ALL=(ALL) NOPASSWD:ALL` (`-S` or `SUDOERS_ENTRY` changes it), in `/etc/sudoers.d/<you>`. It is off by default. The entry is
-checked with `visudo -cf` before it is installed (so a bad one can't break sudo), installed mode 0440, and only if sudo doesn't already allow it (the check is made without a password prompt).
-That default gives your user passwordless root, so think before using it.
+`-s` (`DO_SUDOERS_CHECK`) installs a sudoers entry for your user, by default `ALL=(ALL) NOPASSWD:ALL` (`-S` or `SUDOERS_ENTRY` changes it),
+in `/etc/sudoers.d/<you>`. It is off by default. The entry is checked with `visudo -cf` before it is installed (so a bad one can't break
+sudo), installed mode 0440, and only if sudo doesn't already allow it (the check is made without a password prompt). That default gives your
+user passwordless root, so think before using it.
 
 ## Dotfiles
 
@@ -862,10 +923,12 @@ Links dotfiles from `~/.ussuri/dotfiles` into your home directory, in layers so 
 ~/.ussuri/dotfiles/hosts/mybox/.gitconfig          only the machine whose short hostname is mybox
 ```
 
-A file at `<layer>/.config/app/conf` is linked as `~/.config/app/conf`. The profile comes from `--profile` or `PROFILE` (or `DOTFILES_PROFILE`), the host from `MACHINE` (or `DOTFILES_HOST`;
-default is the short hostname), and the directory from `DOTFILES_DIR`. Nothing is ever deleted: a real file (or a link pointing somewhere else) that is in the way is moved to
-`~/.ussuri/dotfile-backups/<date>/` first. Running it again changes nothing, `--dryrun --verbose` shows what it would do, and `--unlink` removes only the links that point into the dotfiles directory (backups are
-left for you to restore by hand). It runs only when asked, unless you set `DO_DOTFILES_CHECK=true` to keep the links in place on every login. File names are treated as plain text, whatever is in them.
+A file at `<layer>/.config/app/conf` is linked as `~/.config/app/conf`. The profile comes from `--profile` or `PROFILE` (or
+`DOTFILES_PROFILE`), the host from `MACHINE` (or `DOTFILES_HOST`; default is the short hostname), and the directory from `DOTFILES_DIR`.
+Nothing is ever deleted: a real file (or a link pointing somewhere else) that is in the way is moved to `~/.ussuri/dotfile-backups/<date>/`
+first. Running it again changes nothing, `--dryrun --verbose` shows what it would do, and `--unlink` removes only the links that point into
+the dotfiles directory (backups are left for you to restore by hand). It runs only when asked, unless you set `DO_DOTFILES_CHECK=true` to
+keep the links in place on every login. File names are treated as plain text, whatever is in them.
 
 ### Dotfiles from a git repository
 
@@ -874,14 +937,18 @@ left for you to restore by hand). It runs only when asked, unless you set `DO_DO
 ./ussuri.zsh --dotfiles
 ```
 
-With `DOTFILES_REPO` set the dotfiles directory is a clone of that repository, laid out as above (`common/`, `profiles/<name>/`, `hosts/<name>/`), so a new machine gets its dotfiles from one setting.
-`--dotfiles` clones it (or pulls it) first, in the foreground, says what happened, and then links. After that it keeps itself current: an interactive login checks at most once a day, in the background (a
-detached job with its output discarded, the stamp touched first, nothing printed, nothing prompted for), and `--doctor` shows what the last check said and when. Links to files that were already there pick up a
-change by themselves; a new file is linked the next time you run `--dotfiles`. `DOTFILES_REF` keeps it on a branch, tag or commit instead of following the remote.
+With `DOTFILES_REPO` set the dotfiles directory is a clone of that repository, laid out as above (`common/`, `profiles/<name>/`,
+`hosts/<name>/`), so a new machine gets its dotfiles from one setting. `--dotfiles` clones it (or pulls it) first, in the foreground, says
+what happened, and then links. After that it keeps itself current: an interactive login checks at most once a day, in the background (a
+detached job with its output discarded, the stamp touched first, nothing printed, nothing prompted for), and `--doctor` shows what the last
+check said and when. Links to files that were already there pick up a change by themselves; a new file is linked the next time you run
+`--dotfiles`. `DOTFILES_REF` keeps it on a branch, tag or commit instead of following the remote.
 
-This is the one place where the script runs on every machine what you did not write on it, so it is careful: only `https://`, `ssh://`, `file://` and `git@host:path` URLs are accepted (git's `ext::` transport
-runs commands, and `GIT_ALLOW_PROTOCOL` is set to the same list as well); an existing directory that is not a clone of that URL is left alone, as is a clone with changes that are not committed; only a fast forward is
-taken, never a merge or a reset; and a failure leaves what you had. It is off unless you set it, and the dotfiles in the repository are code that runs in your shell, so only point it at a repository you trust.
+This is the one place where the script runs on every machine what you did not write on it, so it is careful: only `https://`, `ssh://`,
+`file://` and `git@host:path` URLs are accepted (git's `ext::` transport runs commands, and `GIT_ALLOW_PROTOCOL` is set to the same list as
+well); an existing directory that is not a clone of that URL is left alone, as is a clone with changes that are not committed; only a fast
+forward is taken, never a merge or a reset; and a failure leaves what you had. It is off unless you set it, and the dotfiles in the
+repository are code that runs in your shell, so only point it at a repository you trust.
 
 ## Maintenance
 
@@ -891,24 +958,32 @@ taken, never a merge or a reset; and a failure leaves what you had. It is off un
 ./ussuri.zsh --update
 ```
 
-Downloads the release archive from GitHub (one request, the script and its `files/`), checks the script parses and is the version expected, saves the current script in `~/.ussuri`, replaces it, and then
-brings `~/.ussuri/files` up to date: new files are added and changed ones replaced, with the copy that is replaced first saved in `~/.ussuri/files.bak/<date>/`, so an edit of yours is never lost.
-Nothing is deleted, and your `local.*` files are never touched. It refuses an archive that fails the checks (a script that doesn't parse, paths that would escape the target, or a checksum that doesn't match
-`UPDATE_SHA256` if you set one, or a script that does not match `SCRIPT_SHA256`), and if the archive can't be fetched it updates the script alone and says the supporting files were not updated. `UPDATE_URL` points it somewhere else. It updates the script you
-ran: run it from `~/.zshrc`, or run `--install` after updating a checkout. `--check` only compares versions.
+Downloads the release archive from GitHub (one request: the script and its `files/`), checks that the script parses and is the version expected, saves
+the current script in `~/.ussuri`, replaces it, and then brings `~/.ussuri/files` up to date.
 
-It prints the SHA-256 of the script it installed, so it can be compared with one you trust. `UPDATE_SHA256` pins the whole archive and `SCRIPT_SHA256` just the script, on either way of fetching it (the whole archive or the script alone);
-both are checked before anything is replaced, and a mismatch changes nothing. They are for a release you have checked: a pin for a moving `main` branch would refuse every update but one. `--rollback update` undoes an update (below).
+- **Your files are safe.** New files are added and changed ones replaced, the copy that is replaced first saved in
+  `~/.ussuri/files.bak/<date>/`, so an edit of yours is never lost. Nothing is deleted, and your `local.*` files are never touched.
+- **What it refuses.** An archive that fails a check: a script that doesn't parse, paths that would escape the target, or a checksum that
+  doesn't match `UPDATE_SHA256` (the whole archive) or `SCRIPT_SHA256` (just the script), if you set them. Both are checked before anything
+  is replaced, whichever way the script was fetched, and a mismatch changes nothing. They are for a release you have checked: a pin for a
+  moving `main` branch would refuse every update but one.
+- **If the archive can't be fetched** it updates the script alone and says the supporting files were not updated. `UPDATE_URL` points it
+  somewhere else.
+- **It shows the SHA-256** of the script it installed, so it can be compared with one you trust.
+- **It updates the script you ran:** run it from `~/.zshrc`, or run `--install` after updating a checkout. `--check` only compares versions, and
+  `--rollback update` undoes an update (see [Backups, rollback and uninstall](#backups-rollback-and-uninstall)).
 
-**Update hint.** `UPDATE_HINT=true` (off by default, because it contacts GitHub from your shell) checks at most once a day, in the background (a disowned job with its output detached, so a login never waits for it), and records
-the latest version in `~/.ussuri/update.latest`. When that is newer than your script, one line is shown at the next prompt, at most once a day:
+**Update hint.** `UPDATE_HINT=true` (off by default, because it contacts GitHub from your shell) checks at most once a day, in the
+background (a disowned job with its output detached, so a login never waits for it), and records the latest version in
+`~/.ussuri/update.latest`. When that is newer than your script, one line is shown at the next prompt, at most once a day:
 
 ```
 ussuri 1.7.0 is available (this is 1.6.4): run ussuri.zsh --update  (UPDATE_HINT=false turns this off)
 ```
 
-It is shown from a prompt hook after startup finishes, not during it, as output during startup upsets powerlevel10k's instant prompt. A normal login does no extra work for it: two checks of stamp files and one small file
-read. Only interactive logins check (never a manual run), a damaged or unexpected answer is ignored, and several shells opened together start one check.
+It is shown from a prompt hook after startup finishes, not during it, as output during startup upsets powerlevel10k's instant prompt. A
+normal login does no extra work for it: two checks of stamp files and one small file read. Only interactive logins check (never a manual
+run), a damaged or unexpected answer is ignored, and several shells opened together start one check.
 
 ### Backups, rollback and uninstall
 
@@ -919,13 +994,17 @@ read. Only interactive logins check (never a manual run), a damaged or unexpecte
 ./ussuri.zsh --uninstall
 ```
 
-`--install` saves your current `~/.zshrc` in `~/.ussuri` before replacing it (two installs in the same second keep both). `--backups` lists them, newest first, with the version of each and whether it is ussuri or a
-`.zshrc` of your own. `--rollback` puts one back (N is the number from `--backups`, a file name, or nothing for the newest). `--uninstall` goes back to the `.zshrc` you had before ussuri: the newest backup that isn't ussuri
-itself, or, if you had none, it moves ussuri's aside. Either way the `.zshrc` being replaced is saved first, so a rollback can itself be undone. Installed components and the backups in `~/.ussuri` are left alone, and
-`--unlink` removes dotfile links. All of them honour `--dryrun`.
+`--install` saves your current `~/.zshrc` in `~/.ussuri` before replacing it (two installs in the same second keep both). `--backups` lists
+them, newest first, with the version of each and whether it is ussuri or a `.zshrc` of your own. `--rollback` puts one back (N is the number
+from `--backups`, a file name, or nothing for the newest). `--uninstall` goes back to the `.zshrc` you had before ussuri: the newest backup
+that isn't ussuri itself, or, if you had none, it moves ussuri's aside. Either way the `.zshrc` being replaced is saved first, so a rollback
+can itself be undone. Installed components and the backups in `~/.ussuri` are left alone, and `--unlink` removes dotfile links. All of them
+honour `--dryrun`.
 
-`--rollback update` undoes the last `--update`: it puts back the script the update replaced (kept as `~/.ussuri/ussuri.zsh.<date>`) and the supporting files it replaced (kept in `~/.ussuri/files.bak/<date>/`, the same date).
-A file the update added is left where it is, as nothing recorded which were new. The script it replaces is kept first, so doing it twice goes forward again. `--backups` mentions the copies when there are some.
+`--rollback update` undoes the last `--update`: it puts back the script the update replaced (kept as `~/.ussuri/ussuri.zsh.<date>`) and the
+supporting files it replaced (kept in `~/.ussuri/files.bak/<date>/`, the same date). A file the update added is left where it is, as nothing
+recorded which were new. The script it replaces is kept first, so doing it twice goes forward again. `--backups` mentions the copies when
+there are some.
 
 ### Moving to a new machine: `--export` and `--import`
 
@@ -934,13 +1013,16 @@ A file the update added is left where it is, as nothing recorded which were new.
 ./ussuri.zsh --import FILE         # on the new machine, after installing ussuri
 ```
 
-The bundle holds your config and its profile and machine layers, your local plugin and package lists (and their layers), the dotfiles directory and your `~/.p10k.zsh`, with a `MANIFEST` saying which version and
-machine made it. It holds nothing the release owns or the machine made (the shipped files, caches, stamps, backups, the defaults journal). With no name it writes `ussuri-export-<machine>-<date>.tgz` in the current
-directory, never over a file that is there (`--force` replaces it), readable by you alone: it can hold things you would not post, your config values and your dotfiles.
+The bundle holds your config and its profile and machine layers, your local plugin and package lists (and their layers), the dotfiles
+directory and your `~/.p10k.zsh`, with a `MANIFEST` saying which version and machine made it. It holds nothing the release owns or the
+machine made (the shipped files, caches, stamps, backups, the defaults journal). With no name it writes `ussuri-export-<machine>-<date>.tgz`
+in the current directory, never over a file that is there (`--force` replaces it), readable by you alone: it can hold things you would not
+post, your config values and your dotfiles.
 
-`--import` is careful about what it takes. Every entry must be a plain file or directory (no links) with a name from the list above, with no absolute path and no `..`, and the archive must have the MANIFEST, or nothing is
-imported. A file that is already there and the same is left; one that differs is replaced, with the old copy in `~/.ussuri/import.bak/<date>/`. The dotfiles are put in the dotfiles directory, not linked: run `--dotfiles`
-after it, and `--doctor` to check the result. Both honour `--dryrun`, and `--import` takes the lock.
+`--import` is careful about what it takes. Every entry must be a plain file or directory (no links) with a name from the list above, with no
+absolute path and no `..`, and the archive must have the MANIFEST, or nothing is imported. A file that is already there and the same is
+left; one that differs is replaced, with the old copy in `~/.ussuri/import.bak/<date>/`. The dotfiles are put in the dotfiles directory, not
+linked: run `--dotfiles` after it, and `--doctor` to check the result. Both honour `--dryrun`, and `--import` takes the lock.
 
 ### Doctor
 
@@ -948,10 +1030,12 @@ after it, and `--doctor` to check the result. Both honour `--dryrun`, and `--imp
 ./ussuri.zsh --doctor
 ```
 
-Checks the shell, tools, install (the `.zshrc` version, support files, the lists and the local ones), config, profile and machine, lock, components, fonts, backups and state (defaults stamp, journal, init cache, PATH, the update
-hint), the prompt's top line (see [`--prompt-preview`](#looking-at-it---prompt-preview)) and the dotfiles repository if there is one, and prints `ok`, `warn` or `FAIL` for each. A warning is something that will probably fix itself on the next login or is worth a look, a failure is something that will not. It exits non-zero if there are
-any failures, and it never changes anything (a missing directory is reported, not recreated). Some of what it finds can be repaired, and it says so at the
-end.
+Checks the shell, tools, install (the `.zshrc` version, support files, the lists and the local ones), config, profile and machine, lock,
+components, fonts, backups and state (defaults stamp, journal, init cache, PATH, the update hint), the prompt's top line (see
+[`--prompt-preview`](#looking-at-it---prompt-preview)) and the dotfiles repository if there is one, and prints `ok`, `warn` or `FAIL` for
+each. A warning is something that will probably fix itself on the next login or is worth a look, a failure is something that will not. It
+exits non-zero if there are any failures, and it never changes anything (a missing directory is reported, not recreated). Some of what it
+finds can be repaired, and it says so at the end.
 
 ```
 ./ussuri.zsh --doctor --fix --dryrun     # what it would repair
@@ -961,24 +1045,33 @@ end.
 `--fix` repairs only what is small, local and reversible, and checks afterwards that each repair worked (the totals and the exit status are updated):
 
 - **A config file that others can write** (the config and the profile and machine files are executed on every shell): `chmod go-w`.
-- **A config file with a syntax error:** the newest backup that is valid zsh is put back, and the broken file is kept beside it as `<name>.broken`. If there is no valid
-  backup it is left alone and stays a failure.
+- **A config file with a syntax error:** the newest backup that is valid zsh is put back, and the broken file is kept beside it as
+  `<name>.broken`. If there is no valid backup it is left alone and stays a failure.
 - **A missing `~/.p10k.zsh`:** copied from the shipped one in `~/.ussuri/files/p10k`.
-- **A temp file left by a `--set`, `--edit` or `--adopt` that did not finish:** removed once it is over 10 minutes old, as one that is newer may be in use.
+- **A temp file left by a `--set`, `--edit` or `--adopt` that did not finish:** removed once it is over 10 minutes old, as one that is newer
+  may be in use.
 
-It never installs anything, fetches anything, deletes a file of yours or touches a backup. Without `--fix`, `--doctor` changes nothing at all. It takes the lock,
-so it will not run alongside another ussuri run, and `--dryrun` and `--confirm` are honoured.
+It never installs anything, fetches anything, deletes a file of yours or touches a backup. Without `--fix`, `--doctor` changes nothing at
+all. It takes the lock, so it will not run alongside another ussuri run, and `--dryrun` and `--confirm` are honoured.
 
 ## Security notes
 
-- Installers are downloaded to a file, optionally checked against a SHA-256, and only then run; nothing is piped into a shell. Git installs can be pinned.
-- Every path, name and version that goes into a command is quoted, and values read back from the defaults journal and the dotfile names are never evaluated. Profile and machine names and prompt segment names are validated.
-- `--update` refuses an archive with an unsafe path or a wrong checksum (`UPDATE_SHA256`, `SCRIPT_SHA256`), never deletes anything, keeps a copy of every file it replaces and shows the checksum of the script it installed. `--import` takes only plain files with names from a fixed list, and keeps a copy of what it replaces.
-- `DOTFILES_REPO` accepts only https, ssh and file URLs, never pulls over local changes or a different remote, and prompts for nothing in the background.
-- Anything that contacts the network on a login (the update hint) is off by default, runs in the background and never blocks. `--drift`, `--doctor`, `--help` and `--version` change nothing.
-- `~/.ussuri/config` is executed on every shell, so it should be writable only by you. `--set` saves a value quoted and never runs it, and replaces the file with one rename. The profile and machine files (`profiles/<name>/local.config`, `hosts/<name>/local.config`) are executed the same way and are checked by `--doctor` the same way. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
-- What the script writes outside `~/.ussuri` and your dotfiles is what you enable: the OS X defaults and Transmission blocklist, GNOME settings, packages, language managers, a sudoers file, and `~/.zshrc` itself. Each has an undo
-  or a backup, except installed packages.
+- Installers are downloaded to a file, optionally checked against a SHA-256, and only then run; nothing is piped into a shell. Git installs
+  can be pinned.
+- Every path, name and version that goes into a command is quoted, and values read back from the defaults journal and the dotfile names are
+  never evaluated. Profile and machine names and prompt segment names are validated.
+- `--update` refuses an archive with an unsafe path or a wrong checksum (`UPDATE_SHA256`, `SCRIPT_SHA256`), never deletes anything, keeps a
+  copy of every file it replaces and shows the checksum of the script it installed. `--import` takes only plain files with names from a
+  fixed list, and keeps a copy of what it replaces.
+- `DOTFILES_REPO` accepts only https, ssh and file URLs, never pulls over local changes or a different remote, and prompts for nothing in
+  the background.
+- Anything that contacts the network on a login (the update hint) is off by default, runs in the background and never blocks. `--drift`,
+  `--doctor`, `--help` and `--version` change nothing.
+- `~/.ussuri/config` is executed on every shell, so it should be writable only by you. `--set` saves a value quoted and never runs it, and
+  replaces the file with one rename. The profile and machine files (`profiles/<name>/local.config`, `hosts/<name>/local.config`) are
+  executed the same way and are checked by `--doctor` the same way. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
+- What the script writes outside `~/.ussuri` and your dotfiles is what you enable: the OS X defaults and Transmission blocklist, GNOME
+  settings, packages, language managers, a sudoers file, and `~/.zshrc` itself. Each has an undo or a backup, except installed packages.
 
 ## Testing and CI
 
@@ -988,19 +1081,24 @@ zsh tests/package-names.zsh [-v]
 zsh tests/forgit-aliases.zsh        # needs the network, see Plugins
 ```
 
-The smoke tests run against a copy of the script in a throwaway home directory with the system commands (`defaults`, `brew`, `sudo`, `rbenv`, `pyenv`, the package managers...) stubbed, so they do not touch the real system.
-They pretend to be macOS whatever the host is (`TEST_OS=linux` and `TEST_OS_REL` change that), and `TEST_PATH_PREFIX` goes in front of the sandbox's `PATH`, to try another userland, for example GNU tools on a Mac:
-`TEST_PATH_PREFIX=/opt/homebrew/opt/coreutils/libexec/gnubin: zsh tests/smoke.zsh`. Where a stub can't show it, a few things were also checked by hand against the real thing (the real Homebrew, the real `defaults` on a
-scratch file, a real terminal for the prompt, plugins and hint).
+The smoke tests run against a copy of the script in a throwaway home directory with the system commands (`defaults`, `brew`, `sudo`,
+`rbenv`, `pyenv`, the package managers...) stubbed, so they do not touch the real system. They pretend to be macOS whatever the host is
+(`TEST_OS=linux` and `TEST_OS_REL` change that), and `TEST_PATH_PREFIX` goes in front of the sandbox's `PATH`, to try another userland, for
+example GNU tools on a Mac: `TEST_PATH_PREFIX=/opt/homebrew/opt/coreutils/libexec/gnubin: zsh tests/smoke.zsh`. Where a stub can't show it,
+a few things were also checked by hand against the real thing (the real Homebrew, the real `defaults` on a scratch file, a real terminal for
+the prompt, plugins and hint).
 
-`tests/package-names.zsh` checks that every package named in the shipped list for this system exists in its repositories (`apt-cache`, `pacman -Si`, `dnf repoquery`, `apk search` or `brew info`), installing nothing. It needs a fresh
-package index, and it is how a wrong name in a list is found before `-P` fails on it.
+`tests/package-names.zsh` checks that every package named in the shipped list for this system exists in its repositories (`apt-cache`,
+`pacman -Si`, `dnf repoquery`, `apk search` or `brew info`), installing nothing. It needs a fresh package index, and it is how a wrong name
+in a list is found before `-P` fails on it.
 
-`.github/workflows/ci.yml` runs the smoke tests and the name check on macOS and Ubuntu runners, and on Debian, Ubuntu, Fedora, Arch and Alpine in containers, where it also runs `--install`, `--doctor` and `--drift packages` for real, as those are the
-paths the smoke tests can only check against stubs. Nothing in it installs packages from your lists or changes the runner. The actions are pinned to a major version (`actions/checkout@v4`), not to a commit.
+`.github/workflows/ci.yml` runs the smoke tests and the name check on macOS and Ubuntu runners, and on Debian, Ubuntu, Fedora, Arch and
+Alpine in containers, where it also runs `--install`, `--doctor` and `--drift packages` for real, as those are the paths the smoke tests can
+only check against stubs. Nothing in it installs packages from your lists or changes the runner. The actions are pinned to a major version
+(`actions/checkout@v4`), not to a commit.
 
-What is checked only against stubs so far is the Linux package managers and their drift queries, the package names for everything but Homebrew, the GNOME settings and the fnm, rustup, uv and mise installers; the workflow is how those get checked on
-real systems.
+What is checked only against stubs so far is the Linux package managers and their drift queries, the package names for everything but
+Homebrew, the GNOME settings and the fnm, rustup, uv and mise installers; the workflow is how those get checked on real systems.
 
 ## Files and directories
 
