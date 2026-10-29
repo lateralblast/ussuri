@@ -9,6 +9,14 @@ zinit light MichaelAquilina/zsh-you-should-use
 # Add in snippets (one line each: they are run one line at a time)
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
+# Archives, the clipboard and suspending: extract (x), copypath, copyfile and copybuffer (Ctrl-O) need clipcopy,
+# which lives in an Oh My Zsh library file (a snippet downloads one file, so it is loaded first), and Ctrl-Z fg
+zinit snippet OMZL::clipboard.zsh
+zinit snippet OMZP::extract
+zinit snippet OMZP::copypath
+zinit snippet OMZP::copyfile
+zinit snippet OMZP::copybuffer
+zinit snippet OMZP::fancy-ctrl-z
 if os_is_like arch; then zinit snippet OMZP::archlinux; fi
 # common-aliases: many short aliases (l, ll, la, H, T, G...). zsh-you-should-use is told to leave them alone,
 # or it would mention them all the time. The aliases still work

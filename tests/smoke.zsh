@@ -2042,6 +2042,22 @@ test_you_should_use () {
   check "turbo: compinit is still the last line" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit' )" "1"
 }
 
+test_everyday_snippets () {
+  new_home
+  print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"
+  local turbo snip
+  for turbo in true false; do
+    : > "${LOG}"
+    EXTRA_ENV=( ZINIT_TURBO="${turbo}" )
+    run --zinit > /dev/null 2>&1
+    for snip in OMZL::clipboard.zsh OMZP::extract OMZP::copypath OMZP::copyfile OMZP::copybuffer OMZP::fancy-ctrl-z; do
+      check "turbo=${turbo}: ${snip} is loaded" "$( grep -c "snippet ${snip}\$" "${LOG}" )" "1"
+    done
+    check "turbo=${turbo}: the clipboard library comes before the plugins that call clipcopy" "$( grep -n -E 'snippet (OMZL::clipboard.zsh|OMZP::copypath)$' "${LOG}" | sed 's/.*snippet //' | tr '\n' ' ' )" "OMZL::clipboard.zsh OMZP::copypath "
+  done
+  EXTRA_ENV=()
+}
+
 test_tool_snippets () {
   new_home
   print -r -- "zinit () { print -r -- \"zinit \$*\" >> ${LOG}; }" > "${H}/.zinit/zinit.zsh"

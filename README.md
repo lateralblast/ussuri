@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.7.6
+Current Version: 1.7.7
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -532,7 +532,7 @@ rather than in the shipped copy.
 The zinit plugin lists are `files/zinit/zinit-turbo.zsh` (the default: the prompt appears first and the other plugins load just after it, about
 75 ms sooner) and `files/zinit/zinit.zsh` (`ZINIT_TURBO=false`: everything loads before the prompt). Both load the same plugins in the same order:
 powerlevel10k (only when it is the prompt engine), zsh-syntax-highlighting, zsh-completions, zsh-autosuggestions, fzf-tab,
-zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh snippets (git, sudo, archlinux, aws, kubectl, kubectx, command-not-found).
+zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh snippets (git, sudo, extract, copypath, copyfile, copybuffer, fancy-ctrl-z, archlinux, aws, kubectl, kubectx, command-not-found).
 
 - **History search.** Type part of a command and press Up or Down to step through the history entries that contain it (the arrow keys are bound for
   both keypad modes).
@@ -541,6 +541,12 @@ zsh-history-substring-search, zsh-you-should-use, forgit and a set of Oh My Zsh 
   derivatives, `fedora` and its derivatives). They are checked once, when the list is read, so installing docker later is noticed on the next shell.
   `OMZP::macos` is not loaded, as it needs two more files that a zinit snippet does not fetch. Add your own the same way in
   `~/.ussuri/files/zinit/local.zsh`, for example `if (( $+commands[kubectl] )); then zinit snippet OMZP::kubectl; fi`.
+- **extract, copypath, copyfile, copybuffer, fancy-ctrl-z** (`OMZP::...`) are small everyday helpers, no external tools. `extract FILE` (alias `x`)
+  unpacks most archive types (`-r` removes the archive afterwards, `-t DIR` unpacks elsewhere). `copypath [FILE]` puts an absolute path on the clipboard,
+  `copyfile FILE` its contents, and Ctrl-O (`copybuffer`) the line you are typing. Ctrl-Z on an empty line runs `fg`, and on a line with text puts it
+  aside and brings it back after the next command. The three copy ones call `clipcopy`, which is in an Oh My Zsh library file, so
+  `OMZL::clipboard.zsh` is loaded before them (it finds `pbcopy`, `wl-copy`, `xclip` or `xsel`; on a machine with none, they say so when used).
+  They cost nothing until used; to drop one, remove its line from the plugin lists.
 - **common-aliases** (`OMZP::common-aliases`) adds dozens of short aliases: `l`, `ll`, `la`, `lt`, `h` (history), `p` (`ps -f`), global ones such as `H` and `G`
   (`| head`, `| grep`), and it makes `rm`, `cp` and `mv` ask before overwriting (`-i`) and `grep` add colour and skip VCS directories. The aliases work as
   usual, but zsh-you-should-use is told to ignore them, so it does not mention them: `mark_aliases` and `ignore_new_aliases` (in the script) note what
