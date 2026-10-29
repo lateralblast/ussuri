@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.7.9
+# Version: 1.8.7
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -216,7 +216,7 @@ acquire_lock () {
 # Read only modes (--doctor, --drift) must not create or copy anything
 
 is_read_only () {
-  [ "${DO_DOCTOR}" = "true" ] || [ "${DO_DRIFT}" = "true" ]
+  [ "${DO_DOCTOR}" = "true" ] || [ "${DO_DRIFT}" = "true" ] || [ "${DO_PROMPT_PREVIEW}" = "true" ]
 }
 
 # Guards used throughout: is the lock held, and which OS is this
@@ -374,6 +374,201 @@ apply_prompt_top_line () {
   if (( $+functions[p10k] )); then
     p10k reload
   fi
+}
+
+# Looking at the prompt without opening a shell: --prompt-preview, and the checks --doctor makes. The layout is worked
+# out the way a login does it (the config's own p10k file read, then apply_prompt_top_line), in a subshell so nothing
+# leaks. For each segment: the text it would show (for the ones whose text is known without a prompt), its colours, the
+# contrast between them (the WCAG ratio, from the xterm 256 colour table; under 3 is hard to read), and whether
+# powerlevel10k has a segment of that name at all (its source is searched, so a typo or an old p10k is found)
+
+# A colour as three 0-255 numbers in COLOR_RGB: a number 0-255 (the xterm table), #rrggbb, or one of p10k's names.
+# Empty if it is none of those
+
+color_rgb () {
+  setopt localoptions extendedglob
+  local c="${(L)1}" n r
+  local -a levels=( 0 95 135 175 215 255 )
+  local -a basic=( "0 0 0" "128 0 0" "0 128 0" "128 128 0" "0 0 128" "128 0 128" "0 128 128" "192 192 192" "128 128 128" "255 0 0" "0 255 0" "255 255 0" "0 0 255" "255 0 255" "0 255 255" "255 255 255" )
+  COLOR_RGB=()
+  COLOR_INDEX=""
+  case "${c}" in
+    black) c=0 ;; red) c=1 ;; green) c=2 ;; yellow) c=3 ;; blue) c=4 ;; magenta) c=5 ;; cyan) c=6 ;; white) c=7 ;; grey|gray) c=8 ;;
+  esac
+  if [[ "${c}" == '#'[0-9a-f](#c6) ]]; then
+    COLOR_RGB=( $(( 16#${c[2,3]} )) $(( 16#${c[4,5]} )) $(( 16#${c[6,7]} )) )
+  elif [[ "${c}" == <0-255> ]]; then
+    n=$(( c ))
+    COLOR_INDEX="${n}"
+    if (( n < 16 )); then
+      COLOR_RGB=( ${=basic[n+1]} )
+    elif (( n < 232 )); then
+      n=$(( n - 16 ))
+      COLOR_RGB=( ${levels[n/36+1]} ${levels[(n%36)/6+1]} ${levels[n%6+1]} )
+    else
+      r=$(( 8 + (n - 232) * 10 ))
+      COLOR_RGB=( ${r} ${r} ${r} )
+    fi
+  fi
+}
+
+# The contrast ratio of two colours (1 to 21) in COLOR_CONTRAST, empty if either is not a colour we can work out
+
+color_contrast () {
+  local -a w=( 0.2126 0.7152 0.0722 ) lum=( 0 0 )
+  local -F v
+  local which i
+  COLOR_CONTRAST=""
+  for which in 1 2; do
+    color_rgb "${@[which]}"
+    (( ${#COLOR_RGB} == 3 )) || return 1
+    for i in 1 2 3; do
+      v=$(( ${COLOR_RGB[i]} / 255.0 ))
+      if (( v <= 0.03928 )); then v=$(( v / 12.92 )); else v=$(( ((v + 0.055) / 1.055) ** 2.4 )); fi
+      lum[which]=$(( lum[which] + w[i] * v ))
+    done
+  done
+  printf -v COLOR_CONTRAST '%.1f' $(( (lum[1] > lum[2] ? lum[1] + 0.05 : lum[2] + 0.05) / (lum[1] > lum[2] ? lum[2] + 0.05 : lum[1] + 0.05) ))
+}
+
+# The terminal escape for a foreground and a background colour (what a swatch is drawn with)
+
+color_escape () {
+  local out="" c kind=38
+  for c in "$1" "$2"; do
+    color_rgb "${c}"
+    if [[ -n "${COLOR_INDEX}" ]]; then
+      out+=$'\e'"[${kind};5;${COLOR_INDEX}m"
+    elif (( ${#COLOR_RGB} == 3 )); then
+      out+=$'\e'"[${kind};2;${COLOR_RGB[1]};${COLOR_RGB[2]};${COLOR_RGB[3]}m"
+    fi
+    kind=48
+  done
+  print -rn -- "${out}"
+}
+
+# The text a segment shows, where it can be known without a prompt, in PSEG_TEXT
+
+prompt_segment_text () {
+  local f
+  case "$1" in
+    context)       PSEG_TEXT="${USER:-${LOGNAME}}@${HOST%%.*}" ;;
+    os_version)    PSEG_TEXT="${OS_VERSION_TEXT}" ;;
+    macos_version) PSEG_TEXT="${MACOS_VERSION_TEXT}" ;;
+    linux_version) PSEG_TEXT="${LINUX_VERSION_TEXT}" ;;
+    cpu_arch)      PSEG_TEXT="${CPUTYPE}" ;;
+    date)          f="${POWERLEVEL9K_DATE_FORMAT}"; [[ -n "${f}" ]] || f='%D{%d.%m.}'; PSEG_TEXT="${(%)f}" ;;
+    time)          f="${POWERLEVEL9K_TIME_FORMAT}"; [[ -n "${f}" ]] || f='%D{%H:%M:%S}'; PSEG_TEXT="${(%)f}" ;;
+    os_icon)       PSEG_TEXT="(icon)" ;;
+    *)             PSEG_TEXT="(when there is something to show)" ;;
+  esac
+}
+
+# Is there a segment of this name? 0 yes, 1 no, 2 can't tell (powerlevel10k's source is not here). One of ours, or a
+# prompt_<name> function in your p10k config, counts; the rest are looked for in p10k's source
+
+prompt_segment_known () {
+  local f
+  if [[ -n "${functions[prompt_${1}]}" ]]; then
+    return 0
+  fi
+  if [[ -z "${PSEG_SOURCE_TEXT+x}" ]]; then
+    typeset -g PSEG_SOURCE_TEXT=""
+    for f in "${P10K_HOME}/internal/p10k.zsh" "${ZINIT_HOME}/plugins/romkatv---powerlevel10k/internal/p10k.zsh"; do
+      if [[ -r "${f}" ]]; then
+        PSEG_SOURCE_TEXT="$(<${f})"
+        break
+      fi
+    done
+  fi
+  [[ -n "${PSEG_SOURCE_TEXT}" ]] || return 2
+  [[ "${PSEG_SOURCE_TEXT}" == *$'\n'"prompt_${1}()"* || "${PSEG_SOURCE_TEXT}" == *$'\n'"function prompt_${1}()"* ]]
+}
+
+# One row per segment, tab separated: line (top or bottom), side, segment, text, foreground, background, contrast and a
+# verdict: ok, low (hard to read), same (the same colour as the background), default (a colour p10k picks) or unknown
+# (no such segment). Printed from a subshell
+
+prompt_layout_report () {
+  (
+    prompt_engine_is p10k || exit 0
+    [[ -r "${P10K_INIT}" ]] && source "${P10K_INIT}" > /dev/null 2>&1
+    apply_prompt_top_line > /dev/null 2>&1
+    local -a left=( ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS} ) right=( ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS} )
+    local row line side name base up fg bg verdict known idx
+    print -r -- "background"$'\t'"${POWERLEVEL9K_BACKGROUND}"
+    for side in left right; do
+      local -a names=( ${(P)side} )
+      idx=${names[(i)newline]}
+      for (( i = 1; i <= ${#names}; i++ )); do
+        name="${names[i]}"
+        [[ "${name}" == newline ]] && continue
+        line="bottom"
+        (( i < idx )) && line="top"
+        (( idx > ${#names} )) && line="bottom"
+        base="${${name%%:*}%_joined}"
+        up="${(U)base}"
+        fg="${(P)${:-POWERLEVEL9K_${up}_FOREGROUND}}"
+        bg="${(P)${:-POWERLEVEL9K_${up}_BACKGROUND}}"
+        [[ -z "${bg}" ]] && bg="${POWERLEVEL9K_BACKGROUND}"
+        # Ours are drawn with this colour when the config has not chosen one
+        [[ "${base}" == (os|macos|linux)_version && -z "${fg}" ]] && fg=250
+        prompt_segment_text "${base}"
+        COLOR_CONTRAST=""
+        verdict="ok"
+        if [[ -z "${fg}" ]]; then
+          verdict="default"
+        else
+          color_contrast "${fg}" "${bg}"
+          if [[ -n "${COLOR_CONTRAST}" ]]; then
+            (( COLOR_CONTRAST < 1.5 )) && verdict="same"
+            (( COLOR_CONTRAST >= 1.5 && COLOR_CONTRAST < 3 )) && verdict="low"
+          fi
+        fi
+        prompt_segment_known "${base}"
+        [[ $? -eq 1 ]] && verdict="unknown"
+        print -r -- "${line}"$'\t'"${side}"$'\t'"${name}"$'\t'"${PSEG_TEXT}"$'\t'"${fg}"$'\t'"${bg}"$'\t'"${COLOR_CONTRAST}"$'\t'"${verdict}"
+      done
+    done
+  )
+}
+
+print_prompt_preview () {
+  if ! prompt_engine_is p10k; then
+    print -r -- "The prompt engine is ${PROMPT_ENGINE}: there is no powerlevel10k layout to preview"
+    return 0
+  fi
+  local -a rows=( "${(@f)$( prompt_layout_report )}" ) cols
+  local row side pad esc reset="" colour="false" back="" bottom_left="" bottom_right="" hard="" tops=0
+  cols=( "${(@ps:\t:)rows[1]}" )
+  back="${cols[2]}"
+  [[ -t 1 && -z "${NO_COLOR}" ]] && colour="true"
+  [[ "${colour}" == true ]] && reset=$'\e[0m'
+  print -r -- "Prompt preview: powerlevel10k, $( [ "${PROMPT_TWO_LINE}" = "true" ] && print -r "two lines" || print -r "one line" ), background ${back:-not set}"
+  print -r -- "(${P10K_INIT}; PROMPT_TOP_ELEMENTS=${PROMPT_TOP_ELEMENTS:-none}, PROMPT_TOP_RIGHT_ELEMENTS=${PROMPT_TOP_RIGHT_ELEMENTS:-none})"
+  print
+  print -r -- "Top line"
+  for row in "${rows[@]:1}"; do
+    cols=( "${(@ps:\t:)row}" )
+    if [[ "${cols[1]}" == bottom ]]; then
+      [[ "${cols[2]}" == left ]] && bottom_left+=" ${cols[3]}" || bottom_right+=" ${cols[3]}"
+      [[ "${cols[8]}" == (low|same|unknown) ]] && hard+=" ${cols[3]}${${cols[7]:+ (${cols[7]})}:-}${${${cols[8]}:#low}:+ ${cols[8]}}"
+      continue
+    fi
+    tops=$(( tops + 1 ))
+    pad="${(r:26:)cols[4]}"
+    esc=""
+    [[ "${colour}" == true ]] && esc="$( color_escape "${cols[5]}" "${cols[6]}" )"
+    printf '  %-6s %-14s %s%s%s  fg %-4s on %-4s %-15s %s\n' "${cols[2]}" "${cols[3]}" "${esc}" "${pad}" "${reset}" "${cols[5]:--}" "${cols[6]:--}" "${${cols[7]:+contrast ${cols[7]}}:-}" "${cols[8]}"
+  done
+  (( tops )) || print -r -- "  (nothing: the prompt has no top line)"
+  print
+  print -r -- "Bottom line (your ~/.p10k.zsh, left)${bottom_left:-: nothing}"
+  [[ -n "${bottom_right}" ]] && print -r -- "                          (right)${bottom_right}"
+  [[ -n "${hard}" ]] && print -r -- "  hard to read or unknown in it:${hard}"
+  print
+  print -r -- "Verdicts: ok is readable, low is under 3:1 contrast, same is the background's own colour, default is a colour"
+  print -r -- "powerlevel10k picks, unknown is a name powerlevel10k has no segment for. Text in brackets shows when there is something."
 }
 
 # Key bindings for zsh-history-substring-search (called from the plugin lists in files/zinit):
@@ -1509,6 +1704,9 @@ set_all_defaults () {
   set_env "DO_ZSH_THEME"        "true"
   set_env "DO_CACHE_INIT"       "true"
   set_env "DO_DOCTOR"           "false"
+  set_env "DO_PROMPT_PREVIEW"   "false"
+  set_env "DO_EXPORT"           "false"
+  set_env "DO_IMPORT"           "false"
   set_env "DO_CONFIG"           "false"
   set_env "DO_DOTFILES_CHECK"   "false"
   set_env "DO_UNLINK"           "false"
@@ -1537,6 +1735,8 @@ set_all_defaults () {
   set_env "DO_ROLLBACK"         "false"
   set_env "DO_UNINSTALL"        "false"
   set_env "DOTFILES_DIR"        "${WORK_DIR}/dotfiles"
+  set_env "DOTFILES_REPO"       ""
+  set_env "DOTFILES_REF"        ""
   # One profile and machine name for dotfiles, packages and plugins. DOTFILES_PROFILE and DOTFILES_HOST
   # (the older names) still override them for dotfiles alone
   set_env "PROFILE"             ""
@@ -1736,13 +1936,14 @@ print_help () {
   help_row "-G" "--drift [WHAT]"   "Report drift: settings, packages or all"
   help_row "-a" "--adopt"          "With --drift: add installed packages to your list"
   help_row "-j" "--timing"         "Run as a login and time each step of it"
+  help_row ""   "--prompt-preview" "Show the prompt's top line, colours and checks"
 
   help_heading "Install, update and undo"
   help_row "-I" "--install"        "Install as ~/.zshrc (the old one is kept)"
   help_row "-U" "--update"         "Update the script and its files"          "${DO_UPDATE_CHECK}"
   help_row "-C" "--check"          "Check for a newer version"                "${DO_VERSION_CHECK}"
   help_row "-B" "--backups"        "List the .zshrc backups"
-  help_row "-R" "--rollback [N]"   "Restore .zshrc backup N"                  "newest"
+  help_row "-R" "--rollback [N|update]" "Restore .zshrc backup N, or undo --update"  "newest"
   help_row "-X" "--uninstall"      "Restore the .zshrc from before ussuri"
   help_row "-J" "--defaults-undo [N|list]" "Undo a run of defaults changes"   "newest"
   help_row "-u" "--unlink"         "Unlink the dotfiles"
@@ -1755,6 +1956,8 @@ print_help () {
   help_row "-K" "--edit"           "Edit the config in \$EDITOR, checked first"
   help_row "-M" "--profile NAME"   "Profile; with --set/--unset/--edit its file"  "${PROFILE:-none}"
   help_row "-H" "--host NAME"      "Machine; with --set/--unset/--edit its file"  "${MACHINE}"
+  help_row ""   "--export [FILE]"  "Write your config, local lists and dotfiles to FILE"
+  help_row ""   "--import FILE"    "Read them back (on a new machine); keeps what it replaces"
 
   help_heading "Set up"
   help_row "-A" "--doall"          "Do everything that is enabled"
@@ -2998,7 +3201,7 @@ sync_support_files () {
 # expected, backs up the current script, replaces it and then brings the supporting files up to
 # date. If the archive can't be fetched the script alone is updated. Everything goes through
 # execute_command so --dryrun and --confirm are honoured. UPDATE_URL points somewhere else, and
-# UPDATE_SHA256 pins the archive's checksum (a mismatch refuses the update)
+# UPDATE_SHA256 pins the archive's checksum and SCRIPT_SHA256 the script's (a mismatch refuses the update)
 
 update_script () {
   have_lock || return
@@ -3024,10 +3227,19 @@ update_script () {
       fetch_url "${SCRIPT_URL}" > "${UPDATE_NEW}"
       ;;
   esac
+  # The script itself is checked on its own too, whichever way it was fetched: UPDATE_SHA256 pins the whole archive,
+  # SCRIPT_SHA256 pins just the script, and its checksum is always shown so it can be compared with a published one
+  UPDATE_NEW_SUM=$( sha256_of "${UPDATE_NEW}" )
+  if [ -n "${SCRIPT_SHA256}" ] && [ ! "${UPDATE_NEW_SUM}" = "${(L)SCRIPT_SHA256}" ]; then
+    echo "Warning:        Checksum mismatch for the downloaded script (expected ${SCRIPT_SHA256}, got ${UPDATE_NEW_SUM:-none}), not updating"
+    rm -rf "${UPDATE_DIR:?}"
+    return 1
+  fi
   if zsh -n "${UPDATE_NEW}" 2> /dev/null && grep -q "^# Version: ${REMOTE_VERSION}$" "${UPDATE_NEW}"; then
-    verbose_message "${SCRIPT_FILE} to version ${REMOTE_VERSION}" "replace"
+    verbose_message "${SCRIPT_FILE} to version ${REMOTE_VERSION} (sha256 ${UPDATE_NEW_SUM})" "replace"
     check_dir_exists "${WORK_DIR}"
     execute_command "cp ${(q)SCRIPT_FILE} ${(q)WORK_DIR}/${SCRIPT_NAME}.zsh.${DATE_SUFFIX} && cp ${(q)UPDATE_NEW} ${(q)SCRIPT_FILE}.new && mv ${(q)SCRIPT_FILE}.new ${(q)SCRIPT_FILE}"
+    [ "${DO_DRYRUN}" = "true" ] || notice_message "Updated ${SCRIPT_FILE} to version ${REMOTE_VERSION} (script sha256 ${UPDATE_NEW_SUM})"
     if [ -n "${UPDATE_SRC}" ] && [ -d "${UPDATE_SRC}/files" ]; then
       sync_support_files "${UPDATE_SRC}/files"
     fi
@@ -3093,7 +3305,87 @@ dotfile_state () {
   fi
 }
 
+# DOTFILES_REPO: keep the dotfiles directory as a clone of a git repository (its layout is the one above: common/,
+# profiles/<name>/, hosts/<name>/), so a new machine gets them with one setting. It is opt-in, and it is the one thing
+# here that runs code you did not write on every machine, so: only https, ssh and file URLs are accepted (not git's ext
+# transports, which run commands), a clone is never pulled over local changes or a different remote, only a
+# fast forward is taken (DOTFILES_REF pins a branch, tag or commit instead), and nothing is prompted for in the
+# background. On a login it is the update hint's pattern: at most once a day, a detached background job with its
+# output discarded, the stamp touched first, nothing printed (the result is in ~/.ussuri/dotfiles.sync, which --doctor
+# reads). --dotfiles does the same in the foreground first, so you see what it says. New files are linked by --dotfiles,
+# links to files that were already there pick up the change by themselves
+
+dotfiles_repo_url_ok () {
+  setopt localoptions extendedglob
+  [[ "$1" == (https://|ssh://|file://|git@)[A-Za-z0-9._/:@~%+=,-]## ]]
+}
+
+dotfiles_repo_sync () {
+  setopt localoptions nullglob
+  local url="${DOTFILES_REPO}" dir="${DOTFILES_DIR}" ref="${DOTFILES_REF}" remote
+  local -a entries=()
+  local env="GIT_ALLOW_PROTOCOL=https:ssh:file"
+  if ! dotfiles_repo_url_ok "${url}"; then
+    print -r -- "DOTFILES_REPO is not an https://, ssh:// or file:// URL (or git@host:path): ${url}"
+    return 1
+  fi
+  [[ "${INTERACTIVE_SYNC}" == true ]] || env+=" GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND=${(q)GIT_SSH_COMMAND:-ssh -o BatchMode=yes}"
+  [ -d "${dir}" ] && entries=( ${dir}/*(D) )
+  if [ ! -e "${dir}" ] || { [ -d "${dir}" ] && (( ! ${#entries} )); }; then
+    execute_command "${env} git_clone ${(q)url} ${(q)dir} ${(q)ref}" || return 1
+    [ -d "${dir}/.git" ] || [ "${DO_DRYRUN}" = "true" ] || { print -r -- "could not clone ${url}"; return 1; }
+    print -r -- "$( [ "${DO_DRYRUN}" = "true" ] && print -rn "would clone" || print -rn "cloned" ) ${url}${ref:+ at ${ref}}"
+    return 0
+  fi
+  if [ ! -d "${dir}/.git" ]; then
+    print -r -- "${dir} is not a clone, leaving it alone (move it aside, or point DOTFILES_DIR elsewhere)"
+    return 1
+  fi
+  remote=$( git -C "${dir}" remote get-url origin 2> /dev/null )
+  if [ ! "${remote}" = "${url}" ]; then
+    print -r -- "${dir} is a clone of ${remote:-something else}, not ${url}: leaving it alone"
+    return 1
+  fi
+  if [ -n "$( git -C "${dir}" status --porcelain 2> /dev/null )" ]; then
+    print -r -- "${dir} has changes that are not committed, not pulling over them"
+    return 1
+  fi
+  if [ -n "${ref}" ]; then
+    execute_command "${env} git -C ${(q)dir} fetch --quiet --tags origin && git -C ${(q)dir} checkout --quiet ${(q)ref}" || { print -r -- "could not fetch and check out ${ref}"; return 1; }
+    print -r -- "$( [ "${DO_DRYRUN}" = "true" ] && print -rn "would be" || print -rn "now" ) at ${ref}"
+  else
+    execute_command "${env} git -C ${(q)dir} fetch --quiet origin && git -C ${(q)dir} merge --ff-only --quiet FETCH_HEAD" || { print -r -- "could not fast forward (the local copy has commits of its own, or the fetch failed)"; return 1; }
+    print -r -- "$( [ "${DO_DRYRUN}" = "true" ] && print -rn "would be up to date" || print -rn "up to date" ) with ${url}"
+  fi
+}
+
+# Runs in the background: do the sync and keep its result (one line: seconds since the epoch, ok or failed, what happened)
+
+dotfiles_repo_sync_background () {
+  local msg result="ok"
+  msg=$( INTERACTIVE_SYNC=false dotfiles_repo_sync 2>&1 ) || result="failed"
+  print -r -- "${EPOCHSECONDS} ${result} ${msg//$'\n'/ }" >| "${WORK_DIR}/dotfiles.sync.$$" && mv -f "${WORK_DIR}/dotfiles.sync.$$" "${WORK_DIR}/dotfiles.sync"
+}
+
+check_dotfiles_sync () {
+  [ -n "${DOTFILES_REPO}" ] || return 0
+  have_lock || return 0
+  if (( ${#ARGS} )); then
+    return 0
+  fi
+  [[ -o interactive ]] || return 0
+  local recent
+  recent=( ${WORK_DIR}/dotfiles.sync.stamp(Nmh-24) )
+  (( ${#recent} )) && return 0
+  : >| "${WORK_DIR}/dotfiles.sync.stamp"
+  ( dotfiles_repo_sync_background ) < /dev/null > /dev/null 2>&1 &!
+}
+
 check_dotfiles_config () {
+  if [ -n "${DOTFILES_REPO}" ] && (( ${#ARGS} )); then
+    local synced
+    synced=$( INTERACTIVE_SYNC=true dotfiles_repo_sync 2>&1 ) && notice_message "dotfiles: ${synced}" || print -u2 -r -- "Warning:        dotfiles: ${synced}"
+  fi
   dotfiles_map
   if (( ! ${#DOT_MAP} )); then
     verbose_message "No dotfiles to link in ${DOTFILES_DIR}"
@@ -3183,10 +3475,18 @@ backup_zshrc () {
   execute_command "cp ${(q)HOME_DIR}/.zshrc ${(q)BACKUP_FILE}"
 }
 
+print_update_backups () {
+  list_update_backups
+  if (( ${#UPDATE_BACKUPS} )); then
+    print -r -- "--update kept ${#UPDATE_BACKUPS} earlier script(s): --rollback update puts the newest back, with the files it replaced."
+  fi
+}
+
 print_backups () {
   list_backups
   if (( ! ${#BACKUPS} )); then
     print -r -- "No backups in ${WORK_DIR}"
+    print_update_backups
     return 1
   fi
   zmodload -F zsh/stat b:zstat 2> /dev/null
@@ -3202,6 +3502,7 @@ print_backups () {
     printf '%3d  %s  %-7s  %-8s  %s\n' "${BACKUP_INDEX}" "${BACKUP_WHEN}" "${FILE_VERSION:--}" "${BACKUP_KIND}" "${BACKUPS[BACKUP_INDEX]:t}"
   done
   print -r -- "Restore one with --rollback N (1 is the newest), or --uninstall to go back to before ussuri."
+  print_update_backups
 }
 
 # Work out which backup was asked for: a number from --backups, a file name in the work
@@ -3239,6 +3540,10 @@ restore_zshrc () {
 }
 
 do_rollback () {
+  if [[ "$1" == update ]]; then
+    do_rollback_update
+    return
+  fi
   list_backups
   if (( ! ${#BACKUPS} )); then
     print -r -- "No backups in ${WORK_DIR}"
@@ -3249,6 +3554,52 @@ do_rollback () {
     return 1
   fi
   restore_zshrc "${BACKUP_CHOSEN}"
+}
+
+# --rollback update: undo the last --update. It kept the script it replaced as ~/.ussuri/ussuri.zsh.<date>, and the
+# supporting files it replaced in ~/.ussuri/files.bak/<date>/ (the same date), so both are put back. A file the update
+# added is left where it is, since nothing recorded which files were new. The script it replaces is kept first, so the
+# rollback can itself be undone. SCRIPT_FILE is the script that --update replaced, whichever way it was run
+
+list_update_backups () {
+  UPDATE_BACKUPS=( ${WORK_DIR}/${SCRIPT_NAME}.zsh.[0-9][0-9]_[0-9][0-9]_[0-9][0-9][0-9][0-9]_*(N.om) )
+}
+
+do_rollback_update () {
+  local old stamp saved dir rel replaced=0
+  list_update_backups
+  if (( ! ${#UPDATE_BACKUPS} )); then
+    print -r -- "No copies of an earlier script in ${WORK_DIR}, --update has not replaced this one"
+    return 1
+  fi
+  old="${UPDATE_BACKUPS[1]}"
+  if ! is_ussuri_script "${old}" || ! zsh -n "${old}" 2> /dev/null; then
+    print -r -- "${old:t} is not a script that parses, not restoring it"
+    return 1
+  fi
+  if [ -f "${SCRIPT_FILE}" ] && cmp -s "${old}" "${SCRIPT_FILE}"; then
+    print -r -- "${SCRIPT_FILE} is already the same as ${old:t}"
+    return 0
+  fi
+  stamp="${old:t}"
+  stamp="${stamp#${SCRIPT_NAME}.zsh.}"
+  saved="${WORK_DIR}/${SCRIPT_NAME}.zsh.${DATE_SUFFIX}"
+  [ -e "${saved}" ] && saved="${saved}_1"
+  execute_command "cp ${(q)SCRIPT_FILE} ${(q)saved} && cp ${(q)old} ${(q)SCRIPT_FILE}.new && mv ${(q)SCRIPT_FILE}.new ${(q)SCRIPT_FILE}"
+  dir="${WORK_DIR}/files.bak/${stamp}"
+  if [ -d "${dir}" ]; then
+    for rel in ${dir}/**/*(DN.); do
+      rel="${rel#${dir}/}"
+      check_dir_exists "${WORK_DIR}/files/${rel:h}"
+      execute_command "cp -p ${(q)dir}/${(q)rel} ${(q)WORK_DIR}/files/${(q)rel}"
+      replaced=$(( replaced + 1 ))
+    done
+  fi
+  if [ "${DO_DRYRUN}" = "true" ]; then
+    print -r -- "Would restore ${old:t} as ${SCRIPT_FILE} and put back ${replaced} supporting files from files.bak/${stamp}"
+  else
+    print -r -- "Restored ${old:t} as ${SCRIPT_FILE} and put back ${replaced} supporting files (the script it replaced is in ${saved})"
+  fi
 }
 
 # Go back to the .zshrc you had before ussuri: the newest backup that isn't ussuri itself.
@@ -3279,6 +3630,174 @@ do_uninstall () {
     fi
   fi
   print -r -- "${WORK_DIR} (installed components, backups) was left alone. --unlink removes dotfile links."
+}
+
+# --export and --import: your setup in one file, for a new machine (or a backup). The bundle (a .tgz) holds what is
+# yours and nothing the release owns or the machine made: the config and its profile and host layers, the local plugin
+# and package lists (and their layers), the dotfiles directory and your ~/.p10k.zsh. Not the caches, stamps, backups,
+# journals or the shipped files. A MANIFEST says what made it. It can hold things you would not post (your config
+# values, your dotfiles), so it is written readable by you alone, and --import only takes names from that list
+# (no absolute paths, no .., no links, nothing outside it) and keeps a copy of whatever it replaces
+
+bundle_files () {
+  setopt localoptions nullglob extendedglob
+  local f
+  BUNDLE_FILES=()
+  for f in ${WORK_DIR}/config ${WORK_DIR}/{profiles,hosts}/**/*(D.) ${WORK_DIR}/files/**/local.*(D.) \
+           ${WORK_DIR}/files/*/{profiles,hosts}/**/*(D.) ${WORK_DIR}/dotfiles/**/*(D.); do
+    [[ -f "${f}" && ! -L "${f}" ]] || continue
+    [[ "${f:t}" == *.(tmp|edit|rejected|broken)* ]] && continue
+    BUNDLE_FILES+=( "${f#${WORK_DIR}/}" )
+  done
+  BUNDLE_FILES=( ${(ou)BUNDLE_FILES} )
+}
+
+# Copy what goes in the bundle, under the names it has inside it, into a directory
+
+bundle_stage () {
+  local stage="$1" rel
+  for rel in "${BUNDLE_FILES[@]}"; do
+    mkdir -p "${stage}/${rel:h}" && cp -p "${WORK_DIR}/${rel}" "${stage}/${rel}" || return 1
+  done
+  if [ -f "${P10K_INIT}" ]; then
+    mkdir -p "${stage}/HOME" && cp -p "${P10K_INIT}" "${stage}/HOME/.p10k.zsh" || return 1
+  fi
+  local count=${#BUNDLE_FILES}
+  [ -f "${P10K_INIT}" ] && count=$(( count + 1 ))
+  {
+    print -r -- "ussuri-export 1"
+    print -r -- "version ${SCRIPT_VERSION}"
+    print -r -- "date ${DATE_SUFFIX}"
+    print -r -- "machine ${MACHINE}"
+    print -r -- "profile ${PROFILE:-none}"
+    print -r -- "files ${count}"
+  } > "${stage}/MANIFEST"
+}
+
+export_bundle () {
+  local out="$1" stage
+  local -a tops
+  [[ "${out}" == ":default:" ]] && out="${PWD}/${SCRIPT_NAME}-export-${MACHINE}-${DATE_SUFFIX}.tgz"
+  [[ "${out}" == */* ]] || out="${PWD}/${out}"
+  if [ -e "${out}" ] && [ ! "${DO_FORCE}" = "true" ]; then
+    print -u2 -r -- "Error:          ${out} already exists (--force replaces it)"
+    return 1
+  fi
+  bundle_files
+  if (( ! ${#BUNDLE_FILES} )) && [ ! -f "${P10K_INIT}" ]; then
+    print -u2 -r -- "Error:          nothing of yours to export in ${WORK_DIR} (no config, layers, local lists or dotfiles)"
+    return 1
+  fi
+  if [ "${DO_DRYRUN}" = "true" ]; then
+    print -r -- "Would write ${out} with ${#BUNDLE_FILES} files from ${WORK_DIR}$( [ -f "${P10K_INIT}" ] && print -rn -- " and ${P10K_INIT}" ):"
+    (( ${#BUNDLE_FILES} )) && print -rl -- "  ${(@)BUNDLE_FILES}"
+    return 0
+  fi
+  stage=$( mktemp -d ) || return 1
+  if ! bundle_stage "${stage}"; then
+    rm -rf "${stage:?}"
+    print -u2 -r -- "Error:          could not collect the files"
+    return 1
+  fi
+  tops=( ${stage}/*(N:t) )
+  execute_command "COPYFILE_DISABLE=1 tar -czf ${(q)out} -C ${(q)stage} ${(j: :)${(@q)tops}}"
+  rm -rf "${stage:?}"
+  if [ ! -s "${out}" ]; then
+    rm -f "${out}"
+    print -u2 -r -- "Error:          ${out} was not written"
+    return 1
+  fi
+  chmod 600 "${out}"
+  print -r -- "Wrote ${out} (${#BUNDLE_FILES} files from ${WORK_DIR}${${P10K_INIT:+ and your p10k config}}). It may hold private settings and dotfiles: keep it to yourself."
+  print -r -- "On the new machine: install ussuri, then ${SCRIPT_NAME}.zsh --import ${out:t}, then --dotfiles to link the dotfiles."
+}
+
+# Is this a name a bundle may hold? The list is the one above; anything else, however it is spelt, is refused
+
+bundle_path_ok () {
+  local name="${1%/}"
+  [[ "${name}" == /* || "${name}" == ".." || "${name}" == ../* || "${name}" == */../* || "${name}" == */.. ]] && return 1
+  name="${name#./}"
+  case "${name}" in
+    MANIFEST|config|HOME/.p10k.zsh) return 0 ;;
+    profiles/*|hosts/*|dotfiles/*) return 0 ;;
+    files/*/local.*|files/*/profiles/*|files/*/hosts/*) return 0 ;;
+    profiles|hosts|dotfiles|files|HOME|files/*|HOME/*) [[ "$2" == dir ]] && return 0 ;;
+  esac
+  return 1
+}
+
+import_bundle () {
+  local archive="$1" line name type tmp rel target backup new=0 changed=0 same=0 file idx=0 verb info
+  local -a names manifest
+  if [ ! -f "${archive}" ]; then
+    print -u2 -r -- "Error:          ${archive} is not a file"
+    return 1
+  fi
+  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+    print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
+    return 1
+  fi
+  names=( "${(@f)$( tar -tzf "${archive}" 2> /dev/null )}" )
+  if (( ! ${#names} )) || [[ -z "${names[1]}" ]]; then
+    print -u2 -r -- "Error:          ${archive} is not a gzipped tar file"
+    return 1
+  fi
+  # Every entry must be a plain file or directory with an allowed name
+  while IFS= read -r line; do
+    type="${line[1]}"
+    name="${names[++idx]}"
+    if [[ "${type}" != [-d] || "${line}" == *" link to "* || "${line}" == *" -> "* ]]; then
+      print -u2 -r -- "Error:          ${archive} has an entry that is not a plain file or directory (${name}), not importing it"
+      return 1
+    fi
+    if ! bundle_path_ok "${name}" "$( [[ "${type}" == d ]] && print dir )"; then
+      print -u2 -r -- "Error:          ${archive} has a name that does not belong in a bundle (${name}), not importing it"
+      return 1
+    fi
+  done < <( tar -tvzf "${archive}" 2> /dev/null )
+  if (( ${#names} != idx )); then
+    print -u2 -r -- "Error:          could not read ${archive}'s contents, not importing it"
+    return 1
+  fi
+  tmp=$( mktemp -d ) || return 1
+  if ! tar -xzf "${archive}" -C "${tmp}" 2> /dev/null || [ ! -f "${tmp}/MANIFEST" ] || [[ "$(<${tmp}/MANIFEST)" != "ussuri-export 1"* ]]; then
+    rm -rf "${tmp:?}"
+    print -u2 -r -- "Error:          ${archive} is not a ussuri export (no MANIFEST)"
+    return 1
+  fi
+  backup="${WORK_DIR}/import.bak/${DATE_SUFFIX}"
+  for file in ${tmp}/**/*(D.N); do
+    rel="${file#${tmp}/}"
+    [[ "${rel}" == MANIFEST ]] && continue
+    if [[ "${rel}" == HOME/.p10k.zsh ]]; then
+      target="${P10K_INIT}"
+    else
+      target="${WORK_DIR}/${rel}"
+    fi
+    if [ -f "${target}" ]; then
+      if cmp -s "${file}" "${target}"; then
+        same=$(( same + 1 ))
+        continue
+      fi
+      check_dir_exists "${backup}/${rel:h}"
+      execute_command "cp -p ${(q)target} ${(q)backup}/${(q)rel}"
+      changed=$(( changed + 1 ))
+    else
+      new=$(( new + 1 ))
+    fi
+    check_dir_exists "${target:h}"
+    execute_command "cp -p ${(q)file} ${(q)target}"
+    [[ "${rel}" == (config|*/local.config) ]] && execute_command "chmod 600 ${(q)target}"
+  done
+  manifest=( "${(@f)$(<${tmp}/MANIFEST)}" )
+  info="${${(M)manifest:#version *}[1]#version } from ${${(M)manifest:#machine *}[1]#machine }"
+  verb="Imported"
+  [ "${DO_DRYRUN}" = "true" ] && verb="Would import"
+  print -r -- "${verb} ${archive:t} (version ${info}): ${new} new, ${changed} replaced, ${same} already the same"
+  (( changed )) && [ ! "${DO_DRYRUN}" = "true" ] && print -r -- "The ${changed} files it replaced are in ${backup}"
+  rm -rf "${tmp:?}"
+  [ "${DO_DRYRUN}" = "true" ] || print -r -- "Next: ${SCRIPT_NAME}.zsh --dotfiles to link the dotfiles, --doctor to check the setup."
 }
 
 # Print a config file with every setting commented out
@@ -3353,14 +3872,17 @@ print_config_template () {
 
 # Dotfiles (see --dotfiles): layers in ~/.ussuri/dotfiles/{common,profiles/<name>,hosts/<host>}
 #DO_DOTFILES_CHECK=true     # link them on every login, not just with --dotfiles
+#DOTFILES_REPO=             # a git URL (https, ssh or file) to keep the dotfiles directory a clone of: pulled once a day in the background, and by --dotfiles
+#DOTFILES_REF=              # a branch, tag or commit of it to stay on (empty: fast forward the one cloned)
 #PROFILE=work               # profile: adds profiles/work/ on top of common, for dotfiles, packages and plugins
 #MACHINE=mybox              # machine name for hosts/mybox/ (default is the short hostname)
 
 # Your own plugins and packages go in files, not in the shipped lists (updates and --install replace those):
 #   ~/.ussuri/files/zinit/local.zsh        zinit lines, same format as zinit.zsh, run after it
 #   ~/.ussuri/files/packages/local.brew    one package per line (local.apt, local.pacman, local.dnf, local.apk, local.nix)
-# --update checks the release against UPDATE_SHA256 if you set it, and fetches it from UPDATE_URL
+# --update checks the release against UPDATE_SHA256 and the script in it against SCRIPT_SHA256, if you set them, and fetches it from UPDATE_URL
 #UPDATE_SHA256=
+#SCRIPT_SHA256=
 
 # Pin installs (a branch, tag or commit for the first clone, a SHA-256 for installers)
 #ZINIT_REF=
@@ -3650,7 +4172,7 @@ config_edit () {
     print -u2 -r -- "Error:          ${file} was not changed"
     return 1
   else
-    print -r -- "Saved in ${file}, it applies to new shells"
+    print -r -- "Saved in ${file}, it applies to new shells (run exec zsh to start one in this window)"
   fi
   return 0
 }
@@ -3708,7 +4230,7 @@ edit_config () {
   done
   [ -e "${file}" ] && backup_config
   execute_command "mv -f ${(q)tmp} ${(q)file}"
-  print -r -- "Saved ${file}, it applies to new shells"
+  print -r -- "Saved ${file}, it applies to new shells (run exec zsh to start one in this window)"
   return 0
 }
 
@@ -4035,7 +4557,33 @@ doctor_config () {
   doctor_config_layers
 }
 
+doctor_dotfiles_repo () {
+  [ -n "${DOTFILES_REPO}" ] || return 0
+  local line epoch result msg age
+  print -r -- "Dotfiles repository"
+  if ! dotfiles_repo_url_ok "${DOTFILES_REPO}"; then
+    doctor_fail "DOTFILES_REPO is not an https://, ssh:// or file:// URL (or git@host:path), so it is not used: ${DOTFILES_REPO}"
+    return
+  fi
+  if [ ! -f "${WORK_DIR}/dotfiles.sync" ]; then
+    doctor_ok "${DOTFILES_REPO} (not synced yet: a login does it once a day in the background, --dotfiles does it now)"
+    return
+  fi
+  line=$(<"${WORK_DIR}/dotfiles.sync")
+  epoch="${line%% *}"
+  result="${${line#* }%% *}"
+  msg="${${line#* }#* }"
+  age="some time ago"
+  [[ "${epoch}" == <-> ]] && age="$(( (EPOCHSECONDS - epoch) / 3600 )) hours ago"
+  if [ "${result}" = "ok" ]; then
+    doctor_ok "${DOTFILES_REPO}: ${msg} (${age})"
+  else
+    doctor_warn "${DOTFILES_REPO}: the last sync failed (${age}): ${msg}"
+  fi
+}
+
 doctor_dotfiles () {
+  doctor_dotfiles_repo
   if [ ! -d "${DOTFILES_DIR}" ]; then
     return
   fi
@@ -4082,6 +4630,38 @@ doctor_lock () {
   fi
 }
 
+# The segments on the top line (the ones these settings choose): a name that is not a segment, a colour that can't be
+# read on the background, a word that isn't a segment name at all. The bottom line is your p10k config's, and is only
+# listed by --prompt-preview
+
+doctor_prompt_segments () {
+  setopt localoptions extendedglob
+  local word row bad=0 checked=0
+  local -a cols
+  for word in ${=PROMPT_TOP_ELEMENTS} ${=PROMPT_TOP_RIGHT_ELEMENTS}; do
+    [[ "${word}" == none || "${word}" == [A-Za-z0-9_]## ]] && continue
+    doctor_warn "'${word}' in PROMPT_TOP_ELEMENTS or PROMPT_TOP_RIGHT_ELEMENTS is not a segment name (letters, digits and underscores), it is ignored"
+    bad=1
+  done
+  [ -r "${P10K_INIT}" ] || return
+  for row in "${(@f)$( prompt_layout_report )}"; do
+    cols=( "${(@ps:\t:)row}" )
+    [[ "${cols[1]}" == top ]] || continue
+    checked=$(( checked + 1 ))
+    case "${cols[8]}" in
+      unknown)
+        doctor_warn "top line segment '${cols[3]}' is not one this powerlevel10k has (a typo, or an older powerlevel10k): it shows nothing"
+        bad=1
+        ;;
+      low|same)
+        doctor_warn "top line segment '${cols[3]}' is hard to read: foreground ${cols[5]} on ${cols[6]}, contrast ${cols[7]} to 1 (3 or more is readable): set POWERLEVEL9K_${(U)${cols[3]%%:*}%_JOINED}_FOREGROUND (--prompt-preview shows them)"
+        bad=1
+        ;;
+    esac
+  done
+  (( bad || ! checked )) || doctor_ok "top line segments exist and are readable (--prompt-preview shows them)"
+}
+
 doctor_components () {
   print -r -- "Components"
   if [ "${INSTALL_ZINIT}" = "true" ]; then
@@ -4103,6 +4683,7 @@ doctor_components () {
   if prompt_engine_is p10k; then
     if [ "${PROMPT_TWO_LINE}" = "true" ]; then
       doctor_ok "two line prompt, top line: ${PROMPT_TOP_ELEMENTS:-nothing}${PROMPT_TOP_RIGHT_ELEMENTS:+ (right: ${PROMPT_TOP_RIGHT_ELEMENTS})}"
+      doctor_prompt_segments
     else
       doctor_ok "single line prompt (PROMPT_TWO_LINE=false)"
     fi
@@ -4474,6 +5055,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --host -H         --edit -K
       --adopt -a        --fix -Y
       --timing -j
+      --prompt-preview -4
+      --export -2       --import -3
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -4487,8 +5070,16 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       ARG="${LONG_SWITCHES[${ARG}]:-${ARG}}"
       SWITCHES+=( "${ARG}" )
       case "${ARG}" in
-        -g|-l|-m|-M|-S|-W|-E|-Z|-q|-H)
+        -g|-l|-m|-M|-S|-W|-E|-Z|-q|-H|-3)
           SWITCH_VALUE="true"
+          ;;
+        -2)
+          # Where to write the bundle is optional, no value means a name made from the machine and the date
+          if [[ -z "${@[ARG_INDEX+1]}" || "${@[ARG_INDEX+1]}" == -* ]]; then
+            SWITCHES+=( ":default:" )
+          else
+            SWITCH_VALUE="true"
+          fi
           ;;
         -w)
           # Which setting is optional, no name means all of them
@@ -4529,7 +5120,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -4781,6 +5372,20 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           DO_DOCTOR="true"
           shift OPTS
           ;;
+        -4)
+          DO_PROMPT_PREVIEW="true"
+          shift OPTS
+          ;;
+        -2)
+          DO_EXPORT="true"
+          EXPORT_TARGET="${OPTS[2]}"
+          shift 2 OPTS
+          ;;
+        -3)
+          DO_IMPORT="true"
+          IMPORT_TARGET="${OPTS[2]}"
+          shift 2 OPTS
+          ;;
         -z)
           DO_ZINIT_CHECK="true"
           shift OPTS
@@ -4868,6 +5473,30 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     echo "${SCRIPT_VERSION}"
     release_lock
     exit
+  fi
+
+  # Show the prompt layout (read only)
+
+  if [ "${DO_PROMPT_PREVIEW}" = "true" ]; then
+    print_prompt_preview
+    release_lock
+    exit
+  fi
+
+  # Write or read a bundle of your setup
+
+  if [ "${DO_EXPORT}" = "true" ] || [ "${DO_IMPORT}" = "true" ]; then
+    BUNDLE_STATUS=0
+    if [ "${DO_EXPORT}" = "true" ] && [ "${DO_IMPORT}" = "true" ]; then
+      print -u2 -r -- "Error:          --export and --import are two jobs, run one at a time"
+      BUNDLE_STATUS=1
+    elif [ "${DO_EXPORT}" = "true" ]; then
+      export_bundle "${EXPORT_TARGET}" || BUNDLE_STATUS=1
+    else
+      import_bundle "${IMPORT_TARGET}" || BUNDLE_STATUS=1
+    fi
+    release_lock
+    exit ${BUNDLE_STATUS}
   fi
 
   # Do the doctor (read only)
@@ -4982,6 +5611,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   if [ "${DO_DOTFILES_CHECK}" = "true" ]; then
     phase dotfiles check_dotfiles_config
   fi
+  phase dotfiles-sync check_dotfiles_sync
 
   # Do check for updates
 

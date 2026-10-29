@@ -121,7 +121,7 @@ EOF
   # git: anything that would clone from the network is refused (and logged), so a test can never download a
   # repository (a login on Linux clones nerd-fonts, which is hundreds of megabytes). Everything else is real git
   REAL_GIT=$( command -v git )
-  stub git "case \"\$*\" in *clone*://[!f]*) echo \"git \$* BLOCKED: tests must not clone from the network\" >> ${LOG}; echo 'git: network clones are blocked in the tests' >&2; exit 1;; esac; exec ${REAL_GIT} \"\$@\""
+  stub git "case \"\$*\" in *clone*https://*|*clone*http://*|*clone*ssh://*|*clone*git://*|*clone*git@*) echo \"git \$* BLOCKED: tests must not clone from the network\" >> ${LOG}; echo 'git: network clones are blocked in the tests' >&2; exit 1;; esac; exec ${REAL_GIT} \"\$@\""
   stub oh-my-posh "echo \"oh-my-posh \$*\" >> ${LOG}; exit 0"
   cp "${TMP}/stubs/brew" "${TMP}/brew/bin/brew"
   # Point the copy of the script at the stub brew. If the pattern goes missing the real brew
@@ -872,6 +872,7 @@ test_config_set () {
   check "the config is still valid zsh" "$( zsh -n "${cfg}" && echo valid || echo invalid )" "valid"
   check "and the next run reads it" "$( run --get PROMPT_TOP_ELEMENTS 2>&1 )" "PROMPT_TOP_ELEMENTS=context\\ os_icon  (config: ${cfg})"
   check "it says it applies to new shells" "$( print -r -- "${out}" | grep -c 'applies to new shells' )" "1"
+  check "and how to get one in this window" "$( print -r -- "${out}" | grep -c 'run exec zsh' )" "1"
   run --set PROMPT_TOP_ELEMENTS context > /dev/null 2>&1
   check "setting it again replaces the line" "$( grep -c '^PROMPT_TOP_ELEMENTS=' "${cfg}" )" "1"
   check "with the new value" "$( grep '^PROMPT_TOP_ELEMENTS=' "${cfg}" )" "PROMPT_TOP_ELEMENTS=context"
@@ -2414,6 +2415,311 @@ EOF
   UPDATE_ENV=()
 }
 
+test_update_script_checksum () {
+  local out ver sum
+  ver=$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )
+  new_home; make_release 9.9.9
+  sum=$( shasum -a 256 "${TMP}/rel/ussuri-main/ussuri.zsh" 2> /dev/null || sha256sum "${TMP}/rel/ussuri-main/ussuri.zsh" )
+  sum="${sum%% *}"
+  UPDATE_ENV=( SCRIPT_SHA256=0000000000000000000000000000000000000000000000000000000000000000 )
+  out=$( run_update )
+  check "a wrong SCRIPT_SHA256 is refused" "$( print -r -- "${out}" | grep -c 'Checksum mismatch for the downloaded script' )" "1"
+  check "and the script is not replaced" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "${ver}"
+  check "nor the files" "$( [[ -e "${H}/.ussuri/files/zinit/brandnew.zsh" ]] && echo changed || echo untouched )" "untouched"
+  UPDATE_ENV=( SCRIPT_SHA256="${(U)sum}" )
+  out=$( run_update )
+  check "the right one is accepted (in either case)" "$( grep -m1 '^# Version:' "${TMP}/live/ussuri.zsh" | awk '{print $3}' )" "9.9.9"
+  check "and the checksum of what was installed is shown" "$( print -r -- "${out}" | grep -c "script sha256 ${sum}" )" "1"
+  # the script alone, when the archive can't be fetched, is checked too
+  new_home; make_release 9.9.9
+  RELEASE_ENV=( SCRIPT_URL="file://${TMP}/rel/ussuri-main/ussuri.zsh" UPDATE_URL="file://${TMP}/no-such.tgz" )
+  UPDATE_ENV=( SCRIPT_SHA256=0000000000000000000000000000000000000000000000000000000000000000 )
+  out=$( run_update )
+  check "also when only the script was fetched" "$( print -r -- "${out}" | grep -c 'Checksum mismatch for the downloaded script' )" "1"
+  UPDATE_ENV=()
+}
+
+test_rollback_update () {
+  new_home; make_release 9.9.9; UPDATE_ENV=()
+  local out live="${TMP}/live/ussuri.zsh" files="${H}/.ussuri/files" ver
+  ver=$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )
+  out=$( run_update --dryrun )
+  out=$( run_update )
+  check "after --update the script is the new one" "$( grep -m1 '^# Version:' "${live}" | awk '{print $3}' )" "9.9.9"
+  check "and the changed list is the new one" "$( grep -c '^a-new-package$' "${files}/packages/macos.brew" )" "1"
+  out=$( ( SCRIPT="${live}"; run --backups 2>&1 ) )
+  check "--backups mentions the copy --update kept" "$( print -r -- "${out}" | grep -c 'rollback update puts the newest back' )" "1"
+  sleep 1
+  check "--rollback update says what it restored" "$( ( SCRIPT="${live}"; run --rollback update 2>&1 ) | grep -c 'Restored' )" "1"
+  check "the script is the old one again" "$( grep -m1 '^# Version:' "${live}" | awk '{print $3}' )" "${ver}"
+  check "and the list it replaced is back" "$( grep -c '^a-new-package$' "${files}/packages/macos.brew" )" "0"
+  check "a file the update added is left" "$( [[ -e "${files}/zinit/brandnew.zsh" ]] && echo left || echo removed )" "left"
+  # the rollback is itself undoable: the 9.9.9 script it replaced was kept, and is the newest copy now
+  check "the script it replaced was kept" "$( grep -l -m1 '^# Version: 9.9.9' "${H}"/.ussuri/ussuri.zsh.* 2> /dev/null | wc -l | tr -d ' ' )" "1"
+  sleep 1
+  ( SCRIPT="${live}"; run --rollback update > /dev/null 2>&1 )
+  check "so doing it again goes forward to it" "$( grep -m1 '^# Version:' "${live}" | awk '{print $3}' )" "9.9.9"
+  # no update yet, nothing to roll back
+  new_home
+  out=$( ( SCRIPT="${live}"; run --rollback update 2>&1 ) )
+  check "with no update done it says so, and changes nothing" "$( print -r -- "${out}" | grep -c 'has not replaced' )" "1"
+}
+
+# A bundle made by hand, for the refusals: python writes entries of the given kinds. NAME:KIND where KIND is file,
+# dir, symlink or hardlink; the first entry is always a valid MANIFEST unless the word nomanifest is given
+
+make_bundle () {
+  local out="$1"; shift
+  python3 - "${out}" "$@" << 'PYEOF'
+import sys, tarfile, io
+out = sys.argv[1]
+with tarfile.open(out, 'w:gz') as t:
+    if 'nomanifest' not in sys.argv[2:]:
+        data = b'ussuri-export 1\nversion 9.9.9\nmachine elsewhere\n'
+        i = tarfile.TarInfo('MANIFEST'); i.size = len(data); t.addfile(i, io.BytesIO(data))
+    for arg in sys.argv[2:]:
+        if arg == 'nomanifest': continue
+        name, kind = arg.rsplit(':', 1)
+        i = tarfile.TarInfo(name)
+        if kind == 'dir':
+            i.type = tarfile.DIRTYPE; t.addfile(i)
+        elif kind == 'symlink':
+            i.type = tarfile.SYMTYPE; i.linkname = '/etc/passwd'; t.addfile(i)
+        elif kind == 'hardlink':
+            i.type = tarfile.LNKTYPE; i.linkname = '/etc/passwd'; t.addfile(i)
+        else:
+            data = b'x\n'; i.size = len(data); t.addfile(i, io.BytesIO(data))
+PYEOF
+}
+
+test_export_import () {
+  new_home
+  make_dotfiles
+  local u="${H}/.ussuri" out b="${TMP}/b.tgz" list
+  print -r -- "PROMPT_TOP_ELEMENTS='context'" > "${u}/config"
+  mkdir -p "${u}/profiles/work" "${u}/hosts/box" "${u}/files/packages/hosts/box"
+  print -r -- "DO_VERBOSE=false" > "${u}/profiles/work/local.config"
+  print -r -- "MACHINE_VAR=1" > "${u}/hosts/box/local.config"
+  print -r -- "my own package" > "${u}/files/packages/local.brew"
+  print -r -- "host package" > "${u}/files/packages/hosts/box/local.brew"
+  print -r -- "my own plugin" > "${u}/files/zinit/local.zsh"
+  print -r -- "my p10k" >> "${H}/.p10k.zsh"
+  print -r -- "x" > "${u}/files/zinit/local.zsh.tmp.1"
+  : > "${u}/defaults.journal"; mkdir -p "${u}/cache"; print -r -- "c" > "${u}/cache/x"
+  rm -f "${b}"
+  out=$( run --export "${b}" 2>&1 )
+  check "--export writes the bundle" "$( [[ -s "${b}" ]] && echo written )" "written"
+  check "readable by you alone" "$( ls -l "${b}" | cut -c1-10 )" "-rw-------"
+  check "and says to keep it private" "$( print -r -- "${out}" | grep -c 'keep it to yourself' )" "1"
+  list=$( tar -tzf "${b}" | sed 's|^\./||' | sort )
+  check "it holds the config, the layers, the local lists and the dotfiles" "$( print -r -- "${list}" | grep -c -x -E 'config|profiles/work/local.config|hosts/box/local.config|files/packages/local.brew|files/packages/hosts/box/local.brew|files/zinit/local.zsh|dotfiles/common/.gitconfig|dotfiles/hosts/box/.hostonly|HOME/.p10k.zsh|MANIFEST' )" "10"
+  check "not what the release owns" "$( print -r -- "${list}" | grep -c -E 'files/zinit/zinit.zsh|files/packages/macos.brew' )" "0"
+  check "nor the caches, journals and half written files" "$( print -r -- "${list}" | grep -c -E 'cache|journal|\.tmp\.' )" "0"
+  out=$( run --export "${b}" 2>&1 )
+  check "it will not replace a file that is there" "$( print -r -- "${out}" | grep -c 'already exists' )" "1"
+  out=$( run --export "${b}" --force 2>&1 )
+  check "unless forced" "$( print -r -- "${out}" | grep -c '^Wrote' )" "1"
+  out=$( cd "${TMP}" && run --export 2>&1 )
+  check "with no name it makes one from the machine and the date" "$( ls "${TMP}"/ussuri-export-*.tgz 2> /dev/null | wc -l | tr -d ' ' )" "1"
+  rm -f "${TMP}"/ussuri-export-*.tgz
+  out=$( run --export "${TMP}/dry.tgz" --dryrun 2>&1 )
+  check "--dryrun lists the files and writes nothing" "$( [[ -e "${TMP}/dry.tgz" ]] && echo written || echo none ):$( print -r -- "${out}" | grep -c 'files/packages/local.brew' )" "none:1"
+  # the new machine
+  new_home
+  out=$( run --import "${b}" --dryrun 2>&1 )
+  check "--import --dryrun says what it would do" "$( print -r -- "${out}" | grep -c -E 'Would import b.tgz .*: [0-9]+ new' )" "1"
+  check "and changes nothing" "$( [[ -e "${H}/.ussuri/config" ]] && echo changed || echo untouched )" "untouched"
+  out=$( run --import "${b}" 2>&1 )
+  check "--import puts the files back" "$( cat "${u}/config" "${u}/files/packages/local.brew" "${u}/dotfiles/common/.gitconfig" | tr '\n' ',' )" "PROMPT_TOP_ELEMENTS='context',my own package,common gitconfig,"
+  check "the layers too" "$( cat "${u}/profiles/work/local.config" "${u}/hosts/box/local.config" "${u}/files/packages/hosts/box/local.brew" | tr '\n' ',' )" "DO_VERBOSE=false,MACHINE_VAR=1,host package,"
+  check "the config is readable by you alone" "$( ls -l "${u}/config" | cut -c1-10 )" "-rw-------"
+  check "your p10k config replaces the shipped one, which is kept" "$( grep -c 'my p10k' "${H}/.p10k.zsh" ):$( grep -rL 'my p10k' "${u}/import.bak" 2> /dev/null | wc -l | tr -d ' ' )" "1:1"
+  check "it says what it did and what to do next" "$( print -r -- "${out}" | grep -c -E 'Imported b.tgz .*version .* from .*[0-9]+ new, [0-9]+ replaced' ):$( print -r -- "${out}" | grep -c 'Next: .*--dotfiles' )" "1:1"
+  out=$( run --import "${b}" 2>&1 )
+  check "doing it again changes nothing" "$( print -r -- "${out}" | grep -c ': 0 new, 0 replaced' )" "1"
+  print -r -- "changed here" > "${u}/files/packages/local.brew"
+  out=$( run --import "${b}" 2>&1 )
+  check "a file that differs is replaced, and the old one kept" "$( cat "${u}/files/packages/local.brew" ):$( cat "${u}"/import.bak/*/files/packages/local.brew | tr -d '\n' )" "my own package:changed here"
+  check "and it says where" "$( print -r -- "${out}" | grep -c 'it replaced are in' )" "1"
+}
+
+test_import_refusals () {
+  new_home
+  local u="${H}/.ussuri" out b="${TMP}/evil.tgz" before after
+  before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  make_bundle "${b}" "../escaped:file"
+  out=$( run --import "${b}" 2>&1 )
+  check "a name with .. is refused" "$( print -r -- "${out}" | grep -c 'does not belong in a bundle' )" "1"
+  make_bundle "${b}" "/tmp/ussuri-test-absolute:file"
+  out=$( run --import "${b}" 2>&1 )
+  check "an absolute name" "$( print -r -- "${out}" | grep -c 'does not belong in a bundle' )" "1"
+  make_bundle "${b}" ".zshrc:file"
+  out=$( run --import "${b}" 2>&1 )
+  check "a name that is not on the list (your .zshrc)" "$( print -r -- "${out}" | grep -c 'does not belong in a bundle' )" "1"
+  make_bundle "${b}" "config:symlink"
+  out=$( run --import "${b}" 2>&1 )
+  check "a symbolic link" "$( print -r -- "${out}" | grep -c 'not a plain file or directory' )" "1"
+  make_bundle "${b}" "dotfiles/x:hardlink"
+  out=$( run --import "${b}" 2>&1 )
+  check "a hard link" "$( print -r -- "${out}" | grep -c 'not a plain file or directory' )" "1"
+  make_bundle "${b}" "config:file" nomanifest
+  out=$( run --import "${b}" 2>&1 )
+  check "a tar with no MANIFEST is not an export" "$( print -r -- "${out}" | grep -c 'not a ussuri export' )" "1"
+  print -r -- "not a tar" > "${b}"
+  out=$( run --import "${b}" 2>&1 )
+  check "something that is not a tar" "$( print -r -- "${out}" | grep -c 'not a gzipped tar' )" "1"
+  out=$( run --import "${TMP}/no-such.tgz" 2>&1 )
+  check "a file that is not there" "$( print -r -- "${out}" | grep -c 'is not a file' )" "1"
+  after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  check "and none of them changed anything" "${after}" "${before}"
+  check "or wrote outside" "$( [[ -e "${TMP}/escaped" || -e /tmp/ussuri-test-absolute ]] && echo written || echo safe )" "safe"
+  make_bundle "${b}" "config:file"
+  out=$( run --import "${b}" --export "${TMP}/x.tgz" 2>&1 )
+  check "--export and --import together are refused" "$( print -r -- "${out}" | grep -c 'two jobs' )" "1"
+  rm -rf "${H}/.ussuri" "${H}/.p10k.zsh"; mkdir -p "${H}/.ussuri"
+  out=$( run --export "${TMP}/empty.tgz" 2>&1 )
+  check "with nothing of yours there is nothing to export" "$( print -r -- "${out}" | grep -c 'nothing of yours' )" "1"
+}
+
+# A git repository of dotfiles in the layout the dotfiles directory has, to clone from (file://, as the tests
+# must not use the network)
+
+make_dotfiles_repo () {
+  local repo="${TMP}/dotrepo"
+  rm -rf "${repo}"
+  git init -q "${repo}" && git -C "${repo}" config user.email t@t && git -C "${repo}" config user.name t
+  mkdir -p "${repo}/common"
+  print -r -- "first gitconfig" > "${repo}/common/.testrc"
+  git -C "${repo}" add -A; git -C "${repo}" commit -qm one; git -C "${repo}" tag v1
+  print -r -- "second gitconfig" > "${repo}/common/.testrc"
+  git -C "${repo}" commit -qam two
+  DOTREPO_URL="file://${repo}"
+}
+
+# Source the script as an interactive login shell (a login shell is where the background sync starts)
+
+dotfiles_login () {
+  env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -i -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1' zsh "${SCRIPT}" 2> /dev/null
+}
+
+wait_for_dotfiles_sync () {
+  local i
+  for i in {1..40}; do
+    [[ -f "${H}/.ussuri/dotfiles.sync" ]] && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+test_dotfiles_repo () {
+  new_home; make_dotfiles_repo
+  local out d="${H}/.ussuri/dotfiles"
+  EXTRA_ENV=( DOTFILES_REPO="${DOTREPO_URL}" )
+  out=$( run --dotfiles --dryrun 2>&1 )
+  check "--dryrun says it would clone, and does not" "$( print -r -- "${out}" | grep -c 'would clone' ):$( [[ -e "${d}" ]] && echo cloned || echo none )" "1:none"
+  out=$( run --dotfiles 2>&1 )
+  check "--dotfiles clones the repository first" "$( cat "${d}/common/.testrc" )" "second gitconfig"
+  check "says so" "$( print -r -- "${out}" | grep -c 'dotfiles: cloned' )" "1"
+  check "and links what is in it" "$( readlink "${H}/.testrc" )" "${d}/common/.testrc"
+  git -C "${TMP}/dotrepo" tag -f v2 > /dev/null 2>&1
+  print -r -- "third gitconfig" > "${TMP}/dotrepo/common/.testrc"; print -r -- "new" > "${TMP}/dotrepo/common/.newfile"
+  git -C "${TMP}/dotrepo" add -A; git -C "${TMP}/dotrepo" commit -qm three
+  out=$( run --dotfiles 2>&1 )
+  check "the next time it pulls what changed" "$( cat "${d}/common/.testrc" )" "third gitconfig"
+  check "so an existing link shows the change, and a new file is linked" "$( cat "${H}/.testrc" ):$( readlink "${H}/.newfile" )" "third gitconfig:${d}/common/.newfile"
+  check "and says it is up to date" "$( print -r -- "${out}" | grep -c 'up to date with' )" "1"
+  # local changes are never pulled over
+  print -r -- "mine" >> "${d}/common/.testrc"
+  print -r -- "fourth gitconfig" > "${TMP}/dotrepo/common/.testrc"; git -C "${TMP}/dotrepo" commit -qam four
+  out=$( run --dotfiles 2>&1 )
+  check "changes that are not committed are not pulled over" "$( print -r -- "${out}" | grep -c 'not committed, not pulling' ):$( grep -c mine "${d}/common/.testrc" )" "1:1"
+  git -C "${d}" checkout -q -- .
+  # a pin
+  EXTRA_ENV=( DOTFILES_REPO="${DOTREPO_URL}" DOTFILES_REF=v1 )
+  out=$( run --dotfiles 2>&1 )
+  check "DOTFILES_REF keeps it on that tag" "$( cat "${d}/common/.testrc" ):$( print -r -- "${out}" | grep -c 'at v1' )" "first gitconfig:1"
+  # a different remote, and a directory that is not a clone
+  EXTRA_ENV=( DOTFILES_REPO="file://${TMP}/other-repo" )
+  out=$( run --dotfiles 2>&1 )
+  check "a clone of another repository is left alone" "$( print -r -- "${out}" | grep -c 'not file://.*leaving it alone' )" "1"
+  new_home; make_dotfiles
+  EXTRA_ENV=( DOTFILES_REPO="${DOTREPO_URL}" )
+  out=$( run --dotfiles 2>&1 )
+  check "so is a dotfiles directory that is not a clone" "$( print -r -- "${out}" | grep -c 'is not a clone, leaving it alone' ):$( cat "${H}/.ussuri/dotfiles/common/.gitconfig" )" "1:common gitconfig"
+  EXTRA_ENV=()
+}
+
+test_dotfiles_repo_urls () {
+  new_home
+  local out marker="${TMP}/ext-ran" url
+  for url in "ext::sh -c touch% ${marker}" 'https://x/y;touch z' 'http://insecure.example/r' 'ftp://x/y' '-oProxyCommand=x' 'https://x/y z'; do
+    rm -f "${marker}"
+    EXTRA_ENV=( DOTFILES_REPO="${url}" )
+    out=$( run --dotfiles 2>&1 )
+    check "a URL that is not https, ssh or file is refused: ${url}" "$( print -r -- "${out}" | grep -c 'is not an https://' ):$( [[ -e "${marker}" ]] && echo ran || echo safe ):$( [[ -e "${H}/.ussuri/dotfiles" ]] && echo cloned || echo none )" "1:safe:none"
+  done
+  for url in 'https://github.com/someone/dotfiles.git' 'ssh://git@host/path.git' 'git@github.com:someone/dotfiles.git' 'file:///tmp/x'; do
+    load_function dotfiles_repo_url_ok
+    check "${url} is accepted" "$( dotfiles_repo_url_ok "${url}" && echo yes )" "yes"
+  done
+  EXTRA_ENV=()
+}
+
+test_dotfiles_repo_login () {
+  new_home; make_dotfiles_repo
+  local d="${H}/.ussuri/dotfiles" before after
+  EXTRA_ENV=()
+  dotfiles_login; sleep 1
+  check "with no DOTFILES_REPO a login does not clone anything" "$( [[ -e "${d}" ]] && echo cloned || echo none )" "none"
+  EXTRA_ENV=( DOTFILES_REPO="${DOTREPO_URL}" )
+  check "a login that is not interactive does not sync (run --dotfiles)" "$( run --version > /dev/null 2>&1; [[ -e "${d}" ]] && echo cloned || echo none )" "none"
+  dotfiles_login
+  wait_for_dotfiles_sync
+  check "an interactive login clones it in the background" "$( cat "${d}/common/.testrc" 2> /dev/null )" "second gitconfig"
+  check "and records the result for --doctor" "$( cut -d' ' -f2 "${H}/.ussuri/dotfiles.sync" 2> /dev/null )" "ok"
+  check "with a stamp, so the next login within a day does nothing" "$( [[ -f "${H}/.ussuri/dotfiles.sync.stamp" ]] && echo yes )" "yes"
+  print -r -- "third gitconfig" > "${TMP}/dotrepo/common/.testrc"; git -C "${TMP}/dotrepo" commit -qam three
+  dotfiles_login; sleep 2
+  check "and does not look again" "$( cat "${d}/common/.testrc" )" "second gitconfig"
+  touch -t "$( date -v-2d +%Y%m%d%H%M 2> /dev/null || date -d '2 days ago' +%Y%m%d%H%M )" "${H}/.ussuri/dotfiles.sync.stamp"
+  rm -f "${H}/.ussuri/dotfiles.sync"
+  dotfiles_login
+  wait_for_dotfiles_sync
+  check "a day later it pulls" "$( cat "${d}/common/.testrc" )" "third gitconfig"
+  # a login does not wait for it
+  rm -f "${H}/.ussuri/dotfiles.sync"; touch -t "$( date -v-2d +%Y%m%d%H%M 2> /dev/null || date -d '2 days ago' +%Y%m%d%H%M )" "${H}/.ussuri/dotfiles.sync.stamp"
+  stub git "sleep 3; exec ${REAL_GIT} \"\$@\""
+  zmodload zsh/datetime 2> /dev/null
+  local t0=$EPOCHREALTIME
+  dotfiles_login
+  check "and the login does not wait for it" "$( (( EPOCHREALTIME - t0 < 2.5 )) && echo quick || echo slow )" "quick"
+  sleep 4
+  make_stubs
+  EXTRA_ENV=()
+}
+
+test_doctor_dotfiles_repo () {
+  healthy_home; make_dotfiles_repo
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor says nothing about a repository that is not set" "$( print -r -- "${out}" | grep -c 'Dotfiles repository' )" "0"
+  EXTRA_ENV=( DOTFILES_REPO="${DOTREPO_URL}" )
+  out=$( run --doctor 2>&1 )
+  check "it says it has not been synced yet" "$( print -r -- "${out}" | grep -c 'ok.*not synced yet' )" "1"
+  print -r -- "$( date +%s ) ok up to date" > "${H}/.ussuri/dotfiles.sync"
+  out=$( run --doctor 2>&1 )
+  check "after a sync, what it said and when" "$( print -r -- "${out}" | grep -c -E 'ok.*: up to date \([0-9]+ hours ago\)' )" "1"
+  print -r -- "$( date +%s ) failed could not fast forward" > "${H}/.ussuri/dotfiles.sync"
+  out=$( run --doctor 2>&1 )
+  check "after a failure, a warning with the reason" "$( print -r -- "${out}" | grep -c 'warn.*last sync failed.*could not fast forward' )" "1"
+  EXTRA_ENV=( DOTFILES_REPO="ext::sh -c x" )
+  out=$( run --doctor 2>&1 )
+  check "a URL that is not allowed is a failure" "$( print -r -- "${out}" | grep -c 'FAIL.*DOTFILES_REPO is not an https' )" "1"
+  EXTRA_ENV=()
+}
+
 test_update_archive_missing () {
   new_home; make_release 9.9.9
   RELEASE_ENV=( SCRIPT_URL="file://${TMP}/rel/ussuri-main/ussuri.zsh" UPDATE_URL="file://${TMP}/no-such.tgz" ); UPDATE_ENV=()
@@ -3261,6 +3567,103 @@ test_top_line_date () {
   check "none means nothing on the right (and is not taken for a segment)" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}|${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]}" "context newline dir|newline time"
   unfunction p10k
   unset POWERLEVEL9K_LEFT_PROMPT_ELEMENTS POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS POWERLEVEL9K_DATE_FORMAT POWERLEVEL9K_DATE_FOREGROUND PROMPT_ENGINE PROMPT_TWO_LINE PROMPT_TOP_ELEMENTS PROMPT_TOP_RIGHT_ELEMENTS
+}
+
+test_color_contrast () {
+  load_function color_rgb
+  load_function color_contrast
+  color_contrast 238 238;     check "the same colour is 1 to 1" "${COLOR_CONTRAST}" "1.0"
+  color_contrast 15 0;        check "white on black is 21 to 1" "${COLOR_CONTRAST}" "21.0"
+  color_contrast 0 15;        check "whichever way round" "${COLOR_CONTRAST}" "21.0"
+  color_contrast '#ffffff' '#000000'; check "a hex colour works" "${COLOR_CONTRAST}" "21.0"
+  color_contrast white black; check "and a name" "${COLOR_CONTRAST}" "$( color_contrast 7 0; print -r -- "${COLOR_CONTRAST}" )"
+  color_contrast 250 238;     check "the light grey on the prompt's background is readable" "$( (( COLOR_CONTRAST >= 3 )) && print readable )" "readable"
+  color_contrast 66 238;      check "p10k's time colour is not" "$( (( COLOR_CONTRAST < 3 )) && print hard )" "hard"
+  color_contrast 300 238;     check "a number out of range is no colour" "${COLOR_CONTRAST:-none}" "none"
+  color_contrast banana 238;  check "nor is a word" "${COLOR_CONTRAST:-none}" "none"
+  color_rgb 196;              check "the colour cube" "${COLOR_RGB[*]}" "255 0 0"
+  color_rgb 244;              check "the grey ramp" "${COLOR_RGB[*]}" "128 128 128"
+}
+
+test_prompt_preview () {
+  new_home
+  local out before after
+  out=$( run --prompt-preview 2>&1 )
+  check "it lists the top line segments with their text" "$( print -r -- "${out}" | grep -c -E 'left +context +tester@.* ok$' )" "1"
+  check "the OS version and the architecture" "$( print -r -- "${out}" | grep -c -E '^  left +(os_version|cpu_arch) ' )" "2"
+  check "the date, with the day" "$( print -r -- "${out}" | grep -c -E 'right +date +[A-Z][a-z]{2} [0-9]{2} [A-Z][a-z]{2} [0-9]{4} ' )" "1"
+  check "with the colours, and the background" "$( print -r -- "${out}" | grep -c -E 'fg 250 +on 238 +contrast 5.1' )" "2"
+  check "the bottom line is listed by name, from your config" "$( print -r -- "${out}" | grep -c -E '^Bottom line .*os_icon dir vcs' )" "1"
+  check "no escape codes when it is not a terminal" "$( print -r -- "${out}" | grep -c $'\e' )" "0"
+  if command -v python3 > /dev/null 2>&1; then
+    out=$( run_on_tty n --prompt-preview 2>&1 )
+    check "on a terminal each line is drawn in its colours (real escape codes)" "$( print -r -- "${out}" | grep -c $'\e\\[38;5;180m\e\\[48;5;238m' )" "1"
+    check "and none is a literal backslash e" "$( print -r -- "${out}" | grep -c '\\e\[' )" "0"
+  fi
+  before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  run --prompt-preview > /dev/null 2>&1
+  after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  check "it changes nothing" "${after}" "${before}"
+  EXTRA_ENV=( PROMPT_TOP_RIGHT_ELEMENTS="time" )
+  out=$( run --prompt-preview 2>&1 )
+  check "a colour that is hard to read is marked" "$( print -r -- "${out}" | grep -c -E 'right +time .*contrast 2\.[0-9] +low' )" "1"
+  EXTRA_ENV=( PROMPT_ENGINE=none )
+  out=$( run --prompt-preview 2>&1 )
+  check "with no p10k there is nothing to preview, and it says so" "$( print -r -- "${out}" | grep -c 'no powerlevel10k layout' )" "1"
+  EXTRA_ENV=( PROMPT_TWO_LINE=false )
+  out=$( run --prompt-preview 2>&1 )
+  check "a one line prompt has no top line" "$( print -r -- "${out}" | grep -c 'the prompt has no top line' )" "1"
+  EXTRA_ENV=()
+  # a p10k that does not have a segment of that name
+  mkdir -p "${H}/.powerlevel10k/internal"
+  printf '\nprompt_context() {\n}\nprompt_date() {\n}\nfunction prompt_time() {\n}\n' > "${H}/.powerlevel10k/internal/p10k.zsh"
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS="context cpu_arch" )
+  out=$( run --prompt-preview 2>&1 )
+  check "a name p10k has no segment for is marked unknown" "$( print -r -- "${out}" | grep -c -E 'cpu_arch .*unknown$' )" "1"
+  check "and the ones it has are not" "$( print -r -- "${out}" | grep -c -E 'context .* ok$' )" "1"
+  EXTRA_ENV=()
+}
+
+test_doctor_prompt_segments () {
+  healthy_home
+  local out
+  out=$( run --doctor 2>&1 )
+  check "doctor is happy with the default top line" "$( print -r -- "${out}" | grep -c 'ok.*top line segments exist and are readable' )" "1"
+  EXTRA_ENV=( PROMPT_TOP_RIGHT_ELEMENTS="time" )
+  out=$( run --doctor 2>&1 )
+  check "and warns about a colour that can't be read, and what to set" "$( print -r -- "${out}" | grep -c "warn.*'time' is hard to read.*POWERLEVEL9K_TIME_FOREGROUND" )" "1"
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS='context a;b' )
+  out=$( run --doctor 2>&1 )
+  check "and about a word that is not a segment name" "$( print -r -- "${out}" | grep -c "warn.*'a;b'.*not a segment name" )" "1"
+  mkdir -p "${H}/.powerlevel10k/internal"
+  printf '\nprompt_context() {\n}\nprompt_date() {\n}\n' > "${H}/.powerlevel10k/internal/p10k.zsh"
+  EXTRA_ENV=( PROMPT_TOP_ELEMENTS="context cpu_arch" )
+  out=$( run --doctor 2>&1 )
+  check "and about a segment this p10k does not have" "$( print -r -- "${out}" | grep -c "warn.*'cpu_arch' is not one this powerlevel10k has" )" "1"
+  EXTRA_ENV=( PROMPT_TWO_LINE=false )
+  out=$( run --doctor 2>&1 )
+  check "with a one line prompt there is nothing to check" "$( print -r -- "${out}" | grep -c 'top line segment' )" "0"
+  EXTRA_ENV=()
+}
+
+test_top_line_per_machine () {
+  new_home
+  local u="${H}/.ussuri" out
+  mkdir -p "${u}/hosts/laptop" "${u}/profiles/work"
+  print -r -- "PROMPT_TOP_RIGHT_ELEMENTS='battery date'" > "${u}/hosts/laptop/local.config"
+  print -r -- "PROMPT_TOP_ELEMENTS='context kubecontext'" > "${u}/profiles/work/local.config"
+  out=$( run --prompt-preview 2>&1 )
+  check "by default every machine has the same top line" "$( print -r -- "${out}" | grep -c -E '^  right +battery' ):$( print -r -- "${out}" | grep -c -E '^  left +kubecontext' )" "0:0"
+  EXTRA_ENV=( MACHINE=laptop )
+  out=$( run --prompt-preview 2>&1 )
+  check "a host's local.config adds a segment for that machine" "$( print -r -- "${out}" | grep -c -E '^  right +battery' )" "1"
+  check "and the others stay as they were" "$( print -r -- "${out}" | grep -c -E '^  left +(context|os_version|cpu_arch) ' )" "3"
+  EXTRA_ENV=( PROFILE=work )
+  out=$( run --prompt-preview 2>&1 )
+  check "a profile's local.config changes the left of the top line" "$( print -r -- "${out}" | grep -c -E '^  left +kubecontext' ):$( print -r -- "${out}" | grep -c -E '^  left +os_version ' )" "1:0"
+  out=$( run --set PROMPT_TOP_RIGHT_ELEMENTS "aws date" -H laptop 2>&1 )
+  check "--set -H writes it there" "$( grep -c "^PROMPT_TOP_RIGHT_ELEMENTS=" "${u}/hosts/laptop/local.config" ):$( grep "^PROMPT_TOP_RIGHT_ELEMENTS=" "${u}/hosts/laptop/local.config" )" "1:PROMPT_TOP_RIGHT_ELEMENTS='aws date'"
+  EXTRA_ENV=()
 }
 
 test_doctor_prompt_layout () {

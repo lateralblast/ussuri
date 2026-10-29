@@ -121,6 +121,25 @@ Decided against: fast-syntax-highlighting (alternative to the one already loaded
 
 - [x] **Q11. Day and date on the top line** (1.7.8, 2026-10-30) `PROMPT_TOP_RIGHT_ELEMENTS` defaults to `date` (p10k's own segment) with `POWERLEVEL9K_DATE_FORMAT` set to `%D{%a %d %b %Y}` when the config has not set one; `none` means nothing there. Sandbox tested only (`test_top_line_date`); not seen in a live prompt. Asked for "at the left" first, then changed to the right.
 
+## Ideas (2026-10-30)
+
+All eight done on 2026-10-30, one version each (1.8.0 to 1.8.7). What is and is not verified is in each line.
+
+- [x] **I1. `--update` checksum.** (1.8.0, 2026-10-30) `SCRIPT_SHA256` pins the script inside the update, whichever way it is fetched, and `--update` prints the SHA-256 of the script it installed. Tested with a local release (right, wrong, upper case, script only). A checksum for a moving `main` cannot be built in: someone has to publish one, so it is a pin you set for a release you have checked. Nothing publishes checksums for the repository's releases yet.
+- [x] **I2. `--export` / `--import`.** (1.8.1, 2026-10-30) A bundle of config, layers, local lists, dotfiles and `~/.p10k.zsh`, readable by you alone, with a MANIFEST; the import takes only plain files with names from a fixed list and keeps what it replaces. Tested in the sandbox, including archives with `..`, absolute names, symbolic and hard links, no MANIFEST and a file that is not a tar. Not tried on a real second machine, or with GNU tar (BSD tar only, `COPYFILE_DISABLE` is set for the macOS extended attributes).
+- [x] **I3. `DOTFILES_REPO`.** (1.8.2, 2026-10-30) Clone or fast forward the dotfiles directory, in the foreground with `--dotfiles` and once a day in a detached background job on an interactive login. Tested against local `file://` repositories (clone, pull, new file, dirty tree, other remote, not a clone, a tag pin, a slow git that must not hold the login up, `ext::` and other URLs refused). Not tried over https or ssh against a real remote (the test git blocks both), and not with a private repository, where the background job cannot ask for a password and only reports the failure.
+- [x] **I4. `--prompt-preview`.** (1.8.3, 2026-10-30) The top line with text, colours, contrast and a verdict, the bottom line by name. Tested in the sandbox, and on a pseudo terminal for the colour swatches (which found that they printed a literal `\e` instead of an escape, now fixed and tested). Not looked at by eye in a real terminal. The contrast of a segment whose colour p10k picks itself (`default`) and the per-state colours (`kubecontext`, `battery`) are not worked out.
+- [x] **I5. `--doctor` checks for the prompt.** (1.8.4, 2026-10-30) Unknown segments (searched for in p10k's source; with no p10k source on the machine nothing is claimed), colours under 3 to 1 on the top line and words that are not segment names. Not for the bottom line, which is your own config's.
+- [x] **I6. Top line segments per machine.** (1.8.5, 2026-10-30) The mechanism was there (profile and host `local.config`); added a test that the layers change the top line, and README examples for `battery`, `aws` and `kubecontext`. No segments are added by default: whether a machine has a battery or a cluster is not known without running something at login.
+- [x] **I7. `--rollback update`.** (1.8.6, 2026-10-30) Puts back the script and the files the last update replaced (matched by date), keeping what it replaces so it can be undone. Files an update added are not removed, as nothing records which they were.
+- [x] **I8. Reload hint after `--set`.** (1.8.7, 2026-10-30) `--set`, `--unset` and `--edit` print `run exec zsh to start one in this window`.
+
+Open questions and checks, not features:
+
+- [ ] Should `rm`, `cp` and `mv` stay interactive (`-i`) under common-aliases (Q5)? Unanswered.
+- [ ] Run the CI workflow on GitHub (R4); the Linux package managers and package names have only met stubs.
+- [ ] Try `--edit` in a real editor, and a full login under zinit turbo (completion, plugins, the new top line segments).
+
 ## Housekeeping when a fix ships
 
 Bump `# Version:` in `ussuri.zsh`, `Current Version` in `README.md`, and add a `CHANGELOG.md` entry (single digits per component, per CLAUDE.md).

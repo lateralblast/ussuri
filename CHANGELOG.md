@@ -4,6 +4,58 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.7] - 2026-10-30
+
+### Changed
+
+- `--set`, `--unset` and `--edit` say how to get the change in the window you are in (`exec zsh`) as well as that it applies to new shells
+
+## [1.8.6] - 2026-10-30
+
+### Added
+
+- `--rollback update` undoes the last `--update`: the script it replaced (`ussuri.zsh.<date>`) and the supporting files it replaced (`files.bak/<date>`, the same date) are put back, the script being replaced is kept first (so doing it twice goes forward again), and `--backups` mentions the copies. A file the update added is left where it is, as nothing recorded which were new
+
+## [1.8.5] - 2026-10-30
+
+### Added
+
+- Examples for a different top line on one machine or profile (`--set NAME VALUE --host laptop`) with `battery`, `aws` and `kubecontext`, and a test that a host's or profile's `local.config` does change the top line. No segments are added by default: whether a machine has a battery or a cluster is not known without running something at login
+
+## [1.8.4] - 2026-10-30
+
+### Added
+
+- `--doctor` checks the prompt's top line: a segment that does not exist in this powerlevel10k (found by searching its source, so a typo or a p10k without `cpu_arch` shows), a colour that can not be read (with the `POWERLEVEL9K_<NAME>_FOREGROUND` that fixes it) and a word that is not a segment name. The bottom line is your config's and is not warned about
+
+## [1.8.3] - 2026-10-30
+
+### Added
+
+- `--prompt-preview` shows the prompt's top line without opening a shell: each segment with the text it would show (context, os_version, cpu_arch, date and time are known without a prompt), its foreground and background, the contrast between them (the WCAG ratio, worked out from the xterm 256 colour table, with `#rrggbb` and p10k's colour names too) and a verdict (ok, low, same, default, unknown), drawn in its own colours on a terminal, then the bottom line's names. The layout is the one a login makes: your `~/.p10k.zsh` is read and `apply_prompt_top_line` applied, in a subshell. It has no short form of its own, as every letter was taken (inside it is `-4`)
+
+## [1.8.2] - 2026-10-30
+
+### Added
+
+- `DOTFILES_REPO` (and `DOTFILES_REF`): the dotfiles directory kept as a clone of a git repository. `--dotfiles` clones or fast forwards it first and says what happened; an interactive login does it at most once a day in a detached background job (the stamp touched first, nothing printed, nothing prompted for) and records the result in `dotfiles.sync` for `--doctor`. Only https, ssh and file URLs are accepted (`GIT_ALLOW_PROTOCOL` is set to match, which stops git's `ext::` transport), a directory that is not a clone of that URL or has uncommitted changes is left alone, and only a fast forward is taken
+
+### Changed
+
+- The test git no longer blocks `file://` clones, which the DOTFILES_REPO tests use (it still blocks https, ssh and git)
+
+## [1.8.1] - 2026-10-30
+
+### Added
+
+- `--export [FILE]` and `--import FILE`: your setup in one file for a new machine. The bundle (readable by you alone) holds the config and its profile and machine layers, the local plugin and package lists and their layers, the dotfiles directory and `~/.p10k.zsh`, with a MANIFEST, and nothing the release owns or the machine made. `--import` takes only plain files and directories with names from that list (no links, no absolute paths, no `..`, a MANIFEST required) and keeps what it replaces in `import.bak/<date>/`. Both honour `--dryrun`. They have no short form of their own, as every letter was taken (inside they are `-2` and `-3`)
+
+## [1.8.0] - 2026-10-30
+
+### Added
+
+- `SCRIPT_SHA256` pins the script inside an update, checked whichever way it was fetched (the archive or the script alone), before anything is replaced; `--update` now says the SHA-256 of the script it installed. `UPDATE_SHA256` still pins the archive
+
 ## [1.7.9] - 2026-10-30
 
 ### Fixed
