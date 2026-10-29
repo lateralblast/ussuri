@@ -148,7 +148,97 @@ the questions for you; `--debug` turns on `set -x`. Every side effect goes throu
 ## Usage
 
 ```
+Usage: ./ussuri.zsh [OPTIONS...]
 
+With no switches it runs as a login script. With switches it is a command line tool
+that does only what you ask. A default on a row is the current value of what the switch
+sets: from your config or the environment, or the built in one.
+
+Look, without changing anything
+  -h, --help                      Print this usage
+  -V, --version                   Print the version
+  -e, --changelog                 Print the changelog
+  -x, --doctor                    Check the environment (read only)
+  -Y, --fix                       With --doctor: repair the safe problems
+  -G, --drift [WHAT]              Report drift: settings, packages or all
+  -a, --adopt                     With --drift: add installed packages to your list
+  -j, --timing                    Run as a login and time each step of it
+
+Install, update and undo
+  -I, --install                   Install as ~/.zshrc (the old one is kept)
+  -U, --update                    Update the script and its files                (default: false)
+  -C, --check                     Check for a newer version                      (default: false)
+  -B, --backups                   List the .zshrc backups
+  -R, --rollback [N]              Restore .zshrc backup N                        (default: newest)
+  -X, --uninstall                 Restore the .zshrc from before ussuri
+  -J, --defaults-undo [N|list]    Undo a run of defaults changes                 (default: newest)
+  -u, --unlink                    Unlink the dotfiles
+
+Settings (~/.ussuri/config)
+  -k, --config                    Create the config file
+      --set NAME VALUE            Save a setting, for every new shell
+      --unset NAME                Remove a setting
+      --get [NAME]                Show a setting (or all) and where it is from
+  -K, --edit                      Edit the config in $EDITOR, checked first
+  -M, --profile NAME              Profile; with --set/--unset/--edit its file    (default: none)
+  -H, --host NAME                 Machine; with --set/--unset/--edit its file    (default: laptop)
+
+Set up
+  -A, --doall                     Do everything that is enabled
+  -i, --inline                    Use the login (inline) defaults
+  -b, --build                     Build sources                                  (default: false)
+  -D, --defaults                  Set the system defaults                        (default: false)
+  -E, --prompt NAME               Prompt engine: p10k, posh or none              (default: p10k)
+  -f, --fonts                     Install the fonts                              (default: false)
+  -L, --dotfiles                  Link the dotfiles                              (default: false)
+  -m, --manager NAME              Plugin manager: zinit or oh-my-zsh             (default: zinit)
+  -n, --notheme                   Do not use a zsh theme
+  -N, --noenv                     Do not set up the tools' environment
+  -o, --ohmyposh                  Install oh my posh                             (default: false)
+  -O, --ohmyzsh                   Install oh my zsh                              (default: false)
+  -p, --pyenv                     Do the pyenv check                             (default: false)
+  -P, --packages                  Do the packages check                          (default: false)
+  -r, --rbenv                     Do the rbenv check                             (default: false)
+  -s, --sudoers                   Do the sudoers check                           (default: false)
+  -S, --sudoersentry ENTRY        Set the sudoers entry                          (default: ALL=(ALL) NOPASSWD:ALL)
+  -T, --p10k                      Do the p10k config                             (default: false)
+  -W, --tool NAME                 Install fnm, rustup, uv, mise or atuin
+  -z, --zinit                     Do the zinit check                             (default: false)
+  -Z, --zshtheme NAME             Set the zsh theme                              (default: robbyrussell)
+  -g, --gopath DIR                Set GOPATH                                     (default: ~/go)
+  -l, --location DIR              Set the start directory                        (default: none)
+
+How it runs
+  -t, --dryrun                    Show the commands, run none                    (default: false)
+  -v, --verbose                   Verbose output                                 (default: false)
+  -c, --confirm                   Confirm each command                           (default: false)
+  -y, --yes                       Answer yes, no prompts                         (default: false)
+  -d, --debug                     Debug output (set -x)                          (default: false)
+  -F, --force                     Force: clear the lock, ignore the stamps       (default: false)
+
+Short switches can be bundled (-vt). Several have other long names, listed in the README.
+
+What a login does with no switches
+  Build                      false
+  Confirm                    false
+  Update check               false
+  Debug                      false
+  Verbose                    false
+  Defaults check             true
+  Fonts check                true
+  Package check              false
+  zinit check                true
+  pyenv check                true
+  rbenv check                true
+  p10k check                 true
+  oh-my-posh check           false
+  oh-my-zsh check            false
+  Sudoers check              false
+  PKGCONFIG check            true
+  CPPFLAGS check             true
+  LDFLAGS check              true
+  Plugin manager             zinit
+  Start directory            none
 ```
 
 The switches by what they are for:
