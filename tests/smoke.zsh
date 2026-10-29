@@ -930,7 +930,7 @@ test_config_get () {
   local cfg="${H}/.ussuri/config" out
   rm -f "${cfg}"
   out=$( run --get PROMPT_TOP_ELEMENTS 2>&1 )
-  check "--get on a setting nobody has set shows its default" "$( print -r -- "${out}" | grep -c 'PROMPT_TOP_ELEMENTS=context  (default)' )" "1"
+  check "--get on a setting nobody has set shows its default" "$( print -r -- "${out}" | grep -c 'PROMPT_TOP_ELEMENTS=context\\ os_version\\ cpu_arch  (default)' )" "1"
   out=$( EXTRA_ENV=( PROMPT_TOP_ELEMENTS=time ); run --get PROMPT_TOP_ELEMENTS 2>&1 )
   check "from the environment" "$( print -r -- "${out}" | grep -c 'PROMPT_TOP_ELEMENTS=time  (environment)' )" "1"
   print -r -- "PROMPT_TOP_ELEMENTS=os_icon" > "${cfg}"
@@ -3114,7 +3114,7 @@ test_package_names_brew () {
 
 test_two_line_prompt () {
   new_home
-  check "by default the top line is user@host (the context segment), above the line you have" "$( layout_state )" 'left=context newline os_icon dir vcs | right=newline status time | context=${P9K_CONTENT}'
+  check "by default the top line is user@host, the OS version and the architecture, above the line you have" "$( layout_state )" 'left=context os_version cpu_arch newline os_icon dir vcs | right=newline status time | context=${P9K_CONTENT}'
   check "and p10k is told to reload, once" "$( grep -c '^p10k reload$' "${LOG}" )" "1"
   EXTRA_ENV=( PROMPT_TWO_LINE=false )
   check "PROMPT_TWO_LINE=false leaves the layout alone" "$( layout_state )" "left=os_icon dir vcs | right=status time context | context=hidden"
@@ -3181,6 +3181,44 @@ test_apply_prompt_top_line_unit () {
   apply_prompt_top_line 2> /dev/null
   check "without p10k loaded yet it still sets the layout, for p10k to read when it loads" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}" "context newline dir"
   unset POWERLEVEL9K_LEFT_PROMPT_ELEMENTS POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS PROMPT_ENGINE PROMPT_TWO_LINE PROMPT_TOP_ELEMENTS PROMPT_TOP_RIGHT_ELEMENTS
+}
+
+test_macos_version_segment () {
+  load_function apply_prompt_top_line
+  load_function define_os_version_segments
+  load_function prompt_engine_is
+  local plist="${TMPDIR:-/tmp}/SystemVersion.$$.plist" shown=""
+  printf '<dict>\n\t<key>ProductName</key>\n\t<string>macOS</string>\n\t<key>ProductVersion</key>\n\t<string>15.1</string>\n</dict>\n' > "${plist}"
+  p10k () { [[ "$1" == segment ]] && shown="${*[2,-1]}" }
+  PROMPT_ENGINE=p10k PROMPT_TWO_LINE=true PROMPT_TOP_ELEMENTS="context macos_version" PROMPT_TOP_RIGHT_ELEMENTS="" MACOS_VERSION_FILE="${plist}"
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( os_icon dir ); POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( time )
+  apply_prompt_top_line
+  check "macos_version goes on the top line like any segment" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}" "context macos_version newline os_icon dir"
+  prompt_macos_version
+  check "it shows the product name and version from the system file" "${shown}" "-f 250 -t macOS 15.1"
+  shown=""; MACOS_VERSION_FILE="${plist}.missing"
+  define_os_version_segments
+  prompt_macos_version
+  check "and nothing where there is no such file (not a Mac)" "${shown}" ""
+  printf 'NAME="Ubuntu"\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04 LTS"\n' > "${plist}.os"
+  OS_RELEASE_FILE="${plist}.os"; MACOS_VERSION_FILE="${plist}"
+  define_os_version_segments
+  shown=""; prompt_os_version
+  check "os_version is the Mac's version on a Mac" "${shown}" "-f 250 -t macOS 15.1"
+  MACOS_VERSION_FILE="${plist}.missing"
+  define_os_version_segments
+  shown=""; prompt_os_version
+  check "and the distribution's name on Linux" "${shown}" "-f 250 -t Ubuntu 24.04 LTS"
+  shown=""; prompt_linux_version
+  check "linux_version shows the same" "${shown}" "-f 250 -t Ubuntu 24.04 LTS"
+  shown=""; prompt_macos_version
+  check "and macos_version nothing there" "${shown}" ""
+  printf 'NAME="Alpine Linux"\nVERSION_ID=3.20.1\n' > "${plist}.os"
+  define_os_version_segments
+  check "without PRETTY_NAME it is the name and version" "${OS_VERSION_TEXT}" "Alpine Linux 3.20.1"
+  rm -f "${plist}" "${plist}.os"
+  unfunction p10k prompt_macos_version prompt_linux_version prompt_os_version
+  unset POWERLEVEL9K_LEFT_PROMPT_ELEMENTS POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS PROMPT_ENGINE PROMPT_TWO_LINE PROMPT_TOP_ELEMENTS PROMPT_TOP_RIGHT_ELEMENTS MACOS_VERSION_FILE MACOS_VERSION_TEXT LINUX_VERSION_TEXT OS_VERSION_TEXT OS_RELEASE_FILE
 }
 
 test_doctor_prompt_layout () {

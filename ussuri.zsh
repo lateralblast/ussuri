@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.7.3
+# Version: 1.7.6
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -270,12 +270,56 @@ resolve_prompt_engine () {
 }
 
 # A two line powerlevel10k prompt: a configurable line above the one you have. PROMPT_TOP_ELEMENTS (default:
-# context, which is user@hostname) are the p10k segments on the left of the top line, and
+# "context os_version cpu_arch": user@hostname, the OS version, the architecture) are the p10k segments on the left of the top line, and
 # PROMPT_TOP_RIGHT_ELEMENTS (default: none) on its right. Your line, with its right hand segments, stays
 # as it is below. A segment moved to the top line is taken off the bottom one, so it isn't shown twice, and
 # context is made visible whatever the user (p10k hides it for a default user). It is done after your
 # ~/.p10k.zsh is read, so it works on top of whatever that holds, even one made by p10k configure. A config that
 # already has more than one line is yours and is left alone. PROMPT_TWO_LINE=false turns it off
+
+# macos_version, linux_version and os_version are segments of our own: "macOS 15.1", "Ubuntu 24.04 LTS", and
+# whichever of the two this machine is. Read from the system version file (macOS) or os-release (Linux) with zsh
+# builtins (no sw_vers or lsb_release, so no fork), once, here, not on every prompt. A segment shows nothing on a
+# machine the other kind
+
+define_os_version_segments () {
+  setopt localoptions extendedglob
+  local mac_file="${MACOS_VERSION_FILE:-/System/Library/CoreServices/SystemVersion.plist}"
+  local linux_file="${OS_RELEASE_FILE:-/etc/os-release}"
+  local text rest name="" version="" line
+  typeset -g MACOS_VERSION_TEXT="" LINUX_VERSION_TEXT=""
+  if [[ -r "${mac_file}" ]]; then
+    text="$(<${mac_file})"
+    if [[ "${text}" == *"<key>ProductVersion</key>"* ]]; then
+      rest="${text#*<key>ProductVersion</key>}"; rest="${rest#*<string>}"; version="${rest%%</string>*}"
+    fi
+    if [[ "${text}" == *"<key>ProductName</key>"* ]]; then
+      rest="${text#*<key>ProductName</key>}"; rest="${rest#*<string>}"; name="${rest%%</string>*}"
+    fi
+    [[ -n "${version}" ]] && MACOS_VERSION_TEXT="${name:-macOS} ${version}"
+  fi
+  if [[ -r "${linux_file}" ]]; then
+    name=""; version=""
+    for line in "${(@f)$(<${linux_file})}"; do
+      case "${line}" in
+        PRETTY_NAME=*) LINUX_VERSION_TEXT="${(Q)${line#PRETTY_NAME=}}" ;;
+        NAME=*)        name="${(Q)${line#NAME=}}" ;;
+        VERSION_ID=*)  version="${(Q)${line#VERSION_ID=}}" ;;
+      esac
+    done
+    [[ -z "${LINUX_VERSION_TEXT}" && -n "${name}" ]] && LINUX_VERSION_TEXT="${name}${version:+ ${version}}"
+  fi
+  typeset -g OS_VERSION_TEXT="${MACOS_VERSION_TEXT:-${LINUX_VERSION_TEXT}}"
+  prompt_macos_version () {
+    [[ -n "${MACOS_VERSION_TEXT}" ]] && p10k segment -f "${POWERLEVEL9K_MACOS_VERSION_FOREGROUND:-250}" -t "${MACOS_VERSION_TEXT}"
+  }
+  prompt_linux_version () {
+    [[ -n "${LINUX_VERSION_TEXT}" ]] && p10k segment -f "${POWERLEVEL9K_LINUX_VERSION_FOREGROUND:-250}" -t "${LINUX_VERSION_TEXT}"
+  }
+  prompt_os_version () {
+    [[ -n "${OS_VERSION_TEXT}" ]] && p10k segment -f "${POWERLEVEL9K_OS_VERSION_FOREGROUND:-250}" -t "${OS_VERSION_TEXT}"
+  }
+}
 
 apply_prompt_top_line () {
   setopt localoptions extendedglob
@@ -309,6 +353,9 @@ apply_prompt_top_line () {
   # An explicit newline in both lists puts the right hand segments of each line on their own line
   POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( "${top[@]}" newline "${bottom_left[@]}" )
   POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( "${top_right[@]}" newline "${bottom_right[@]}" )
+  if (( ${moved[(Ie)macos_version]} + ${moved[(Ie)linux_version]} + ${moved[(Ie)os_version]} )); then
+    define_os_version_segments
+  fi
   if (( ${moved[(Ie)context]} )); then
     typeset -g POWERLEVEL9K_CONTEXT_DEFAULT_CONTENT_EXPANSION='${P9K_CONTENT}'
     typeset -g POWERLEVEL9K_CONTEXT_SUDO_CONTENT_EXPANSION='${P9K_CONTENT}'
@@ -1422,7 +1469,7 @@ set_all_defaults () {
   resolve_prompt_engine
   set_env "PROMPT_ENGINE"       "${PROMPT_ENGINE}"
   set_env "PROMPT_TWO_LINE"     "true"
-  set_env "PROMPT_TOP_ELEMENTS" "context"
+  set_env "PROMPT_TOP_ELEMENTS" "context os_version cpu_arch"
   set_env "PROMPT_TOP_RIGHT_ELEMENTS" ""
   set_env "INSTALL_POSH"        "${PROMPT_WANT_POSH}"
   set_env "INSTALL_OZSH"        "false"
@@ -3248,7 +3295,7 @@ print_config_template () {
 #UPDATE_HINT=true           # once a day, in the background, check GitHub for a newer version and say so at the next prompt
 #PROMPT_ENGINE=p10k         # p10k (powerlevel10k), posh (oh-my-posh) or none: only one is installed and loaded
 #PROMPT_TWO_LINE=false      # p10k: false keeps a single line prompt (the default is a line above yours)
-#PROMPT_TOP_ELEMENTS="context os_icon"       # p10k segments on the left of the top line (context is user@hostname)
+#PROMPT_TOP_ELEMENTS="context os_icon"       # p10k segments on the left of the top line (context is user@hostname, os_version is "macOS 15.1" or "Ubuntu 24.04 LTS")
 #PROMPT_TOP_RIGHT_ELEMENTS="time"            # p10k segments on the right of the top line
 #ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
