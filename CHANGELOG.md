@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.6] - 2026-10-29
+
+### Changed
+
+- The default top line of the two line prompt is now `context os_version cpu_arch`: user@hostname, then the OS version (`macOS 15.1`, `Ubuntu 24.04 LTS`) and the architecture (`arm64`, `x86_64`). It was just `context`. PROMPT_TOP_ELEMENTS="context" brings the old line back
+
+## [1.7.5] - 2026-10-29
+
+### Added
+
+- `os_version` for the top line: a generic label that is the macOS version on a Mac (`macOS 15.1`) and the distribution on Linux (`Ubuntu 24.04 LTS`, from os-release's PRETTY_NAME, or NAME and VERSION_ID without it), so one PROMPT_TOP_ELEMENTS works on every machine. `linux_version` is the Linux half on its own, beside `macos_version`. All three are read once with zsh builtins when the prompt is set up and show nothing where they do not apply. Colours: POWERLEVEL9K_OS_VERSION_FOREGROUND, POWERLEVEL9K_LINUX_VERSION_FOREGROUND
+
+## [1.7.4] - 2026-10-29
+
+### Added
+
+- `macos_version` as a segment for the top line (PROMPT_TOP_ELEMENTS / PROMPT_TOP_RIGHT_ELEMENTS), showing for example `macOS 15.1`. It is a segment of our own, defined only when it is asked for, and reads the version from /System/Library/CoreServices/SystemVersion.plist with zsh builtins once when the prompt is set up (no sw_vers, so no fork and nothing per prompt). On a machine without the file it shows nothing. Colour: POWERLEVEL9K_MACOS_VERSION_FOREGROUND
+
 ## [1.7.3] - 2026-10-29
 
 ### Changed
