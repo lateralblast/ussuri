@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.8.7
+Current Version: 1.8.8
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -120,18 +120,34 @@ processes started to measure it:
 
 ```
 Startup timing (milliseconds, from the start of the script)
-  defaults              0.4
-  zinit                 0.2
-  pyenv                 0.2
-  zoxide                3.5
-  everything else      27.2
-  total                31.8
-Slowest: zoxide (3.5 ms)
+  config files                    1.1
+  defining functions              6.8
+  arguments                      11.2
+  set_defaults                    2.6
+  history, completion dir         0.1
+  brew                           27.5
+  zinit                          60.2
+  zoxide                          4.4
+  p10k                            4.1
+  everything else                14.6
+  total                         135.0
+Slowest: zinit (60.2 ms)
+
+Inside the zinit step, by line of the plugin lists (slowest first, the 8 slowest of 29)
+  romkatv/powerlevel10k                  28.4
+  zsh-users/zsh-syntax-highlighting       1.2
+  OMZP::brew                              0.9
+  all the lines                          43.1
+  zinit starting, reading the lists      17.1
 ```
 
-Run it twice: the first run does the one off work (the defaults, the caches), which is what the stamps and caches exist to avoid. "Everything else" is what is
-not a step of its own: reading the config and its layers, the switches, the defaults and the lock. Plugins that zinit loads after the prompt (turbo mode) are
-not counted. Outside a run of `--timing` the steps are called through one small function and nothing else, so it costs a function call each. The rule that a
+(Some steps are left out here; the output has a row for each that ran, in the order they ran. These figures are from one Mac, and vary by 10% or so from run to run.)
+
+Run it twice: the first run does the one off work (the defaults, the caches), which is what the stamps and caches exist to avoid. The first rows are the start of the script
+in the pieces it can be cut into: the config and its layers, defining the functions (reading the script itself), the switches, `set_defaults`, and the rest of the set up before the steps.
+"Everything else" is what is left, the glue between steps. Under it, the zinit step is cut by line of the plugin lists, each line being one plugin: powerlevel10k is loaded before the
+prompt whatever turbo does, and in turbo mode the others only schedule their load, so they cost about a millisecond each. "zinit starting" is what is left of the step: sourcing zinit and reading the lists.
+Plugins that zinit loads after the prompt (turbo mode) are not counted. The marks are one array append each, and a normal run has no per line timing, so it costs nothing measurable. The rule that a
 login starts no processes is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of the ordinary utilities (`date`,
 `dirname`, `grep`, `sed`, `awk`, `find`, `cat`...), runs a steady state login on macOS and on Linux, and fails if any of them was started.
 
