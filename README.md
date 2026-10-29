@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.7.7
+Current Version: 1.7.9
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -382,7 +382,7 @@ each comes from.
 | `ZSH_THEME`, `DO_ZSH_THEME` | robbyrussell, true | the oh-my-zsh theme (`-Z`, `-n`) |
 | `SHARE_HISTORY`, `DO_HISTORY`, `HISTORY_SIZE` | true, true, 50000 | [history settings](#history) |
 | `PROMPT_ENGINE` | p10k | `p10k`, `posh` or `none` (`-E`) |
-| `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS` | true, context os_version cpu_arch, none | the [two line prompt](#two-line-prompt) and its [settings](#prompt-settings) |
+| `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS` | true, context os_version cpu_arch, date | the [two line prompt](#two-line-prompt) and its [settings](#prompt-settings) |
 | `INSTALL_ZOXIDE` | true | set zoxide up if it is installed |
 
 **Components** (installed and set up on a login when true)
@@ -461,7 +461,7 @@ With powerlevel10k the prompt is two lines: a configurable line on top, starting
 was, with its right hand segments:
 
 ```
-╭─░▒▓ alice@laptop  macOS 15.1  arm64                                                   ─╮
+╭─░▒▓ alice@laptop  macOS 15.1  arm64                                   Fri 30 Oct 2026 ─╮
 ╰─░▒▓    ~/c/project    main !2 ?6                                      ✔  16:15:40  ▓▒░─╯
 ```
 
@@ -470,7 +470,7 @@ The top line is whatever powerlevel10k segments you name, in the config (the nam
 
 ```
 PROMPT_TOP_ELEMENTS="os_icon context"     # the left of the top line (default: context os_version cpu_arch)
-PROMPT_TOP_RIGHT_ELEMENTS="time"          # the right of the top line (default: nothing)
+PROMPT_TOP_RIGHT_ELEMENTS="date time"     # the right of the top line (default: date; none for nothing)
 PROMPT_TWO_LINE=false                     # a single line prompt, as before
 ```
 
@@ -490,7 +490,7 @@ in the environment, or at the top of the script. `--config` writes them commente
 | `PROMPT_ENGINE` | `p10k` | `p10k`, `posh` or `none`. Only that engine is installed and loaded. The settings below apply to `p10k` only |
 | `PROMPT_TWO_LINE` | `true` | `false` keeps a single line prompt: the config's own lines are left exactly as they are |
 | `PROMPT_TOP_ELEMENTS` | `context os_version cpu_arch` | Space separated segments on the left of the top line, in the order given |
-| `PROMPT_TOP_RIGHT_ELEMENTS` | none | Space separated segments on the right of the top line, in the order given |
+| `PROMPT_TOP_RIGHT_ELEMENTS` | `date` | Space separated segments on the right of the top line, in the order given |
 
 The order of a line is the order of the words, first on the left. A segment named in either variable is removed from the bottom line, and a
 segment with nothing to show at that moment (no battery, no VPN, not in a project) is skipped rather than leaving a gap.
@@ -507,6 +507,7 @@ Any powerlevel10k segment name works. Some that suit the top line:
 | Segment | Shows | Notes |
 |---|---|---|
 | `context` | `user@hostname` | always shown on the top line, whatever the user |
+| `date` | the day and date, `Fri 30 Oct 2026` | the default on the right of the top line; format and colour: `POWERLEVEL9K_DATE_FORMAT`, `POWERLEVEL9K_DATE_FOREGROUND` (ours, light grey 250, are used only if your config has not set them) |
 | `os_icon` | the operating system's icon | |
 | `os_version` | `macOS 15.1` or `Ubuntu 24.04 LTS` | whichever operating system this is, so one setting works on every machine; read once when the prompt is set up (macOS: the system version file, Linux: `os-release`), so it costs nothing per prompt; colour: `POWERLEVEL9K_OS_VERSION_FOREGROUND` |
 | `macos_version`, `linux_version` | the same, for one OS only | shows nothing on the other; colours: `POWERLEVEL9K_MACOS_VERSION_FOREGROUND`, `POWERLEVEL9K_LINUX_VERSION_FOREGROUND` |

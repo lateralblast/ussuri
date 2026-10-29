@@ -3130,12 +3130,12 @@ test_package_names_brew () {
 
 test_two_line_prompt () {
   new_home
-  check "by default the top line is user@host, the OS version and the architecture, above the line you have" "$( layout_state )" 'left=context os_version cpu_arch newline os_icon dir vcs | right=newline status time | context=${P9K_CONTENT}'
+  check "by default the top line is user@host, the OS version and the architecture, above the line you have" "$( layout_state )" 'left=context os_version cpu_arch newline os_icon dir vcs | right=date newline status time | context=${P9K_CONTENT}'
   check "and p10k is told to reload, once" "$( grep -c '^p10k reload$' "${LOG}" )" "1"
   EXTRA_ENV=( PROMPT_TWO_LINE=false )
   check "PROMPT_TWO_LINE=false leaves the layout alone" "$( layout_state )" "left=os_icon dir vcs | right=status time context | context=hidden"
   EXTRA_ENV=( PROMPT_TOP_ELEMENTS="os_icon context" )
-  check "any segments can be on the top line, and move up from the bottom one" "$( layout_state )" 'left=os_icon context newline dir vcs | right=newline status time | context=${P9K_CONTENT}'
+  check "any segments can be on the top line, and move up from the bottom one" "$( layout_state )" 'left=os_icon context newline dir vcs | right=date newline status time | context=${P9K_CONTENT}'
   EXTRA_ENV=( PROMPT_TOP_ELEMENTS="os_icon" PROMPT_TOP_RIGHT_ELEMENTS="time" )
   check "the top line can have right hand segments too, and context stays hidden if it is not up there" "$( layout_state )" "left=os_icon newline dir vcs | right=time newline status context | context=hidden"
   EXTRA_ENV=( PROMPT_TOP_ELEMENTS="context" PROMPT_TOP_RIGHT_ELEMENTS="status time" )
@@ -3144,7 +3144,7 @@ test_two_line_prompt () {
   mkdir -p "${cwd}"
   EXTRA_ENV=( PROMPT_TOP_ELEMENTS='context $(touch EVIL) dir' )
   out=$( cd "${cwd}" && layout_state )
-  check "a name that is not a plain segment name is ignored, and the others are used" "${out}" 'left=context dir newline os_icon vcs | right=newline status time | context=${P9K_CONTENT}'
+  check "a name that is not a plain segment name is ignored, and the others are used" "${out}" 'left=context dir newline os_icon vcs | right=date newline status time | context=${P9K_CONTENT}'
   check "and nothing in it is executed" "$( [[ -e "${cwd}/EVIL" ]] && echo executed || echo safe )" "safe"
   check "with a warning that says which" "$( cd "${cwd}" && env -i HOME="${H}" USER=tester PATH="${STUBS}:/usr/bin:/bin" "${TEST_OS_ENV[@]}" PROMPT_TOP_ELEMENTS='a;b' zsh -c 'src="$1"; shift; source "${src}" 2>&1' zsh "${SCRIPT}" | grep -c "Ignoring 'a;b'" )" "1"
   EXTRA_ENV=()
@@ -3235,6 +3235,32 @@ test_macos_version_segment () {
   rm -f "${plist}" "${plist}.os"
   unfunction p10k prompt_macos_version prompt_linux_version prompt_os_version
   unset POWERLEVEL9K_LEFT_PROMPT_ELEMENTS POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS PROMPT_ENGINE PROMPT_TWO_LINE PROMPT_TOP_ELEMENTS PROMPT_TOP_RIGHT_ELEMENTS MACOS_VERSION_FILE MACOS_VERSION_TEXT LINUX_VERSION_TEXT OS_VERSION_TEXT OS_RELEASE_FILE
+}
+
+test_top_line_date () {
+  load_function apply_prompt_top_line
+  load_function prompt_engine_is
+  p10k () { : }
+  PROMPT_ENGINE=p10k PROMPT_TWO_LINE=true PROMPT_TOP_ELEMENTS="context" PROMPT_TOP_RIGHT_ELEMENTS="date"
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( dir ); POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( time )
+  unset POWERLEVEL9K_DATE_FORMAT POWERLEVEL9K_DATE_FOREGROUND
+  apply_prompt_top_line
+  check "date goes on the right of the top line" "${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]}" "date newline time"
+  check "and shows the day and date" "${POWERLEVEL9K_DATE_FORMAT}" '%D{%a %d %b %Y}'
+  check "in a light grey that can be read on the prompt's background" "${POWERLEVEL9K_DATE_FOREGROUND}" "250"
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( dir ); POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( time )
+  POWERLEVEL9K_DATE_FORMAT='%D{%d/%m}'
+  apply_prompt_top_line
+  POWERLEVEL9K_DATE_FOREGROUND=33
+  check "a format the config chose is kept" "${POWERLEVEL9K_DATE_FORMAT}" '%D{%d/%m}'
+  apply_prompt_top_line
+  check "and so is a colour" "${POWERLEVEL9K_DATE_FOREGROUND}" "33"
+  POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( dir ); POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( time )
+  PROMPT_TOP_RIGHT_ELEMENTS="none"
+  apply_prompt_top_line
+  check "none means nothing on the right (and is not taken for a segment)" "${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[*]}|${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[*]}" "context newline dir|newline time"
+  unfunction p10k
+  unset POWERLEVEL9K_LEFT_PROMPT_ELEMENTS POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS POWERLEVEL9K_DATE_FORMAT POWERLEVEL9K_DATE_FOREGROUND PROMPT_ENGINE PROMPT_TWO_LINE PROMPT_TOP_ELEMENTS PROMPT_TOP_RIGHT_ELEMENTS
 }
 
 test_doctor_prompt_layout () {

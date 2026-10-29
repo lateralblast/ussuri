@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.9] - 2026-10-30
+
+### Fixed
+
+- The date on the top line could not be read: p10k's own date colour is dark and the prompt's background is 238. POWERLEVEL9K_DATE_FOREGROUND is set to 250 (the light grey of os_version) unless the config has set one
+
+## [1.7.8] - 2026-10-30
+
+### Changed
+
+- The day and date (`Fri 30 Oct 2026`) are on the right of the top line by default: PROMPT_TOP_RIGHT_ELEMENTS defaults to `date`, p10k's own date segment, whose format is set to `%D{%a %d %b %Y}` unless your config already sets POWERLEVEL9K_DATE_FORMAT. `none` in either list means nothing there (an empty value falls back to the default, so it could not be said before). PROMPT_TOP_RIGHT_ELEMENTS="none" brings the old top line back
+
 ## [1.7.7] - 2026-10-29
 
 ### Added
