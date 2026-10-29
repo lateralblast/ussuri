@@ -1382,6 +1382,18 @@ test_help_layout () {
   check "--help changes nothing" "$( [[ -e "${H}/.ussuri.lock" ]] && echo lock || echo none )" "none"
 }
 
+test_readme_usage_is_the_help () {
+  new_home
+  local readme help
+  # The README's usage block is the script's own output, with the home directory as ~ and the machine as laptop
+  readme=$( awk '/^## Usage$/ {f=1; next} f && /^```$/ {n++; next} f && n==1 {print} n==2 {exit}' "${ROOT}/README.md" )
+  help=$( EXTRA_ENV=( MACHINE=laptop ); cd "${ROOT}" && env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin:/usr/sbin:/sbin" "${TEST_OS_ENV[@]}" MACHINE=laptop zsh "${SRC}" --help 2>&1 | tail -n +2 | sed "s#${H}#~#g; s#^Usage: .*ussuri.zsh#Usage: ./ussuri.zsh#" )
+  check "the README has a usage block" "$( print -r -- "${readme}" | grep -c '^Usage: ' )" "1"
+  check "it has a row for every group" "$( print -r -- "${readme}" | grep -c -E '^(Look, without changing anything|Install, update and undo|Set up|How it runs)$' )" "4"
+  check "and is the output of --help, word for word" "${readme}" "${help}"
+}
+
 test_doctor_config () {
   healthy_home
   local cfg="${H}/.ussuri/config" out
