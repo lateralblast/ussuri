@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.8] - 2026-10-30
+
+### Changed
+
+- `--timing` says where the rest of the time goes. "Everything else" was a quarter of the total, so the start of the script is cut into named pieces by marks (an array append each, no function and no fork, so they cost nothing measurable on a normal login): `config files`, `defining functions` (reading the script itself), `arguments`, `set_defaults` and `history, completion dir`. And the zinit step is cut by line of the plugin lists, each line named by the plugin it loads and the slowest eight shown, with what is left over (zinit starting, reading the lists). The per line timing is only done under `--timing`. On the Mac it was measured on, powerlevel10k (28 ms) is most of the zinit step, the other 28 lines about 15 ms between them (turbo only schedules them) and zinit starting 17 ms
+
 ## [1.8.7] - 2026-10-30
 
 ### Changed

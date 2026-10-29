@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.8.7
+# Version: 1.8.8
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -27,6 +27,9 @@ typeset -U path
 
 zmodload zsh/datetime 2> /dev/null
 STARTUP_T0="${EPOCHREALTIME}"
+# Where the time goes before the login steps: a mark is a label and the time, added inline (no function, no fork) and
+# shown by --timing as the time since the one before. The label names what ran since it
+STARTUP_MARKS=()
 if (( $+builtins[strftime] )); then
   strftime -s DATE '%a %d %b %Y %T %Z' "${EPOCHSECONDS}"
 else
@@ -99,21 +102,52 @@ print_timing () {
     print -r -- "--timing needs the zsh/datetime module, which is not available"
     return 1
   fi
-  local total=$(( (EPOCHREALTIME - STARTUP_T0) * 1000 )) steps=0 ms slowest="" slowest_ms=0 i
+  local total=$(( (EPOCHREALTIME - STARTUP_T0) * 1000 )) steps=0 ms slowest="" slowest_ms=0 i mark at
+  local prev="${STARTUP_T0}" zinit_ms=0 line_sum=0
+  local -a lines
   print -r -- "Startup timing (milliseconds, from the start of the script)"
+  # The time before the login steps, in the pieces the marks cut it into
+  for mark in "${STARTUP_MARKS[@]}"; do
+    at="${mark##*|}"
+    ms=$(( (at - prev) * 1000 ))
+    prev="${at}"
+    steps=$(( steps + ms ))
+    printf '  %-26s %8.1f\n' "${mark%%|*}" "${ms}"
+    if (( ms > slowest_ms )); then
+      slowest="${mark%%|*}"
+      slowest_ms=${ms}
+    fi
+  done
   for (( i = 1; i <= ${#TIMING_NAMES}; i++ )); do
     ms=$(( TIMING_SECONDS[i] * 1000 ))
     steps=$(( steps + ms ))
-    printf '  %-18s %8.1f\n' "${TIMING_NAMES[i]}" "${ms}"
+    [[ "${TIMING_NAMES[i]}" == zinit ]] && zinit_ms=${ms}
+    printf '  %-26s %8.1f\n' "${TIMING_NAMES[i]}" "${ms}"
     if (( ms > slowest_ms )); then
       slowest="${TIMING_NAMES[i]}"
       slowest_ms=${ms}
     fi
   done
-  printf '  %-18s %8.1f\n' "everything else" $(( total - steps ))
-  printf '  %-18s %8.1f\n' "total" "${total}"
+  printf '  %-26s %8.1f\n' "everything else" $(( total - steps ))
+  printf '  %-26s %8.1f\n' "total" "${total}"
   if [[ -n "${slowest}" ]]; then
     printf 'Slowest: %s (%.1f ms)\n' "${slowest}" "${slowest_ms}"
+  fi
+  # Inside the zinit step: each line of the plugin lists, slowest first, and what is left over (zinit itself starting)
+  if (( ${#TIMING_LINES} )); then
+    for (( i = 1; i <= ${#TIMING_LINES}; i++ )); do
+      ms=$(( TIMING_LINE_SECONDS[i] * 1000 ))
+      line_sum=$(( line_sum + ms ))
+      lines+=( "$( printf '%09.3f %s' "${ms}" "${TIMING_LINES[i]}" )" )
+    done
+    print
+    print -r -- "Inside the zinit step, by line of the plugin lists (slowest first, the 8 slowest of ${#TIMING_LINES})"
+    lines=( ${(On)lines} )
+    for mark in "${(@)lines[1,8]}"; do
+      printf '  %-34s %8.1f\n' "${${mark#* }[1,34]}" "$(( ${mark%% *} ))"
+    done
+    printf '  %-34s %8.1f\n' "all the lines" "${line_sum}"
+    printf '  %-34s %8.1f\n' "zinit starting, reading the lists" $(( zinit_ms - line_sum ))
   fi
   print -r -- "Plugins that zinit defers (turbo mode) load after the prompt and are not counted. Run it again for the cost of a normal login: the first run does the one off work."
 }
@@ -143,6 +177,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       source "${CONFIG_LAYER}"
     fi
   done
+
+  STARTUP_MARKS+=( "config files|${EPOCHREALTIME}" )
 
   # USSURI_OS (darwin or linux) overrides the detected OS, which the tests use to exercise
   # the Linux code on any machine
@@ -1889,9 +1925,23 @@ execute_from_file () {
       if [[ "${LINE}" =~ "SystemUIServer" ]]; then
         set_env "RESTART_UISERVER" "true" "force"
       fi
-      execute_command "${LINE}"
+      if [[ "${DO_TIMING}" == "true" ]]; then
+        timed_plugin_line "${LINE}"
+      else
+        execute_command "${LINE}"
+      fi
     fi
   done
+}
+
+# --timing: run one line of a plugin list and note how long it took, named by the plugin it loads when it can be told
+
+timed_plugin_line () {
+  local started="${EPOCHREALTIME}" name="${1[1,40]}"
+  [[ "$1" =~ 'zinit (light|snippet|load) ([^ ;]+)' ]] && name="${match[2]}"
+  execute_command "$1"
+  TIMING_LINES+=( "${name}" )
+  TIMING_LINE_SECONDS+=( $(( EPOCHREALTIME - started )) )
 }
 
 # Help information. One row of the help: the short switch (if it has one), the long one with its value, what it does and, if it has
@@ -4989,6 +5039,8 @@ check_brew_config () {
   fi
 }
 
+STARTUP_MARKS+=( "defining functions|${EPOCHREALTIME}" )
+
 if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Handle install mode
@@ -5021,6 +5073,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   DO_TIMING="false"
   TIMING_NAMES=()
   TIMING_SECONDS=()
+  TIMING_LINES=()
+  TIMING_LINE_SECONDS=()
   DO_ADOPT="false"
   DO_FIX="false"
   PROFILE_SWITCH="false"
@@ -5409,9 +5463,12 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     set_inline_defaults
   fi
 
+  STARTUP_MARKS+=( "arguments|${EPOCHREALTIME}" )
+
   # Set defaults (does not override anything set above)
 
   set_defaults
+  STARTUP_MARKS+=( "set_defaults|${EPOCHREALTIME}" )
 
   # Incrementally append and hare history between sessions
 
@@ -5546,6 +5603,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # the fpath before compinit runs, which the plugin lists do after this
 
   add_completions_dir
+
+  STARTUP_MARKS+=( "history, completion dir|${EPOCHREALTIME}" )
 
   # Set Go PATH
 
