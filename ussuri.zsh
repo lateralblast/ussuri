@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.7.7
+# Version: 1.7.9
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -271,7 +271,7 @@ resolve_prompt_engine () {
 
 # A two line powerlevel10k prompt: a configurable line above the one you have. PROMPT_TOP_ELEMENTS (default:
 # "context os_version cpu_arch": user@hostname, the OS version, the architecture) are the p10k segments on the left of the top line, and
-# PROMPT_TOP_RIGHT_ELEMENTS (default: none) on its right. Your line, with its right hand segments, stays
+# PROMPT_TOP_RIGHT_ELEMENTS (default: date, the day and date, "Fri 30 Oct 2026"; "none" for nothing) on its right. Your line, with its right hand segments, stays
 # as it is below. A segment moved to the top line is taken off the bottom one, so it isn't shown twice, and
 # context is made visible whatever the user (p10k hides it for a default user). It is done after your
 # ~/.p10k.zsh is read, so it works on top of whatever that holds, even one made by p10k configure. A config that
@@ -329,6 +329,7 @@ apply_prompt_top_line () {
   local name
   # Segment names go into p10k's lists, so only plain names are accepted
   for name in ${=PROMPT_TOP_ELEMENTS}; do
+    [[ "${name}" == none ]] && continue
     if [[ "${name}" == [A-Za-z0-9_]## ]]; then
       top+=( "${name}" )
     else
@@ -336,6 +337,7 @@ apply_prompt_top_line () {
     fi
   done
   for name in ${=PROMPT_TOP_RIGHT_ELEMENTS}; do
+    [[ "${name}" == none ]] && continue
     if [[ "${name}" == [A-Za-z0-9_]## ]]; then
       top_right+=( "${name}" )
     else
@@ -353,6 +355,14 @@ apply_prompt_top_line () {
   # An explicit newline in both lists puts the right hand segments of each line on their own line
   POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=( "${top[@]}" newline "${bottom_left[@]}" )
   POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=( "${top_right[@]}" newline "${bottom_right[@]}" )
+  # p10k's own date segment shows 05.02. by default: the day and date is what the top line is for, unless the config chose a format
+  if (( ${moved[(Ie)date]} )) && [[ -z "${POWERLEVEL9K_DATE_FORMAT}" ]]; then
+    typeset -g POWERLEVEL9K_DATE_FORMAT='%D{%a %d %b %Y}'
+  fi
+  # p10k's own date colour is dark and cannot be read on the prompt's background (238); the same light grey as os_version
+  if (( ${moved[(Ie)date]} )) && [[ -z "${POWERLEVEL9K_DATE_FOREGROUND}" ]]; then
+    typeset -g POWERLEVEL9K_DATE_FOREGROUND=250
+  fi
   if (( ${moved[(Ie)macos_version]} + ${moved[(Ie)linux_version]} + ${moved[(Ie)os_version]} )); then
     define_os_version_segments
   fi
@@ -1470,7 +1480,7 @@ set_all_defaults () {
   set_env "PROMPT_ENGINE"       "${PROMPT_ENGINE}"
   set_env "PROMPT_TWO_LINE"     "true"
   set_env "PROMPT_TOP_ELEMENTS" "context os_version cpu_arch"
-  set_env "PROMPT_TOP_RIGHT_ELEMENTS" ""
+  set_env "PROMPT_TOP_RIGHT_ELEMENTS" "date"
   set_env "INSTALL_POSH"        "${PROMPT_WANT_POSH}"
   set_env "INSTALL_OZSH"        "false"
   set_env "INSTALL_FONTS"       "true"
@@ -3295,8 +3305,8 @@ print_config_template () {
 #UPDATE_HINT=true           # once a day, in the background, check GitHub for a newer version and say so at the next prompt
 #PROMPT_ENGINE=p10k         # p10k (powerlevel10k), posh (oh-my-posh) or none: only one is installed and loaded
 #PROMPT_TWO_LINE=false      # p10k: false keeps a single line prompt (the default is a line above yours)
-#PROMPT_TOP_ELEMENTS="context os_icon"       # p10k segments on the left of the top line (context is user@hostname, os_version is "macOS 15.1" or "Ubuntu 24.04 LTS")
-#PROMPT_TOP_RIGHT_ELEMENTS="time"            # p10k segments on the right of the top line
+#PROMPT_TOP_ELEMENTS="context os_version cpu_arch"  # p10k segments on the left of the top line: user@hostname, the OS version ("macOS 15.1"), the architecture
+#PROMPT_TOP_RIGHT_ELEMENTS="date"                   # p10k segments on the right of the top line: the day and date, "Fri 30 Oct 2026" (none for nothing)
 #ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
 #HISTORY_SIZE=50000         # lines kept in memory and in the history file
