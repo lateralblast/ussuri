@@ -16,6 +16,8 @@ _ussuri_settings () {
     DO_CACHE_INIT
     DO_DEFAULTS_CHECK
     DO_DOTFILES_CHECK
+    DOTFILES_REF
+    DOTFILES_REPO
     DO_FONTS_CHECK
     DO_GNOME_DEFAULTS
     DO_HISTORY
@@ -54,6 +56,7 @@ _ussuri_settings () {
     RUBY_VER
     RUSTUP_INSTALL_SHA256
     RUSTUP_TOOLCHAIN_WANTED
+    SCRIPT_SHA256
     SHARE_HISTORY
     START_DIR
     TRANSMISSION_BLOCKLIST_URL
@@ -132,7 +135,7 @@ _ussuri () {
     '(-p --pyenv)'{-p,--pyenv}'[do the pyenv check]' \
     '(-Q --set)'{-Q,--set}'[save a setting in the config]:setting:_ussuri_settings:value:_ussuri_values' \
     '(-q --unset)'{-q,--unset}'[remove a setting from the config]:setting:_ussuri_settings' \
-    '(-R --rollback)'{-R,--rollback}'[restore a .zshrc backup]:: :(1 2 3)' \
+    '(-R --rollback)'{-R,--rollback}'[restore a .zshrc backup, or undo --update]:: :(1 2 3 update)' \
     '(-r --rbenv)'{-r,--rbenv}'[do the rbenv check]' \
     '(-S --sudoersentry)'{-S,--sudoersentry}'[set the sudoers entry]:sudoers entry:' \
     '(-s --sudoers)'{-s,--sudoers}'[do the sudoers check]' \
@@ -152,6 +155,9 @@ _ussuri () {
     '(-j --timing)'{-j,--timing}'[run as a login and time each step of it]' \
     '(-a --adopt)'{-a,--adopt}'[with --drift: add installed packages to your local list]' \
     '(-Y --fix)'{-Y,--fix}'[with --doctor: repair what can be repaired safely]' \
+    '--prompt-preview[show the top line of the prompt, its colours and checks]' \
+    '--export[write your config, local lists and dotfiles to a file]:: :_files' \
+    '--import[read an export back, keeping what it replaces]:export file:_files' \
     '*:: :_nothing'
 }
 

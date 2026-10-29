@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.7.9
+Current Version: 1.8.7
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -163,13 +163,14 @@ Look, without changing anything
   -G, --drift [WHAT]              Report drift: settings, packages or all
   -a, --adopt                     With --drift: add installed packages to your list
   -j, --timing                    Run as a login and time each step of it
+      --prompt-preview            Show the prompt's top line, colours and checks
 
 Install, update and undo
   -I, --install                   Install as ~/.zshrc (the old one is kept)
   -U, --update                    Update the script and its files                (default: false)
   -C, --check                     Check for a newer version                      (default: false)
   -B, --backups                   List the .zshrc backups
-  -R, --rollback [N]              Restore .zshrc backup N                        (default: newest)
+  -R, --rollback [N|update]       Restore .zshrc backup N, or undo --update      (default: newest)
   -X, --uninstall                 Restore the .zshrc from before ussuri
   -J, --defaults-undo [N|list]    Undo a run of defaults changes                 (default: newest)
   -u, --unlink                    Unlink the dotfiles
@@ -182,6 +183,8 @@ Settings (~/.ussuri/config)
   -K, --edit                      Edit the config in $EDITOR, checked first
   -M, --profile NAME              Profile; with --set/--unset/--edit its file    (default: none)
   -H, --host NAME                 Machine; with --set/--unset/--edit its file    (default: laptop)
+      --export [FILE]             Write your config, local lists and dotfiles to FILE
+      --import FILE               Read them back (on a new machine); keeps what it replaces
 
 Set up
   -A, --doall                     Do everything that is enabled
@@ -245,9 +248,9 @@ The switches by what they are for:
 
 | For | Switches |
 |---|---|
-| Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back, `-U` update, `-C` check for a newer version |
-| Looking without touching (read only) | `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
-| Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all, `-K` edit the config, `-H NAME` a machine |
+| Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back (`-R update` undoes `--update`), `-U` update, `-C` check for a newer version |
+| Looking without touching (read only) | `--prompt-preview` the prompt's top line and colours, `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
+| Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all, `-K` edit the config, `-H NAME` a machine, `--export [FILE]` and `--import FILE` your setup in a file |
 | What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
 | Measuring | `-j` run as a login and time each step of it |
 | Repairing and recording | `-Y` with `--doctor` repairs the safe problems, `-a` with `--drift` adds installed packages to your local list |
@@ -260,7 +263,7 @@ Notes on the switches:
 - **Other long names:** most switches have more than one. The others are `--assume-yes` and `--assumeyes` (`--yes`), `--changes` (`--changelog`),
   `--compile` (`--build`), `--engine` (`--prompt`), `--fonts` (`--font`), `--gohome` (`--gopath`), `--packages` (`--package`), `--plugin`
   (`--manager`), `--posh` (`--ohmyposh`), `--startdir` (`--location`), `--test` (`--dryrun`), `--usage` (`--help`) and `--zosh` (`--ohmyzsh`).
-  `--set`, `--unset` and `--get` have no short form.
+  `--set`, `--unset`, `--get`, `--prompt-preview`, `--export` and `--import` have no short form (they are `-Q`, `-q`, `-w`, `-4`, `-2` and `-3` inside, as every letter was taken).
 - **Bundling and values:** short switches can be bundled (`-vt`). A switch that takes a value ignores a leading `-` in it.
 - **Mistakes:** a switch that is missing its value, or an unknown switch, prints the usage and exits with status 1.
 - **Exit statuses:** `--doctor` is 0, or 1 if anything failed. `--drift` is 0 for none, 1 for drift, 2 if there was nothing to compare with.
@@ -419,6 +422,7 @@ each comes from.
 | `MACHINE` | the short hostname |
 | `DOTFILES_DIR` | `~/.ussuri/dotfiles` |
 | `DOTFILES_PROFILE`, `DOTFILES_HOST` | follow `PROFILE` and `MACHINE`; override them for dotfiles alone |
+| `DOTFILES_REPO`, `DOTFILES_REF` | none; a git URL to keep the dotfiles directory a clone of, and a branch, tag or commit to stay on (see [Dotfiles from a git repository](#dotfiles-from-a-git-repository)) |
 | `PKG_MANAGER` | from the distribution: `apt`, `pacman`, `dnf`, `apk` or `nix` |
 | `OS_RELEASE_FILE`, `APK_WORLD_FILE` | `/etc/os-release`, `/etc/apk/world`: where the distribution and the apk packages you asked for are read from |
 | `SUDOERS_ENTRY` | `ALL=(ALL) NOPASSWD:ALL` (`-S`) |
@@ -444,7 +448,7 @@ The other names `set_env` is called with in the script are internal state, not s
 | `BREW_INSTALL_SHA256`, `POSH_INSTALL_SHA256`, `FNM_INSTALL_SHA256`, `RUSTUP_INSTALL_SHA256`, `UV_INSTALL_SHA256`, `MISE_INSTALL_SHA256` | refuse the installer unless it matches |
 | `ZINIT_REF`, `RBENV_REF`, `RUBY_BUILD_REF`, `PYENV_REF`, `NERD_FONTS_REF`, `ZOSH_REF`, `P10K_REF` | pin the first clone to a branch, tag or commit |
 | `BREW_INSTALL_URL`, `POSH_INSTALL_URL`, `FNM_INSTALL_URL`, `RUSTUP_INSTALL_URL`, `UV_INSTALL_URL`, `MISE_INSTALL_URL` | where the installers come from |
-| `SCRIPT_URL`, `UPDATE_URL`, `UPDATE_SHA256` | where `--update` and the update hint look, and an optional checksum for the release |
+| `SCRIPT_URL`, `UPDATE_URL`, `UPDATE_SHA256`, `SCRIPT_SHA256` | where `--update` and the update hint look, and optional checksums for the release archive and for the script in it |
 | `TRANSMISSION_BLOCKLIST_URL` | the [Transmission blocklist](#transmission-blocklist) |
 
 ## Prompt
@@ -499,6 +503,35 @@ segment with nothing to show at that moment (no battery, no VPN, not in a projec
 PROMPT_TOP_ELEMENTS="os_icon context"
 PROMPT_TOP_RIGHT_ELEMENTS="battery cpu_arch time"
 ```
+
+#### Looking at it: `--prompt-preview`
+
+```
+./ussuri.zsh --prompt-preview
+```
+
+Shows the layout your settings give, without opening a shell: each segment on the top line with the text it would show (for the ones whose text is known without a prompt: `context`, `os_version`,
+`cpu_arch`, `date`, `time`), its foreground and background colours, the contrast between them and a verdict, then the names on the bottom line (from your `~/.p10k.zsh`, which is read the way a login reads it,
+in a subshell). In a terminal each line is drawn in its own colours. The contrast is the WCAG ratio worked out from the xterm 256 colour table: `ok` is 3 to 1 or more, `low` is under that, `same` is the background's own
+colour, `default` is a colour powerlevel10k picks itself (it cannot be known without a prompt), and `unknown` is a name this powerlevel10k has no segment for (its source is searched, so a typo or an older version is
+found). It changes nothing.
+
+`--doctor` makes the same checks on the top line, so a colour that cannot be read, a segment that does not exist and a word that is not a segment name are warnings, with the setting that fixes each
+(for example `POWERLEVEL9K_TIME_FOREGROUND`). The bottom line is your own config's and is only listed.
+
+#### A different top line on one machine
+
+The top line is made from settings, so a profile or machine can have its own with the files that already exist for them. For a laptop that should show its battery and the AWS profile, and a work profile that
+should show the Kubernetes context:
+
+```
+./ussuri.zsh --set PROMPT_TOP_RIGHT_ELEMENTS "aws battery date" --host laptop
+./ussuri.zsh --set PROMPT_TOP_ELEMENTS "context kubecontext os_version cpu_arch" --profile work
+```
+
+These go in `~/.ussuri/hosts/laptop/local.config` and `~/.ussuri/profiles/work/local.config`, which are read after the main config. `battery`, `aws` and `kubecontext` show nothing when there is nothing to show
+(no battery, no profile, no cluster), so a segment left in the list on a machine that has none costs a blank, not a gap. `--prompt-preview` with `MACHINE=laptop` (or `-H laptop`) shows the result. `--set` also
+says how to get the change in the window you are in: `exec zsh`.
 
 #### Segments for the top line
 
@@ -820,6 +853,22 @@ default is the short hostname), and the directory from `DOTFILES_DIR`. Nothing i
 `~/.ussuri/dotfile-backups/<date>/` first. Running it again changes nothing, `--dryrun --verbose` shows what it would do, and `--unlink` removes only the links that point into the dotfiles directory (backups are
 left for you to restore by hand). It runs only when asked, unless you set `DO_DOTFILES_CHECK=true` to keep the links in place on every login. File names are treated as plain text, whatever is in them.
 
+### Dotfiles from a git repository
+
+```
+./ussuri.zsh --set DOTFILES_REPO https://github.com/you/dotfiles.git
+./ussuri.zsh --dotfiles
+```
+
+With `DOTFILES_REPO` set the dotfiles directory is a clone of that repository, laid out as above (`common/`, `profiles/<name>/`, `hosts/<name>/`), so a new machine gets its dotfiles from one setting.
+`--dotfiles` clones it (or pulls it) first, in the foreground, says what happened, and then links. After that it keeps itself current: an interactive login checks at most once a day, in the background (a
+detached job with its output discarded, the stamp touched first, nothing printed, nothing prompted for), and `--doctor` shows what the last check said and when. Links to files that were already there pick up a
+change by themselves; a new file is linked the next time you run `--dotfiles`. `DOTFILES_REF` keeps it on a branch, tag or commit instead of following the remote.
+
+This is the one place where the script runs on every machine what you did not write on it, so it is careful: only `https://`, `ssh://`, `file://` and `git@host:path` URLs are accepted (git's `ext::` transport
+runs commands, and `GIT_ALLOW_PROTOCOL` is set to the same list as well); an existing directory that is not a clone of that URL is left alone, as is a clone with changes that are not committed; only a fast forward is
+taken, never a merge or a reset; and a failure leaves what you had. It is off unless you set it, and the dotfiles in the repository are code that runs in your shell, so only point it at a repository you trust.
+
 ## Maintenance
 
 ### Updating
@@ -831,8 +880,11 @@ left for you to restore by hand). It runs only when asked, unless you set `DO_DO
 Downloads the release archive from GitHub (one request, the script and its `files/`), checks the script parses and is the version expected, saves the current script in `~/.ussuri`, replaces it, and then
 brings `~/.ussuri/files` up to date: new files are added and changed ones replaced, with the copy that is replaced first saved in `~/.ussuri/files.bak/<date>/`, so an edit of yours is never lost.
 Nothing is deleted, and your `local.*` files are never touched. It refuses an archive that fails the checks (a script that doesn't parse, paths that would escape the target, or a checksum that doesn't match
-`UPDATE_SHA256` if you set one), and if the archive can't be fetched it updates the script alone and says the supporting files were not updated. `UPDATE_URL` points it somewhere else. It updates the script you
+`UPDATE_SHA256` if you set one, or a script that does not match `SCRIPT_SHA256`), and if the archive can't be fetched it updates the script alone and says the supporting files were not updated. `UPDATE_URL` points it somewhere else. It updates the script you
 ran: run it from `~/.zshrc`, or run `--install` after updating a checkout. `--check` only compares versions.
+
+It prints the SHA-256 of the script it installed, so it can be compared with one you trust. `UPDATE_SHA256` pins the whole archive and `SCRIPT_SHA256` just the script, on either way of fetching it (the whole archive or the script alone);
+both are checked before anything is replaced, and a mismatch changes nothing. They are for a release you have checked: a pin for a moving `main` branch would refuse every update but one. `--rollback update` undoes an update (below).
 
 **Update hint.** `UPDATE_HINT=true` (off by default, because it contacts GitHub from your shell) checks at most once a day, in the background (a disowned job with its output detached, so a login never waits for it), and records
 the latest version in `~/.ussuri/update.latest`. When that is newer than your script, one line is shown at the next prompt, at most once a day:
@@ -849,6 +901,7 @@ read. Only interactive logins check (never a manual run), a damaged or unexpecte
 ```
 ./ussuri.zsh --backups
 ./ussuri.zsh --rollback [N]
+./ussuri.zsh --rollback update
 ./ussuri.zsh --uninstall
 ```
 
@@ -857,6 +910,24 @@ read. Only interactive logins check (never a manual run), a damaged or unexpecte
 itself, or, if you had none, it moves ussuri's aside. Either way the `.zshrc` being replaced is saved first, so a rollback can itself be undone. Installed components and the backups in `~/.ussuri` are left alone, and
 `--unlink` removes dotfile links. All of them honour `--dryrun`.
 
+`--rollback update` undoes the last `--update`: it puts back the script the update replaced (kept as `~/.ussuri/ussuri.zsh.<date>`) and the supporting files it replaced (kept in `~/.ussuri/files.bak/<date>/`, the same date).
+A file the update added is left where it is, as nothing recorded which were new. The script it replaces is kept first, so doing it twice goes forward again. `--backups` mentions the copies when there are some.
+
+### Moving to a new machine: `--export` and `--import`
+
+```
+./ussuri.zsh --export [FILE]       # a .tgz of what is yours
+./ussuri.zsh --import FILE         # on the new machine, after installing ussuri
+```
+
+The bundle holds your config and its profile and machine layers, your local plugin and package lists (and their layers), the dotfiles directory and your `~/.p10k.zsh`, with a `MANIFEST` saying which version and
+machine made it. It holds nothing the release owns or the machine made (the shipped files, caches, stamps, backups, the defaults journal). With no name it writes `ussuri-export-<machine>-<date>.tgz` in the current
+directory, never over a file that is there (`--force` replaces it), readable by you alone: it can hold things you would not post, your config values and your dotfiles.
+
+`--import` is careful about what it takes. Every entry must be a plain file or directory (no links) with a name from the list above, with no absolute path and no `..`, and the archive must have the MANIFEST, or nothing is
+imported. A file that is already there and the same is left; one that differs is replaced, with the old copy in `~/.ussuri/import.bak/<date>/`. The dotfiles are put in the dotfiles directory, not linked: run `--dotfiles`
+after it, and `--doctor` to check the result. Both honour `--dryrun`, and `--import` takes the lock.
+
 ### Doctor
 
 ```
@@ -864,7 +935,7 @@ itself, or, if you had none, it moves ussuri's aside. Either way the `.zshrc` be
 ```
 
 Checks the shell, tools, install (the `.zshrc` version, support files, the lists and the local ones), config, profile and machine, lock, components, fonts, backups and state (defaults stamp, journal, init cache, PATH, the update
-hint), and prints `ok`, `warn` or `FAIL` for each. A warning is something that will probably fix itself on the next login or is worth a look, a failure is something that will not. It exits non-zero if there are
+hint), the prompt's top line (see [`--prompt-preview`](#looking-at-it---prompt-preview)) and the dotfiles repository if there is one, and prints `ok`, `warn` or `FAIL` for each. A warning is something that will probably fix itself on the next login or is worth a look, a failure is something that will not. It exits non-zero if there are
 any failures, and it never changes anything (a missing directory is reported, not recreated). Some of what it finds can be repaired, and it says so at the
 end.
 
@@ -888,7 +959,8 @@ so it will not run alongside another ussuri run, and `--dryrun` and `--confirm` 
 
 - Installers are downloaded to a file, optionally checked against a SHA-256, and only then run; nothing is piped into a shell. Git installs can be pinned.
 - Every path, name and version that goes into a command is quoted, and values read back from the defaults journal and the dotfile names are never evaluated. Profile and machine names and prompt segment names are validated.
-- `--update` refuses an archive with an unsafe path or a wrong checksum, never deletes anything, and keeps a copy of every file it replaces.
+- `--update` refuses an archive with an unsafe path or a wrong checksum (`UPDATE_SHA256`, `SCRIPT_SHA256`), never deletes anything, keeps a copy of every file it replaces and shows the checksum of the script it installed. `--import` takes only plain files with names from a fixed list, and keeps a copy of what it replaces.
+- `DOTFILES_REPO` accepts only https, ssh and file URLs, never pulls over local changes or a different remote, and prompts for nothing in the background.
 - Anything that contacts the network on a login (the update hint) is off by default, runs in the background and never blocks. `--drift`, `--doctor`, `--help` and `--version` change nothing.
 - `~/.ussuri/config` is executed on every shell, so it should be writable only by you. `--set` saves a value quoted and never runs it, and replaces the file with one rename. The profile and machine files (`profiles/<name>/local.config`, `hosts/<name>/local.config`) are executed the same way and are checked by `--doctor` the same way. A sudoers entry with `NOPASSWD:ALL` gives your user passwordless root.
 - What the script writes outside `~/.ussuri` and your dotfiles is what you enable: the OS X defaults and Transmission blocklist, GNOME settings, packages, language managers, a sudoers file, and `~/.zshrc` itself. Each has an undo
@@ -930,7 +1002,9 @@ real systems.
   hosts/<name>/local.config   settings for a machine, sourced after that (--set --host)
   files/                      the shipped lists, copied from the repository (replaced by --update and --install)
     packages/  zinit/  p10k/  completions/  local.* files in here are yours and are never touched
-  files.bak/<date>/           files --update replaced
+  files.bak/<date>/           files --update replaced (--rollback update puts them back)
+  ussuri.zsh.<date>           the script --update replaced
+  import.bak/<date>/          files --import replaced
   .zshrc.<date>               backups of ~/.zshrc (--backups lists them)
   dotfiles/  dotfile-backups/ your dotfile layers, and what linking moved aside
   cache/                      cached tool init output
@@ -938,6 +1012,7 @@ real systems.
   brew.list  brew.taps  apt.list ...  what is installed, as of the last package check
   <list>.sum                  checksums of the package lists, so only a changed one is reprocessed
   update.check  update.latest  update.hinted    the update hint's state
+  dotfiles.sync  dotfiles.sync.stamp            DOTFILES_REPO's last result, and when it was last tried
 ~/.zinit  ~/.rbenv  ~/.pyenv  ~/.oh-my-posh  ~/.powerlevel10k       components, when installed
 ```
 
