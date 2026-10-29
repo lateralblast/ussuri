@@ -42,8 +42,6 @@ ussuri is a single zsh script that sets up a shell environment from scratch, on 
 inline: every time you log in or start a new shell it checks the environment and installs or configures whatever is missing, so a new
 machine is one `--install` away from your usual setup. With no switches it is a login script; with switches it is a command line tool.
 
-![Config example](https://raw.githubusercontent.com/lateralblast/ussuri/master/ussuri.png)
-
 What it manages:
 
 - **Shell**: zinit plugins (loaded in turbo mode), a powerlevel10k prompt with a configurable second line (or oh-my-posh), history
