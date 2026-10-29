@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.7] - 2026-10-29
+
+### Added
+
+- Plugins in both lists: OMZP::extract (`extract`, alias `x`), OMZP::copypath, OMZP::copyfile, OMZP::copybuffer (Ctrl-O) and OMZP::fancy-ctrl-z. The copy ones need `clipcopy`, which Oh My Zsh keeps in a library file that a snippet does not fetch, so OMZL::clipboard.zsh is loaded first (it is lazy: nothing is detected until a copy is made). Loaded in a real zinit in a throwaway shell: the functions and the `x` alias exist, copypath put the path on the pasteboard, and extract unpacked an archive
+
 ## [1.7.6] - 2026-10-29
 
 ### Changed
