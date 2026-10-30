@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.2] - 2026-10-30
+
+### Fixed
+
+- A flaky test, not the script: the smoke test with a slow `git` for the background dotfiles sync only waited 4 seconds, but the job makes several 3 second `git` calls, so on a slower machine it finished during a later test and wrote `dotfiles.sync` into that test's fresh home directory. That made `--drift` fail "changes nothing in the home directory" on Ubuntu in CI (the file was found by the test's new list of what changed). The test now waits for the job to finish. `--drift` does not write there
+
 ## [1.9.1] - 2026-10-30
 
 ### Fixed
