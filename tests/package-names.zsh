@@ -33,7 +33,8 @@ package_exists () {
   case "${CHECK_MANAGER}" in
     apt)    apt-cache show "$1" > /dev/null 2>&1 ;;
     pacman) pacman -Si "$1" > /dev/null 2>&1 ;;
-    dnf)    [[ -n "$( dnf -q repoquery "$1" 2> /dev/null )" ]] ;;
+    dnf)    # By name, or by what it provides: wget is provided by wget1-wget or wget2-wget, and dnf install takes either
+            [[ -n "$( dnf -q repoquery "$1" 2> /dev/null )" || -n "$( dnf -q repoquery --whatprovides "$1" 2> /dev/null )" ]] ;;
     apk)    [[ -n "$( apk search -e "$1" 2> /dev/null )" ]] ;;
     brew)   brew info --formula --json=v2 "$1" > /dev/null 2>&1 || brew info --cask --json=v2 "$1" > /dev/null 2>&1 ;;
     brew-cask) brew info --cask --json=v2 "$1" > /dev/null 2>&1 ;;
