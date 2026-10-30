@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.8.8
+Current Version: 1.8.9
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -633,8 +633,9 @@ command-not-found, aws, kubectl, kubectx, and the ones for what the machine has:
   in an Oh My Zsh library file, so `OMZL::clipboard.zsh` is loaded before them (it finds `pbcopy`, `wl-copy`, `xclip` or `xsel`; on a
   machine with none, they say so when used). They cost nothing until used; to drop one, remove its line from the plugin lists.
 - **common-aliases** (`OMZP::common-aliases`) adds dozens of short aliases: `l`, `ll`, `la`, `lt`, `h` (history), `p` (`ps -f`), global ones
-  such as `H` and `G` (`| head`, `| grep`), and it makes `rm`, `cp` and `mv` ask before overwriting (`-i`) and `grep` add colour and skip
-  VCS directories. The aliases work as usual, but zsh-you-should-use is told to ignore them, so it does not mention them: `mark_aliases` and
+  such as `H` and `G` (`| head`, `| grep`), and `grep` adds colour and skips VCS directories. The snippet also makes `rm`, `cp` and `mv` ask
+  before overwriting (`-i`); `plain_file_aliases` (in the script) takes those three back to the plain commands, so they do not ask. To have
+  the questions back, add `alias rm="rm -i"` (and `cp`, `mv`) to `~/.ussuri/files/zinit/local.zsh`. The aliases work as usual, but zsh-you-should-use is told to ignore them, so it does not mention them: `mark_aliases` and
   `ignore_new_aliases` (in the script) note what aliases exist before the snippet and add every new one to `YSU_IGNORED_ALIASES` and
   `YSU_IGNORED_GLOBAL_ALIASES`. You can wrap any other snippet the same way in `~/.ussuri/files/zinit/local.zsh` (turbo:
   `zinit ice wait lucid atinit"mark_aliases" atload"ignore_new_aliases"; zinit snippet OMZP::name`). To drop common-aliases, remove its line
