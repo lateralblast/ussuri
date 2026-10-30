@@ -1,0 +1,94 @@
+# Continuous integration for ussuri.
+#
+# smoke: the sandboxed smoke tests (tests/smoke.zsh) on macOS and Ubuntu runners, and that every package named in
+#        the shipped list exists in that system's repositories (tests/package-names.zsh).
+# distros: the same on Debian, Ubuntu, Fedora, Arch and Alpine in containers, plus the read-only commands run for
+#        real on each: --doctor and --drift packages, which use the real package manager's queries. These are the
+#        paths the smoke tests can only check against stubs.
+#
+# Nothing here installs packages from the lists or changes the runner: the tests run in a throwaway home with
+# stubbed commands, the name check only looks names up, and --doctor and --drift are read only.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Syntax check
+        run: zsh -n ussuri.zsh
+
+      - name: Smoke tests
+        run: zsh tests/smoke.zsh
+
+      - name: Package names exist (Homebrew)
+        if: runner.os == 'macOS'
+        run: zsh tests/package-names.zsh
+
+      - name: Package names exist (apt)
+        if: runner.os == 'Linux'
+        run: zsh tests/package-names.zsh
+
+  distros:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:stable
+            setup: apt-get update && apt-get install -y zsh git curl tar python3 perl sudo
+          - image: ubuntu:latest
+            setup: apt-get update && apt-get install -y zsh git curl tar python3 perl sudo
+          - image: fedora:latest
+            setup: dnf install -y zsh git curl tar python3 perl sudo findutils which
+          - image: archlinux:latest
+            setup: pacman -Syu --noconfirm zsh git curl tar python perl sudo
+          - image: alpine:latest
+            setup: apk add --no-cache zsh git curl tar python3 perl sudo bash coreutils grep sed findutils
+    steps:
+      - name: Install what the tests need
+        run: ${{ matrix.setup }}
+
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: zsh -n ussuri.zsh
+
+      - name: Smoke tests
+        run: zsh tests/smoke.zsh
+
+      - name: Package names exist in this distribution's repositories
+        run: zsh tests/package-names.zsh
+
+      # The real package manager's queries, which the smoke tests only check against stubs. --install puts the
+      # lists where --drift reads them (this is a throwaway container). Status 0 or 1 is fine (a fresh container
+      # is missing packages, so 1 is expected); 2 means there was nothing to compare, which is a failure on a
+      # distribution the script supports.
+      - name: Install into the container, then --doctor and --drift packages (read only)
+        shell: bash
+        run: |
+          zsh ussuri.zsh --install > /dev/null
+          zsh ussuri.zsh --doctor || [ $? -le 1 ]
+          zsh ussuri.zsh --drift packages || [ $? -eq 1 ]
