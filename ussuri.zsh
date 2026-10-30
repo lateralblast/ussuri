@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.8.8
+# Version: 1.8.9
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -658,6 +658,18 @@ ignore_new_aliases () {
   YSU_IGNORED_ALIASES+=( ${now:|ALIASES_MARK} )
   now=( ${(k)galiases} )
   YSU_IGNORED_GLOBAL_ALIASES+=( ${now:|GALIASES_MARK} )
+  return 0
+}
+
+# common-aliases makes rm, cp and mv ask before overwriting (alias rm="rm -i"). The plugin lists call this after
+# it to take those three back to the plain commands; an alias that is not exactly that (yours) is left alone.
+# To have the questions back, add the aliases to your local.zsh (or ~/.zshrc.local), after the snippet
+
+plain_file_aliases () {
+  local cmd
+  for cmd in rm cp mv; do
+    [[ "${aliases[${cmd}]}" == "${cmd} -i" ]] && unalias ${cmd}
+  done
   return 0
 }
 

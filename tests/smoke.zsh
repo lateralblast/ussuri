@@ -2115,8 +2115,8 @@ test_common_aliases () {
     list="${ROOT}/files/zinit/${name}"
     check "${name}: loads common-aliases" "$( grep -c 'zinit snippet OMZP::common-aliases$' "${list}" )" "1"
   done
-  check "turbo: the marks run as the snippet's atinit and atload, in its own deferred step" "$( grep -c -E 'ice wait lucid atinit"mark_aliases" atload"ignore_new_aliases"; zinit snippet OMZP::common-aliases$' "${ROOT}/files/zinit/zinit-turbo.zsh" )" "1"
-  check "eager: marks the aliases before the snippet and ignores the new ones after it" "$( grep -B1 -A1 'zinit snippet OMZP::common-aliases$' "${ROOT}/files/zinit/zinit.zsh" | grep -v '^--' | tr '\n' ' ' )" "mark_aliases zinit snippet OMZP::common-aliases ignore_new_aliases "
+  check "turbo: the marks run as the snippet's atinit and atload, in its own deferred step" "$( grep -c -E 'ice wait lucid atinit"mark_aliases" atload"plain_file_aliases; ignore_new_aliases"; zinit snippet OMZP::common-aliases$' "${ROOT}/files/zinit/zinit-turbo.zsh" )" "1"
+  check "eager: marks the aliases before the snippet and ignores the new ones after it" "$( grep -B1 -A1 'zinit snippet OMZP::common-aliases$' "${ROOT}/files/zinit/zinit.zsh" | grep -v '^--' | tr '\n' ' ' )" "mark_aliases zinit snippet OMZP::common-aliases plain_file_aliases "
   load_function mark_aliases
   load_function ignore_new_aliases
   out=$( typeset -ga ALIASES_MARK GALIASES_MARK
@@ -2133,6 +2133,13 @@ test_common_aliases () {
     ignore_new_aliases
     print -r -- "${#YSU_IGNORED_ALIASES}|${#YSU_IGNORED_GLOBAL_ALIASES}" )
   check "nothing new, nothing ignored" "${out}" "0|0"
+  load_function plain_file_aliases
+  out=$( alias rm="rm -i" cp="cp -i" mv="mv -f" ll="ls -l"
+    plain_file_aliases
+    print -r -- "${aliases[rm]-none}|${aliases[cp]-none}|${aliases[mv]-none}|${aliases[ll]-none}" )
+  check "rm and cp lose the -i alias, an alias of yours (mv -f) and other aliases stay" "${out}" "none|none|mv -f|ls -l"
+  out=$( plain_file_aliases; print -r -- "ok" )
+  check "with no such aliases it does nothing" "${out}" "ok"
 }
 
 test_zoxide () {

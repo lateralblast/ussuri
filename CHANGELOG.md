@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.9] - 2026-10-30
+
+### Changed
+
+- `rm`, `cp` and `mv` no longer ask before overwriting. OMZP::common-aliases makes them `rm -i`, `cp -i` and `mv -i`; the new `plain_file_aliases` runs after it in both plugin lists (as part of the snippet's atload in turbo mode) and removes those three aliases when they are exactly that, leaving any alias of your own alone. The rest of common-aliases is unchanged. To have the questions back, add the aliases to `files/zinit/local.zsh`. The plugin lists only change on `--install` or `--update`
+
 ## [1.8.8] - 2026-10-30
 
 ### Changed

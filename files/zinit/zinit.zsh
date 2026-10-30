@@ -19,9 +19,11 @@ zinit snippet OMZP::copybuffer
 zinit snippet OMZP::fancy-ctrl-z
 if os_is_like arch; then zinit snippet OMZP::archlinux; fi
 # common-aliases: many short aliases (l, ll, la, H, T, G...). zsh-you-should-use is told to leave them alone,
-# or it would mention them all the time. The aliases still work
+# or it would mention them all the time. The aliases still work, except that rm, cp and mv are put back to the
+# plain commands (the snippet makes them ask first, -i)
 mark_aliases
 zinit snippet OMZP::common-aliases
+plain_file_aliases
 ignore_new_aliases
 # Aliases for what this machine has, each checked once as this list is read: brew, docker and docker-compose if the
 # command is on the PATH, systemd where systemctl is (Linux), and the apt (debian, ubuntu, mint...) and dnf (fedora)
