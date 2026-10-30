@@ -1578,8 +1578,11 @@ test_drift () {
   # Nothing applied yet: every setting differs
   local before after
   before=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  ( cd "${H}" && find . | sort ) > "${TMP}/home.before"
   out=$( run --drift settings 2>&1 ); rc=$?
   after=$( cd "${H}" && find . | sort | md5 2> /dev/null || find . | sort | md5sum )
+  ( cd "${H}" && find . | sort ) > "${TMP}/home.after"
+  [[ "${after}" == "${before}" ]] || { print "  (home directory changed:)"; diff "${TMP}/home.before" "${TMP}/home.after" | sed 's/^/    /'; print -r -- "${out}" | head -20 | sed 's/^/    | /' }
   check "with nothing applied every setting is reported" "$( print -r -- "${out}" | grep -c -E '^ +[A-Za-z].* -> ' )" "${total}"
   check "the summary says how many differ, out of how many were checked" "$( print -r -- "${out}" | grep -c -E "^${total} of [0-9]+ settings differ" )" "1"
   check "and the exit status says there is drift" "${rc}" "1"

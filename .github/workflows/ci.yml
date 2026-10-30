@@ -64,7 +64,7 @@ jobs:
           - image: fedora:latest
             setup: dnf install -y zsh git curl tar python3 perl sudo findutils which
           - image: archlinux:latest
-            setup: pacman -Syu --noconfirm zsh git curl tar python perl sudo
+            setup: pacman -Syu --noconfirm zsh git curl tar python perl sudo diffutils
           - image: alpine:latest
             setup: apk add --no-cache zsh git curl tar python3 perl sudo bash coreutils grep sed findutils
     steps:
