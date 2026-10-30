@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.0] - 2026-10-30
+
+### Fixed
+
+- `--timing` printed no `Slowest:` line when every step took under 0.1 ms (a quick machine, or all the work already done), because nothing was bigger than the starting value of zero. Found by the first CI run on Linux
+
+### Changed
+
+- The smoke tests no longer assume a non root user on a host with Debian, Fedora, Alpine or Arch tools. Found by the first CI run, which ran them in containers as root and on Ubuntu: the spies for the startup test were never made on Linux (`command` is not a program there, so the real utilities were not found), the package manager tests expected `sudo` (root does not use it) and `env DEBIAN_FRONTEND` (visible only through sudo), two tests that remove a stub package manager skip themselves where the real one is installed (`apt-get`, `dnf`), the slowest step can have a name with spaces, and a history file named by the system zshrc (Alpine's) is accepted. Run in Debian, Ubuntu, Fedora and Alpine containers as root: 1065 to 1067 passed, none failed. No change to what the script does apart from the fix above
+
 ## [1.8.9] - 2026-10-30
 
 ### Changed

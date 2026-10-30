@@ -20,6 +20,14 @@ typeset -U path
 # The OS and kernel the sandbox pretends to be, so the tests behave the same on any host (a test that is
 # about Linux sets USSURI_OS=linux itself). TEST_PATH_PREFIX goes in front of the sandbox's PATH, for
 # trying another userland, e.g. GNU tools on a Mac: TEST_PATH_PREFIX=/opt/homebrew/opt/coreutils/libexec/gnubin:
+# Root runs the package manager directly; anyone else through sudo (the script does the same)
+SUDO_WORD="sudo "
+(( UID == 0 )) && SUDO_WORD=""
+# What the stub logs for the debconf setting: through sudo it sees "sudo env DEBIAN_FRONTEND=... apt ...", as root
+# only the apt it is given, so there the variable itself is not checked
+DEBCONF_WORD="${SUDO_WORD}env DEBIAN_FRONTEND=noninteractive "
+(( UID == 0 )) && DEBCONF_WORD=""
+
 TEST_OS_ENV=( USSURI_OS="${TEST_OS:-darwin}" USSURI_OS_REL="${TEST_OS_REL:-27.2.0}" )
 
 STUBS="${TMP}/stubs"
@@ -1286,7 +1294,7 @@ make_spies () {
   local name real
   for name in awk basename cat chmod cp cut date dirname env expr find getconf grep head hostname id ln ls mkdir \
               mktemp mv readlink rm sed sleep sort stat tail tar tee touch tr uname uniq wc whoami xargs; do
-    real=$( env -i PATH=/usr/bin:/bin command -v "${name}" 2> /dev/null )
+    real=$( path=( /usr/bin /bin ); whence -p "${name}" 2> /dev/null )
     [[ -n "${real}" ]] || continue
     print -r -- "#!/bin/sh" > "${SPY}/${name}"
     print -r -- "echo \"${name} \$*\" >> ${SPYLOG}" >> "${SPY}/${name}"
@@ -1339,7 +1347,7 @@ test_timing () {
   check "with a line for each step of the login that ran" "$( print -r -- "${out}" | grep -c -E '^  (defaults|zinit|pyenv|rbenv|p10k|ldflags|pkgconfig|cppflags) +[0-9]+\.[0-9]$' )" "8"
   check "and what the steps do not cover" "$( print -r -- "${out}" | grep -c -E '^  everything else +[0-9]+\.[0-9]$' )" "1"
   check "and the total" "$( print -r -- "${out}" | grep -c -E '^  total +[0-9]+\.[0-9]$' )" "1"
-  check "and the slowest step" "$( print -r -- "${out}" | grep -c -E '^Slowest: [a-z0-9-]+ \([0-9]+\.[0-9] ms\)$' )" "1"
+  check "and the slowest step" "$( print -r -- "${out}" | grep -c -E '^Slowest: [a-z0-9 ,-]+ \([0-9]+\.[0-9] ms\)$' )" "1"
   check "the steps and the rest add up to the total (the zinit detail below it is part of a step, not extra)" "$( print -r -- "${out}" | awk '/^Slowest/ {exit} /^  total/ {t=$2} /^  [a-z]/ && !/total/ {s+=$NF} END {d=s-t; if (d<0) d=-d; print (d < 0.6) ? "yes" : "no"}' )" "yes"
   check "before the steps, the pieces of the start: config, functions, arguments, defaults" "$( print -r -- "${out}" | grep -c -E '^  (config files|defining functions|arguments|set_defaults|history, completion dir) +[0-9]+\.[0-9]$' )" "5"
   check "inside the zinit step, each line of the plugin lists, slowest first" "$( print -r -- "${out}" | grep -c '^Inside the zinit step' ):$( print -r -- "${out}" | awk '/^Inside the zinit step/ {f=1; next} /all the lines/ {f=0} f && /^  [A-Za-z].* [0-9]+\.[0-9]$/ {n++} END {print n+0}' )" "1:8"
@@ -1677,22 +1685,22 @@ test_package_managers () {
   local pkg
   # Every manager installs a package from its own list, with its own command
   linux_packages apt ubuntu "" ubuntu.apt
-  check "apt: the package index is refreshed once" "$( calls 'sudo apt-get update' )" "1"
-  check "apt: a missing package is installed with sudo apt install -y" "$( grep -c '^sudo apt install -y ansible$' "${LOG}" )" "1"
+  check "apt: the package index is refreshed once" "$( calls "${SUDO_WORD}apt-get update" )" "1"
+  check "apt: a missing package is installed with sudo apt install -y" "$( grep -c '^'"${SUDO_WORD}"'apt install -y ansible$' "${LOG}" )" "1"
   check "apt: an installed one is not" "$( grep -c 'apt install -y git$' "${LOG}" )" "0"
   linux_packages apt linuxmint "ubuntu debian" ubuntu.apt
-  check "a Debian derivative (Mint) uses apt" "$( grep -c '^sudo apt install -y ansible$' "${LOG}" )" "1"
+  check "a Debian derivative (Mint) uses apt" "$( grep -c '^'"${SUDO_WORD}"'apt install -y ansible$' "${LOG}" )" "1"
   linux_packages pacman arch "" arch.pacman
-  check "pacman: --needed -S, not -Sy" "$( grep -c '^sudo pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
+  check "pacman: --needed -S, not -Sy" "$( grep -c '^'"${SUDO_WORD}"'pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
   linux_packages pacman manjaro "arch" arch.pacman
-  check "an Arch derivative (Manjaro) uses pacman" "$( grep -c '^sudo pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
+  check "an Arch derivative (Manjaro) uses pacman" "$( grep -c '^'"${SUDO_WORD}"'pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
   linux_packages dnf fedora "" fedora.dnf
-  check "dnf: a missing package is installed with sudo dnf install -y" "$( grep -c '^sudo dnf install -y ansible$' "${LOG}" )" "1"
+  check "dnf: a missing package is installed with sudo dnf install -y" "$( grep -c '^'"${SUDO_WORD}"'dnf install -y ansible$' "${LOG}" )" "1"
   linux_packages dnf rocky "rhel centos fedora" fedora.dnf
-  check "a Red Hat derivative (Rocky) uses dnf" "$( grep -c '^sudo dnf install -y ansible$' "${LOG}" )" "1"
+  check "a Red Hat derivative (Rocky) uses dnf" "$( grep -c '^'"${SUDO_WORD}"'dnf install -y ansible$' "${LOG}" )" "1"
   linux_packages apk alpine "" alpine.apk
-  check "apk: the index is updated first" "$( grep -n -E '^sudo apk (update|add)' "${LOG}" | head -1 | grep -c 'apk update' )" "1"
-  check "apk: a missing package is added with sudo apk add" "$( grep -c '^sudo apk add ansible$' "${LOG}" )" "1"
+  check "apk: the index is updated first" "$( grep -n -E '^'"${SUDO_WORD}"'apk (update|add)' "${LOG}" | head -1 | grep -c 'apk update' )" "1"
+  check "apk: a missing package is added with sudo apk add" "$( grep -c '^'"${SUDO_WORD}"'apk add ansible$' "${LOG}" )" "1"
   linux_packages nix nixos "" nix.nix
   check "nix: no sudo, installed from nixpkgs" "$( grep -c '^nix profile install nixpkgs#ansible$' "${LOG}" )" "1"
   check "nix: and never run through sudo" "$( grep -c '^sudo.*nix' "${LOG}" )" "0"
@@ -1770,7 +1778,11 @@ test_doctor_package_manager () {
   print -r -- "ID=fedora" > "${TMP}/os-release"
   local out
   out=$( EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); run --doctor 2>&1 )
-  check "doctor fails when the distro's package manager is missing" "$( print -r -- "${out}" | grep -c 'FAIL.*dnf' )" "1"
+  if [[ -x /usr/bin/dnf || -x /bin/dnf ]]; then
+    print "  skip  doctor with the package manager missing (this host has dnf)"
+  else
+    check "doctor fails when the distro's package manager is missing" "$( print -r -- "${out}" | grep -c 'FAIL.*dnf' )" "1"
+  fi
   make_linux_stubs
   out=$( EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); run --doctor 2>&1 )
   check "and is happy when it is there" "$( print -r -- "${out}" | grep -c 'ok.*dnf (dnf' )" "1"
@@ -1973,7 +1985,8 @@ test_history () {
   check "searching skips duplicates" "$( print -r -- "${state}" | grep -c 'find=on' )" "1"
   check "extra blanks are removed" "$( print -r -- "${state}" | grep -c 'blanks=on' )" "1"
   check "history is still shared between shells" "$( print -r -- "${state}" | grep -c 'share=on' )" "1"
-  check "a history file is chosen, as without one nothing is saved" "$( print -r -- "${state}" | grep -c "file=${H}/.zsh_history" )" "1"
+  # Usually ~/.zsh_history; a system zshrc that already names one (Alpine's does) is respected, so only that there is one is checked
+  check "a history file is chosen, as without one nothing is saved" "$( print -r -- "${state}" | grep -c -E "file=${H}/[^ ]*hist" )" "1"
   EXTRA_ENV=( HISTFILE=/somewhere/else/hist )
   check "an existing HISTFILE is respected" "$( history_state | grep -c 'file=/somewhere/else/hist' )" "1"
   EXTRA_ENV=()
@@ -2212,21 +2225,21 @@ test_assume_yes () {
   local sw
   # apt: -y is always passed, but debconf dialogs can still prompt, so --yes also turns them off
   linux_packages apt ubuntu "" ubuntu.apt
-  check "without --yes apt is run as before" "$( grep -c '^sudo apt install -y ansible$' "${LOG}" )" "1"
+  check "without --yes apt is run as before" "$( grep -c '^'"${SUDO_WORD}"'apt install -y ansible$' "${LOG}" )" "1"
   for sw in -y --yes --assume-yes; do
     new_home
     print -r -- "ID=ubuntu" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/apt.list"
     EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
     run -P ${sw} > /dev/null 2>&1
     EXTRA_ENV=()
-    check "${sw}: apt gets no debconf dialogs" "$( grep -c '^sudo env DEBIAN_FRONTEND=noninteractive apt install -y ansible$' "${LOG}" )" "1"
+    check "${sw}: apt gets no debconf dialogs" "$( grep -c '^'"${DEBCONF_WORD}"'apt install -y ansible$' "${LOG}" )" "1"
   done
   new_home
   print -r -- "ID=arch" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/pacman.list"
   EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
   run -P -y > /dev/null 2>&1
   EXTRA_ENV=()
-  check "pacman is unchanged by --yes (it never prompts)" "$( grep -c '^sudo pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
+  check "pacman is unchanged by --yes (it never prompts)" "$( grep -c '^'"${SUDO_WORD}"'pacman --noconfirm --needed -S ansible$' "${LOG}" )" "1"
   check "-y takes no value, so a switch after it is still a switch" "$( run -y -v --version 2>&1 | tail -1 )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
   new_home
   print -r -- "ASSUME_YES=true" > "${H}/.ussuri/config"
@@ -2234,7 +2247,7 @@ test_assume_yes () {
   EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
   run -P > /dev/null 2>&1
   EXTRA_ENV=()
-  check "ASSUME_YES=true in the config does the same without the switch" "$( grep -c 'DEBIAN_FRONTEND=noninteractive apt install -y ansible$' "${LOG}" )" "1"
+  check "ASSUME_YES=true in the config does the same without the switch" "$( grep -c '^'"${DEBCONF_WORD}"'apt install -y ansible$' "${LOG}" )" "1"
 }
 
 test_assume_yes_confirm () {
@@ -3369,7 +3382,12 @@ test_package_drift_unavailable () {
   check "on a distribution with no supported package manager it says so, and is not drift" "${rc}:$( print -r -- "${out}" | grep -c -i "isn't available" )" "2:1"
   print -r -- "ID=ubuntu" > "${TMP}/os-release"; rm -f "${STUBS}/apt-get"
   out=$( run --drift packages 2>&1 ); rc=$?
-  check "when the package manager's own tool is not installed it says which" "${rc}:$( print -r -- "${out}" | grep -c 'apt-get' )" "2:1"
+  # The stub is removed, but a host that has the real apt-get (Debian and Ubuntu) still finds it
+  if [[ -x /usr/bin/apt-get || -x /bin/apt-get ]]; then
+    print "  skip  the package manager's own tool is not installed (this host has apt-get)"
+  else
+    check "when the package manager's own tool is not installed it says which" "${rc}:$( print -r -- "${out}" | grep -c 'apt-get' )" "2:1"
+  fi
   EXTRA_ENV=()
 }
 
@@ -3398,7 +3416,11 @@ test_package_names () {
   check "with a count" "$( print -r -- "${out}" | grep -c -E '[0-9]+ names checked, 1 not found' )" "1"
   rm -f "${STUBS}/apt-get"
   out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
-  check "without the package manager's own tool there is nothing to check with (status 2)" "${rc}:$( print -r -- "${out}" | grep -c 'apt-get is not installed' )" "2:1"
+  if [[ -x /usr/bin/apt-get || -x /bin/apt-get ]]; then
+    print "  skip  without the package manager's own tool (this host has apt-get)"
+  else
+    check "without the package manager's own tool there is nothing to check with (status 2)" "${rc}:$( print -r -- "${out}" | grep -c 'apt-get is not installed' )" "2:1"
+  fi
   print -r -- "ID=opensuse-leap" > "${TMP}/os-release"
   out=$( run_names USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); rc=$?
   check "and none on a distribution with no supported manager (status 2)" "${rc}:$( print -r -- "${out}" | grep -c 'No supported package manager' )" "2:1"
@@ -3740,7 +3762,7 @@ test_atuin_install () {
   EXTRA_ENV=( INSTALL_ATUIN=true ); : > "${LOG}"
   run > /dev/null 2>&1
   check "macOS: it is installed with brew" "$( grep -c '^brew install atuin$' "${LOG}" )" "1"
-  for row in 'pacman arch ^sudo.pacman.--noconfirm.--needed.-S.atuin$' 'nix nixos ^nix.profile.install.nixpkgs#atuin$'; do
+  for row in 'pacman arch ^'"${SUDO_WORD// /.}"'pacman.--noconfirm.--needed.-S.atuin$' 'nix nixos ^nix.profile.install.nixpkgs#atuin$'; do
     set -- ${=row}; manager="$1"; osid="$2"; want="$3"
     new_home; print -r -- "ID=${osid}" > "${TMP}/os-release"; print -r -- "git" > "${H}/.ussuri/${manager}.list"
     EXTRA_ENV=( INSTALL_ATUIN=true DO_FONTS_CHECK=false USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" ); : > "${LOG}"
