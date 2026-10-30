@@ -2633,7 +2633,7 @@ dotfiles_login () {
 
 wait_for_dotfiles_sync () {
   local i
-  for i in {1..40}; do
+  for i in {1..${1:-40}}; do
     [[ -f "${H}/.ussuri/dotfiles.sync" ]] && return 0
     sleep 0.2
   done
@@ -2722,7 +2722,9 @@ test_dotfiles_repo_login () {
   local t0=$EPOCHREALTIME
   dotfiles_login
   check "and the login does not wait for it" "$( (( EPOCHREALTIME - t0 < 2.5 )) && echo quick || echo slow )" "quick"
-  sleep 4
+  # The job makes several git calls of 3 seconds each. Wait for it to finish (it writes its result last): left running
+  # it would land in the home directory of a later test, which is what made --drift look as if it wrote a file
+  wait_for_dotfiles_sync 200
   make_stubs
   EXTRA_ENV=()
 }
