@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.8.9
+# Version: 1.9.0
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -102,7 +102,7 @@ print_timing () {
     print -r -- "--timing needs the zsh/datetime module, which is not available"
     return 1
   fi
-  local total=$(( (EPOCHREALTIME - STARTUP_T0) * 1000 )) steps=0 ms slowest="" slowest_ms=0 i mark at
+  local total=$(( (EPOCHREALTIME - STARTUP_T0) * 1000 )) steps=0 ms slowest="" slowest_ms=-1 i mark at
   local prev="${STARTUP_T0}" zinit_ms=0 line_sum=0
   local -a lines
   print -r -- "Startup timing (milliseconds, from the start of the script)"

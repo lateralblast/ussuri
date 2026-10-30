@@ -137,7 +137,7 @@ All eight done on 2026-10-30, one version each (1.8.0 to 1.8.7). What is and is 
 Open questions and checks, not features:
 
 - [x] `rm`, `cp` and `mv` under common-aliases (Q5) (1.8.9, 2026-10-30): decided non-interactive. `plain_file_aliases` removes the `-i` aliases after the snippet, both lists; an alias of yours is left alone. Sandbox tested only, not checked in a real login. The lists only change on `--install` or `--update`.
-- [ ] Run the CI workflow on GitHub (R4); the Linux package managers and package names have only met stubs.
+- [ ] Run the CI workflow on GitHub (R4): it ran on 2026-10-30. macOS passed; the Linux jobs failed in the smoke tests (test assumptions, not the script, apart from the `--timing` `Slowest:` line), fixed in 1.9.0 and passing in Debian, Ubuntu, Fedora and Alpine containers run locally as root. Still to look at after the next push: the Arch job (no arm64 image, and pacman fails to start under emulation here, so it was never run locally), the `ubuntu-latest` runner, the package names job and the install, `--doctor` and `--drift packages` steps, which never got that far.
 - [x] `--edit` in a real editor (2026-10-30): you tried it and it works. Which editor, and whether a rejected edit was tried, was not recorded.
 - [x] A full login under zinit turbo (2026-10-30): you ran it with turbo on (the `--timing` runs, with the plugins deferred) and said it is done. Not checked item by item: completion, each deferred plugin and the top line segments.
 
