@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.1] - 2026-10-30
+
+### Fixed
+
+- Eight names in `files/packages/arch.pacman` and `endeavouros.pacman` did not exist in the Arch repositories (they were Debian names or old ones), found by the package name check in CI: `docker-ce` is now `docker`, `exiftool` and `libimage-exiftool-perl` are `perl-image-exiftool`, `libyaml-dev` is `libyaml`, `p7zip` is `7zip`, `python3` is `python`, `rpm2cpio` is `rpm-tools` and `xorriso` is `libisoburn`. Before this, `-P` on Arch reported each as a failed install. All names in the list were then looked up with `pacman -Si` in an Arch container. Existing installs keep their copy of the lists until `--install` or `--update`; a `local.pacman` is not affected
+
+### Changed
+
+- `tests/package-names.zsh` on Fedora also accepts a name that something provides, as `dnf install` does: `wget` is provided by `wget1-wget` or `wget2-wget`, so it was reported missing. All 36 names in `fedora.dnf` are found
+
 ## [1.9.0] - 2026-10-30
 
 ### Fixed

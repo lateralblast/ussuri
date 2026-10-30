@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.9.0
+# Version: 1.9.1
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
