@@ -39,6 +39,7 @@ osinfo-db
 7zip
 pwgen
 python
+ripgrep
 rpm-tools
 ruby
 ruby-build

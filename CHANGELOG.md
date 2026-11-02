@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.3] - 2026-11-02
+
+### Added
+
+- `--title TEXT` (long only, `-5` inside) sets the window and tab title with the OSC 0 escape sequence and does nothing else: no login steps, no files written, the lock not taken. Control characters are taken out of the text, and an empty title is refused. The sequence goes to `/dev/tty`, so it works when the output is piped
+- `TERMINAL_TITLE` setting, `user@host` by default (the short host name, as the prompt shows it), shown as `user@host:directory`, with the home directory as `~`. A login sets the title before each prompt through a `precmd` hook, once per shell and only in interactive shells, so it follows each `cd`. `none` leaves the title alone. `--title` sets it once, and the next prompt in that shell sets it back
+
 ## [1.9.2] - 2026-10-30
 
 ### Fixed

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.9.2
+# Version: 1.9.3
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -252,7 +252,7 @@ acquire_lock () {
 # Read only modes (--doctor, --drift) must not create or copy anything
 
 is_read_only () {
-  [ "${DO_DOCTOR}" = "true" ] || [ "${DO_DRIFT}" = "true" ] || [ "${DO_PROMPT_PREVIEW}" = "true" ]
+  [ "${DO_DOCTOR}" = "true" ] || [ "${DO_DRIFT}" = "true" ] || [ "${DO_PROMPT_PREVIEW}" = "true" ] || [ "${DO_TITLE}" = "true" ]
 }
 
 # Guards used throughout: is the lock held, and which OS is this
@@ -1724,6 +1724,7 @@ set_all_defaults () {
   set_env "PROMPT_TWO_LINE"     "true"
   set_env "PROMPT_TOP_ELEMENTS" "context os_version cpu_arch"
   set_env "PROMPT_TOP_RIGHT_ELEMENTS" "date"
+  set_env "TERMINAL_TITLE"      "${USER:-${LOGNAME}}@${HOST%%.*}"
   set_env "INSTALL_POSH"        "${PROMPT_WANT_POSH}"
   set_env "INSTALL_OZSH"        "false"
   set_env "INSTALL_FONTS"       "true"
@@ -2012,6 +2013,7 @@ print_help () {
 
   help_heading "Settings (${CONFIG_FILE})"
   help_row "-k" "--config"         "Create the config file"
+  help_row ""   "--title TEXT"     "Set this window's title, and nothing else"
   help_row ""   "--set NAME VALUE" "Save a setting, for every new shell"
   help_row ""   "--unset NAME"     "Remove a setting"
   help_row ""   "--get [NAME]"     "Show a setting (or all) and where it is from"
@@ -3888,6 +3890,7 @@ print_config_template () {
 #PROMPT_TWO_LINE=false      # p10k: false keeps a single line prompt (the default is a line above yours)
 #PROMPT_TOP_ELEMENTS="context os_version cpu_arch"  # p10k segments on the left of the top line: user@hostname, the OS version ("macOS 15.1"), the architecture
 #PROMPT_TOP_RIGHT_ELEMENTS="date"                   # p10k segments on the right of the top line: the day and date, "Fri 30 Oct 2026" (none for nothing)
+#TERMINAL_TITLE=none        # the window and tab title, set before each prompt: user@host:directory by default, "none" leaves it alone (--title sets it once)
 #ASSUME_YES=true            # never prompt: no debconf dialogs, Homebrew installer unattended, --confirm answered yes
 #DO_HISTORY=false           # leave history settings to the system
 #HISTORY_SIZE=50000         # lines kept in memory and in the history file
@@ -4930,6 +4933,29 @@ show_update_hint () {
   precmd_functions=( ${precmd_functions:#show_update_hint} )
 }
 
+# The window and tab title, set with the OSC 0 escape sequence. Control characters are taken out first, so
+# the text cannot end the sequence early. The sequence goes to the terminal itself (/dev/tty), so it works
+# with output piped elsewhere, and stdout is the fallback where there is no terminal to open.
+
+set_terminal_title () {
+  local clean="${1//[[:cntrl:]]/}"
+  if [[ -z "${clean}" ]]; then
+    print -u2 -r -- "Error:          --title needs a title, for example --title \"ussuri\""
+    return 1
+  fi
+  local seq=$'\e]0;'"${clean}"$'\a'
+  { print -rn -- "${seq}" > /dev/tty } 2> /dev/null || print -rn -- "${seq}"
+}
+
+# The login default: TERMINAL_TITLE (user@host unless set, "none" leaves the title alone), then the directory
+# (~ for the home directory), set before each prompt so it follows every cd
+
+apply_terminal_title () {
+  local clean="${TERMINAL_TITLE//[[:cntrl:]]/}"
+  local dir="${PWD/#${HOME}/~}"
+  print -rn -- $'\e]0;'"${clean}:${dir//[[:cntrl:]]/}"$'\a'
+}
+
 # Runs in the background: ask for the latest version and keep it only if it looks like one
 
 update_hint_fetch () {
@@ -5089,6 +5115,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   TIMING_LINE_SECONDS=()
   DO_ADOPT="false"
   DO_FIX="false"
+  DO_TITLE="false"
+  TITLE_TEXT=""
   PROFILE_SWITCH="false"
   MACHINE_SWITCH="false"
 
@@ -5122,6 +5150,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --adopt -a        --fix -Y
       --timing -j
       --prompt-preview -4
+      --title -5
       --export -2       --import -3
     )
     SWITCHES=()
@@ -5186,7 +5215,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 5: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -5452,6 +5481,11 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           IMPORT_TARGET="${OPTS[2]}"
           shift 2 OPTS
           ;;
+        -5)
+          DO_TITLE="true"
+          TITLE_TEXT="${OPTS[2]}"
+          shift 2 OPTS
+          ;;
         -z)
           DO_ZINIT_CHECK="true"
           shift OPTS
@@ -5550,6 +5584,15 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     print_prompt_preview
     release_lock
     exit
+  fi
+
+  # Set the terminal title and nothing else (no login steps, no files touched)
+
+  if [ "${DO_TITLE}" = "true" ]; then
+    TITLE_STATUS=0
+    set_terminal_title "${TITLE_TEXT}" || TITLE_STATUS=1
+    release_lock
+    exit ${TITLE_STATUS}
   fi
 
   # Write or read a bundle of your setup
@@ -5805,6 +5848,12 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Say if there is a newer version (off unless UPDATE_HINT=true)
 
   phase update-hint check_update_hint
+
+  # The default window title, before each prompt (once, and not at all when TERMINAL_TITLE is "none")
+
+  if [ "${TERMINAL_TITLE}" != "none" ] && [[ -o interactive ]]; then
+    (( ${precmd_functions[(Ie)apply_terminal_title]} )) || precmd_functions+=( apply_terminal_title )
+  fi
 
   # Change to start directory
 

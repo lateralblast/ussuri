@@ -66,6 +66,7 @@ p7zip
 pwgen
 python@3.12
 qemu
+ripgrep
 rpm2cpio
 ruby
 ruby-build

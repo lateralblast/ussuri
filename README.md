@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.9.2
+Current Version: 1.9.3
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -226,6 +226,7 @@ Install, update and undo
 
 Settings (~/.ussuri/config)
   -k, --config                    Create the config file
+      --title TEXT                Set this window's title, and nothing else
       --set NAME VALUE            Save a setting, for every new shell
       --unset NAME                Remove a setting
       --get [NAME]                Show a setting (or all) and where it is from
@@ -299,6 +300,7 @@ The switches by what they are for:
 |---|---|
 | Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back (`-R update` undoes `--update`), `-U` update, `-C` check for a newer version |
 | Looking without touching (read only) | `--prompt-preview` the prompt's top line and colours, `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
+| Terminal title | `--title TEXT` sets this window's title and does nothing else (the `TERMINAL_TITLE` setting is the default, see [Settings](#settings)) |
 | Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all, `-K` edit the config, `-H NAME` a machine, `--export [FILE]` and `--import FILE` your setup in a file |
 | What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
 | Measuring | `-j` run as a login and time each step of it |
@@ -312,8 +314,8 @@ Notes on the switches:
 - **Other long names:** most switches have more than one. The others are `--assume-yes` and `--assumeyes` (`--yes`), `--changes` (`--changelog`),
   `--compile` (`--build`), `--engine` (`--prompt`), `--fonts` (`--font`), `--gohome` (`--gopath`), `--packages` (`--package`), `--plugin`
   (`--manager`), `--posh` (`--ohmyposh`), `--startdir` (`--location`), `--test` (`--dryrun`), `--usage` (`--help`) and `--zosh` (`--ohmyzsh`).
-- **Long only:** `--set`, `--unset`, `--get`, `--prompt-preview`, `--export` and `--import` have no short form: every letter was taken, so inside
-  they are `-Q`, `-q`, `-w`, `-4`, `-2` and `-3`.
+- **Long only:** `--set`, `--unset`, `--get`, `--prompt-preview`, `--title`, `--export` and `--import` have no short form: every letter was taken,
+  so inside they are `-Q`, `-q`, `-w`, `-4`, `-5`, `-2` and `-3`.
 - **Bundling and values:** short switches can be bundled (`-vt`). A switch that takes a value ignores a leading `-` in it.
 - **Mistakes:** a switch that is missing its value, or an unknown switch, prints the usage and exits with status 1.
 - **Exit statuses:** `--doctor` is 0, or 1 if anything failed. `--drift` is 0 for none, 1 for drift, 2 if there was nothing to compare with.
@@ -436,6 +438,7 @@ each comes from.
 | `SHARE_HISTORY`, `DO_HISTORY`, `HISTORY_SIZE` | true, true, 50000 | [history settings](#history) |
 | `PROMPT_ENGINE` | p10k | `p10k`, `posh` or `none` (`-E`) |
 | `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS` | true, context os_version cpu_arch, date | the [two line prompt](#two-line-prompt) and its [settings](#prompt-settings) |
+| `TERMINAL_TITLE` | `user@host` | the window and tab title, set before each prompt, as `user@host:directory` (the home directory shows as `~`, and the title follows each `cd`). `none` leaves the title alone. `--title TEXT` sets it once, for the window you run it from; the next prompt in that shell sets it back to this |
 | `INSTALL_ZOXIDE` | true | set zoxide up if it is installed |
 
 **Components** (installed and set up on a login when true)
