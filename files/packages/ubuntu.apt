@@ -40,6 +40,7 @@ osinfo-db
 p7zip
 pwgen
 python3
+ripgrep
 rpm2cpio
 ruby
 ruby-build

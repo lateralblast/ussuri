@@ -21,6 +21,7 @@ jq
 lz4
 imagemagick
 python3
+ripgrep
 ruby
 shellcheck
 socat

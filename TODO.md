@@ -121,6 +121,8 @@ Decided against: fast-syntax-highlighting (alternative to the one already loaded
 
 - [x] **Q11. Day and date on the top line** (1.7.8, 2026-10-30) `PROMPT_TOP_RIGHT_ELEMENTS` defaults to `date` (p10k's own segment) with `POWERLEVEL9K_DATE_FORMAT` set to `%D{%a %d %b %Y}` when the config has not set one; `none` means nothing there. Sandbox tested only (`test_top_line_date`); not seen in a live prompt. Asked for "at the left" first, then changed to the right.
 
+- [x] **Q12. Terminal title** (1.9.3, 2026-11-02) `--title TEXT` sets this window's title with the OSC 0 sequence and does nothing else (long only, `-5` inside; no login steps, no files, no lock). `TERMINAL_TITLE` is the default, `user@host:directory` (short host name, `~` for home), set before each prompt by a `precmd` hook so it follows `cd`; `none` leaves the title alone. Checked in a pty: the sequence, control characters stripped, an empty title refused, and the default function's output. A real login with the installed 1.9.3 (`~/.zshrc`) worked, confirmed by the user on 2026-11-02. Not run: the test suite.
+
 ## Ideas (2026-10-30)
 
 All eight done on 2026-10-30, one version each (1.8.0 to 1.8.7). What is and is not verified is in each line.
