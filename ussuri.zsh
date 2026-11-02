@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.9.3
+# Version: 1.9.4
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -5853,6 +5853,8 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   if [ "${TERMINAL_TITLE}" != "none" ] && [[ -o interactive ]]; then
     (( ${precmd_functions[(Ie)apply_terminal_title]} )) || precmd_functions+=( apply_terminal_title )
+    # Claude Code would overwrite that title with its own, so tell it not to (set it to 0 to let it)
+    export CLAUDE_CODE_DISABLE_TERMINAL_TITLE="${CLAUDE_CODE_DISABLE_TERMINAL_TITLE:-1}"
   fi
 
   # Change to start directory

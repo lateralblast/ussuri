@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.9.3
+Current Version: 1.9.4
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -438,7 +438,7 @@ each comes from.
 | `SHARE_HISTORY`, `DO_HISTORY`, `HISTORY_SIZE` | true, true, 50000 | [history settings](#history) |
 | `PROMPT_ENGINE` | p10k | `p10k`, `posh` or `none` (`-E`) |
 | `PROMPT_TWO_LINE`, `PROMPT_TOP_ELEMENTS`, `PROMPT_TOP_RIGHT_ELEMENTS` | true, context os_version cpu_arch, date | the [two line prompt](#two-line-prompt) and its [settings](#prompt-settings) |
-| `TERMINAL_TITLE` | `user@host` | the window and tab title, set before each prompt, as `user@host:directory` (the home directory shows as `~`, and the title follows each `cd`). `none` leaves the title alone. `--title TEXT` sets it once, for the window you run it from; the next prompt in that shell sets it back to this |
+| `TERMINAL_TITLE` | `user@host` | the window and tab title, set before each prompt, as `user@host:directory` (the home directory shows as `~`, and the title follows each `cd`). `none` leaves the title alone. While the title is managed, a login also exports `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` so Claude Code does not overwrite it (set the variable to `0` beforehand to let it). `--title TEXT` sets it once, for the window you run it from; the next prompt in that shell sets it back to this |
 | `INSTALL_ZOXIDE` | true | set zoxide up if it is installed |
 
 **Components** (installed and set up on a login when true)
