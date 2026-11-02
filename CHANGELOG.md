@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.4] - 2026-11-02
+
+### Added
+
+- A login now exports `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` whenever it manages the window title (`TERMINAL_TITLE` not `none`, interactive shells), so Claude Code does not replace the `user@host:directory` title with its own. A value you already have set, such as `0`, is kept
+
 ## [1.9.3] - 2026-11-02
 
 ### Added

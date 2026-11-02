@@ -3989,6 +3989,26 @@ test_updater () {
   check "a download that does not parse is refused" "$( grep -m1 '^# Version:' "${live}/ussuri.zsh" | awk '{print $3}' )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
 }
 
+test_claude_title () {
+  new_home
+  local out
+  out=$( env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -i -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "${CLAUDE_CODE_DISABLE_TERMINAL_TITLE-unset}"' zsh "${SCRIPT}" 2> /dev/null | tail -1 )
+  check "a login stops Claude Code setting the title" "${out}" "1"
+  out=$( env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm CLAUDE_CODE_DISABLE_TERMINAL_TITLE=0 \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -i -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "${CLAUDE_CODE_DISABLE_TERMINAL_TITLE-unset}"' zsh "${SCRIPT}" 2> /dev/null | tail -1 )
+  check "a value you set is kept" "${out}" "0"
+  out=$( env -i HOME="${H}" USER=tester LOGNAME=tester TERM=xterm TERMINAL_TITLE=none \
+    PATH="${TEST_PATH_PREFIX}${STUBS}:${H}/.rbenv/bin:${H}/.pyenv/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    "${TEST_OS_ENV[@]}" "${EXTRA_ENV[@]}" zsh -i -c 'src="$1"; shift; source "${src}" > /dev/null 2>&1
+print -r -- "${CLAUDE_CODE_DISABLE_TERMINAL_TITLE-unset}"' zsh "${SCRIPT}" 2> /dev/null | tail -1 )
+  check "TERMINAL_TITLE=none leaves it alone" "${out}" "unset"
+}
+
 test_rbenv_pyenv () {
   new_home
   mkdir -p "${H}/.rbenv/versions/3.4.2" "${H}/.pyenv/versions/3.13.1"
