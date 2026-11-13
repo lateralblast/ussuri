@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 2.1.1
+Current Version: 2.2.0
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -233,6 +233,7 @@ Install, update and undo
 Settings (~/.ussuri/config)
   -k, --config                    Create the config file
       --title TEXT                Set this window's title, and nothing else
+      --selftest                  Check the plugin lists in a throwaway home and report
       --set NAME VALUE            Save a setting, for every new shell
       --unset NAME                Remove a setting
       --get [NAME]                Show a setting (or all) and where it is from
@@ -307,6 +308,7 @@ The switches by what they are for:
 | Installing and removing | `-I` install, `-X` uninstall, `-B` list backups, `-R [N]` roll back (`-R update` undoes `--update`), `-U` update, `-C` check for a newer version |
 | Looking without touching (read only) | `--prompt-preview` the prompt's top line and colours, `-x` doctor, `-G [settings\|packages\|all]` drift, `-J list` defaults journal, `-h` help, `-V` version, `-e` changelog |
 | Terminal title | `--title TEXT` sets this window's title and does nothing else (the `TERMINAL_TITLE` setting is the default, see [Settings](#settings)) |
+| Plugin check | `--selftest` loads the plugin list (`zinit.zsh`) in a temporary home, reporting each line as ok, warn, fail or skip, and takes no lock. Plugins that are not installed are skipped, never cloned. Exit status 1 if a line fails |
 | Settings | `-k` create the config, `--set NAME VALUE` save a setting, `--unset NAME` remove it, `--get [NAME]` show one or all, `-K` edit the config, `-H NAME` a machine, `--export [FILE]` and `--import FILE` your setup in a file |
 | What to set up | `-A` everything, `-z` zinit, `-E NAME`/`-T`/`-o` prompt engine, `-p` pyenv, `-r` rbenv, `-W NAME` fnm, rustup, uv, mise or atuin, `-P` packages, `-D` defaults, `-f` fonts, `-L` dotfiles, `-s` sudoers |
 | Measuring | `-j` run as a login and time each step of it |

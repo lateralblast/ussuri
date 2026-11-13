@@ -159,6 +159,7 @@ _ussuri () {
     '(-Y --fix)'{-Y,--fix}'[with --doctor: repair what can be repaired safely]' \
     '--prompt-preview[show the top line of the prompt, its colours and checks]' \
     '--title[set this window'"'"'s title and do nothing else]:title:' \
+    '--selftest[check the plugin lists in a throwaway home and report]' \
     '--export[write your config, local lists and dotfiles to a file]:: :_files' \
     '--import[read an export back, keeping what it replaces]:export file:_files' \
     '*:: :_nothing'
