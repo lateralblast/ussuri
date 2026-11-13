@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.9.4
+# Version: 1.9.8
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -61,17 +61,17 @@ check_layer_name () {
 local_layer_files () {
   LOCAL_LAYERS=()
   local candidates=( "$1/local.$2" ) f
-  if [ "$3" = "layers" ]; then
+  if [[ "$3" = "layers" ]]; then
     candidates=()
   fi
-  if [ -n "${PROFILE}" ]; then
+  if [[ -n "${PROFILE}" ]]; then
     candidates+=( "$1/profiles/${PROFILE}/local.$2" )
   fi
-  if [ -n "${MACHINE}" ]; then
+  if [[ -n "${MACHINE}" ]]; then
     candidates+=( "$1/hosts/${MACHINE}/local.$2" )
   fi
   for f in "${candidates[@]}"; do
-    if [ -f "${f}" ]; then
+    if [[ -f "${f}" ]]; then
       LOCAL_LAYERS+=( "${f}" )
     fi
   done
@@ -133,6 +133,10 @@ print_timing () {
   if [[ -n "${slowest}" ]]; then
     printf 'Slowest: %s (%.1f ms)\n' "${slowest}" "${slowest_ms}"
   fi
+  # Each cache that was rebuilt, and why: a rebuild runs the tool, so it costs its time on that login only
+  for (( i = 1; i <= ${#TIMING_NOTES}; i++ )); do
+    print -r -- "Cache rebuilt: ${TIMING_NOTES[i]}"
+  done
   # Inside the zinit step: each line of the plugin lists, slowest first, and what is left over (zinit itself starting)
   if (( ${#TIMING_LINES} )); then
     for (( i = 1; i <= ${#TIMING_LINES}; i++ )); do
@@ -149,7 +153,7 @@ print_timing () {
     printf '  %-34s %8.1f\n' "all the lines" "${line_sum}"
     printf '  %-34s %8.1f\n' "zinit starting, reading the lists" $(( zinit_ms - line_sum ))
   fi
-  print -r -- "Plugins that zinit defers (turbo mode) load after the prompt and are not counted. Run it again for the cost of a normal login: the first run does the one off work."
+  print -r -- "Plugins that zinit defers (turbo mode) load after the prompt: their times are printed at the next prompt, not counted here. Run it again for the cost of a normal login: the first run does the one off work."
 }
 
 if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
@@ -158,7 +162,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # these variables, so it wins over the environment, and command line switches win over it
 
   CONFIG_FILE="${USSURI_CONFIG:-${HOME_DIR}/.ussuri/config}"
-  if [ -r "${CONFIG_FILE}" ]; then
+  if [[ -r "${CONFIG_FILE}" ]]; then
     source "${CONFIG_FILE}"
   fi
 
@@ -173,7 +177,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   local_layer_files "${CONFIG_FILE:h}" "config" "layers"
   CONFIG_LAYER_FILES=( "${LOCAL_LAYERS[@]}" )
   for CONFIG_LAYER in "${CONFIG_LAYER_FILES[@]}"; do
-    if [ -r "${CONFIG_LAYER}" ]; then
+    if [[ -r "${CONFIG_LAYER}" ]]; then
       source "${CONFIG_LAYER}"
     fi
   done
@@ -196,15 +200,15 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   GO_HOME="${GO_HOME:-${HOME}/go}"
 
-  if [ "$INIT_DIR" = "" ]; then
+  if [[ "$INIT_DIR" = "" ]]; then
     INIT_DIR="${HOME_DIR}"
   fi
 
-  if [ "${SCRIPT_FILE}" = "-zsh" ] || [ "${SCRIPT_FILE}" = "-/bin/zsh" ] || [ "${SCRIPT_FILE}" = "zsh" ]; then
+  if [[ "${SCRIPT_FILE}" = "-zsh" ]] || [[ "${SCRIPT_FILE}" = "-/bin/zsh" ]] || [[ "${SCRIPT_FILE}" = "zsh" ]]; then
     SCRIPT_FILE="${HOME_DIR}/.zshrc"
   else
     SCRIPT_DIR="${SCRIPT_FILE:h}"
-    if [ "${SCRIPT_DIR}" = "." ]; then
+    if [[ "${SCRIPT_DIR}" = "." ]]; then
       SCRIPT_DIR="${PWD}"
     fi
   fi
@@ -226,7 +230,7 @@ LOCK_FILE="${HOME_DIR}/.${SCRIPT_NAME}.lock"
 zmodload -F zsh/files b:zf_mkdir b:zf_rm 2> /dev/null
 
 release_lock () {
-  if [ "${HOLD_LOCK}" = "true" ]; then
+  if [[ "${HOLD_LOCK}" = "true" ]]; then
     if (( $+builtins[zf_rm] )); then
       zf_rm -rf "${LOCK_FILE}"
     else
@@ -252,18 +256,18 @@ acquire_lock () {
 # Read only modes (--doctor, --drift) must not create or copy anything
 
 is_read_only () {
-  [ "${DO_DOCTOR}" = "true" ] || [ "${DO_DRIFT}" = "true" ] || [ "${DO_PROMPT_PREVIEW}" = "true" ] || [ "${DO_TITLE}" = "true" ]
+  [[ "${DO_DOCTOR}" = "true" ]] || [[ "${DO_DRIFT}" = "true" ]] || [[ "${DO_PROMPT_PREVIEW}" = "true" ]] || [[ "${DO_TITLE}" = "true" ]]
 }
 
 # Guards used throughout: is the lock held, and which OS is this
 # (OS_NAME is GNU/Linux until set_all_defaults tidies it up, so match on the Linux part)
 
 have_lock () {
-  [ "${HOLD_LOCK}" = "true" ]
+  [[ "${HOLD_LOCK}" = "true" ]]
 }
 
 is_osx () {
-  [ "${OS_NAME}" = "Darwin" ]
+  [[ "${OS_NAME}" = "Darwin" ]]
 }
 
 is_linux () {
@@ -276,7 +280,7 @@ is_linux () {
 # Set PROMPT_ENGINE (for example in the config), or use -E for one run
 
 prompt_engine_is () {
-  [ "${PROMPT_ENGINE}" = "$1" ]
+  [[ "${PROMPT_ENGINE}" = "$1" ]]
 }
 
 resolve_prompt_engine () {
@@ -292,14 +296,14 @@ resolve_prompt_engine () {
   # What each engine's install and login setup default to (no forking: this runs on every login)
   PROMPT_WANT_POSH="false"
   PROMPT_WANT_P10K="false"
-  if [ "${PROMPT_ENGINE}" = "posh" ]; then
+  if [[ "${PROMPT_ENGINE}" = "posh" ]]; then
     PROMPT_WANT_POSH="true"
   fi
-  if [ "${PROMPT_ENGINE}" = "p10k" ]; then
+  if [[ "${PROMPT_ENGINE}" = "p10k" ]]; then
     PROMPT_WANT_P10K="true"
   fi
   # -A, -o, -T and -E ask for the engine's setup to be done this run, whichever engine it is
-  if [ "${DO_PROMPT_CHECK}" = "true" ]; then
+  if [[ "${DO_PROMPT_CHECK}" = "true" ]]; then
     DO_POSH_CHECK="${PROMPT_WANT_POSH}"
     DO_P10K_CHECK="${PROMPT_WANT_P10K}"
   fi
@@ -359,7 +363,7 @@ define_os_version_segments () {
 
 apply_prompt_top_line () {
   setopt localoptions extendedglob
-  [ "${PROMPT_TWO_LINE}" = "true" ] || return 0
+  [[ "${PROMPT_TWO_LINE}" = "true" ]] || return 0
   prompt_engine_is p10k || return 0
   local -a top=() top_right=() moved bottom_left bottom_right
   local name
@@ -580,7 +584,7 @@ print_prompt_preview () {
   back="${cols[2]}"
   [[ -t 1 && -z "${NO_COLOR}" ]] && colour="true"
   [[ "${colour}" == true ]] && reset=$'\e[0m'
-  print -r -- "Prompt preview: powerlevel10k, $( [ "${PROMPT_TWO_LINE}" = "true" ] && print -r "two lines" || print -r "one line" ), background ${back:-not set}"
+  print -r -- "Prompt preview: powerlevel10k, $( [[ "${PROMPT_TWO_LINE}" = "true" ]] && print -r "two lines" || print -r "one line" ), background ${back:-not set}"
   print -r -- "(${P10K_INIT}; PROMPT_TOP_ELEMENTS=${PROMPT_TOP_ELEMENTS:-none}, PROMPT_TOP_RIGHT_ELEMENTS=${PROMPT_TOP_RIGHT_ELEMENTS:-none})"
   print
   print -r -- "Top line"
@@ -690,7 +694,7 @@ os_is_like () {
 handle_output () {
   OUTPUT="$1"
   STYLE="$2"
-  if [ "${DO_VERBOSE}" = "true" ]; then
+  if [[ "${DO_VERBOSE}" = "true" ]]; then
     case "${STYLE}" in
       add|adding)
         echo "Adding:         ${OUTPUT}"
@@ -734,7 +738,7 @@ handle_output () {
 
 report_drift () {
   DRIFT_COUNT=$(( DRIFT_COUNT + 1 ))
-  if [ ! "$1" = "${DRIFT_LAST_GROUP}" ]; then
+  if [[ ! "$1" = "${DRIFT_LAST_GROUP}" ]]; then
     print -r -- "$1"
     DRIFT_LAST_GROUP="$1"
   fi
@@ -773,7 +777,7 @@ run_settings_drift () {
 # DO_GNOME_DEFAULTS=true), and covered by --drift.
 
 linux_defaults_available () {
-  (( $+commands[gsettings] )) && [ -n "${DBUS_SESSION_BUS_ADDRESS}" ]
+  (( $+commands[gsettings] )) && [[ -n "${DBUS_SESSION_BUS_ADDRESS}" ]]
 }
 
 set_linux_default () {
@@ -786,14 +790,14 @@ set_linux_default () {
     verbose_message "${L_SCHEMA} ${L_KEY} doesn't exist on this desktop, skipping"
     return
   fi
-  if [ "${DO_DRIFT}" = "true" ]; then
+  if [[ "${DO_DRIFT}" = "true" ]]; then
     DRIFT_TOTAL=$(( DRIFT_TOTAL + 1 ))
-    if [ ! "${L_CURRENT}" = "${L_VALUE}" ]; then
+    if [[ ! "${L_CURRENT}" = "${L_VALUE}" ]]; then
       report_drift "${L_SCHEMA}" "${L_KEY}" "${L_CURRENT}" "${L_VALUE}"
     fi
     return
   fi
-  if [ ! "${L_CURRENT}" = "${L_VALUE}" ]; then
+  if [[ ! "${L_CURRENT}" = "${L_VALUE}" ]]; then
     verbose_message "GNOME setting ${L_SCHEMA} ${L_KEY} to ${L_VALUE}" "set"
     execute_command "gsettings set ${(q)L_SCHEMA} ${(q)L_KEY} ${(q)${L_VALUE#uint32 }}"
   fi
@@ -841,19 +845,19 @@ print_wrapped_names () {
 package_drift_group () {
   local label="$1" absent="$2" present="$3" name
   local missing=() extra=() required_short=( ${(@)REQUIRED:t} ${(@)ALSO_LISTED:t} ) installed_short=( ${(@)INSTALLED:t} )
-  if [ "${PKGDRIFT_LOWER}" = "true" ]; then
+  if [[ "${PKGDRIFT_LOWER}" = "true" ]]; then
     required_short=( ${(@L)required_short} )
     installed_short=( ${(@L)installed_short} )
   fi
   for name in "${REQUIRED[@]}"; do
-    if (( ! ${installed_short[(Ie)${${name:t}:l}]} )) && [ "${PKGDRIFT_LOWER}" = "true" ]; then
+    if (( ! ${installed_short[(Ie)${${name:t}:l}]} )) && [[ "${PKGDRIFT_LOWER}" = "true" ]]; then
       missing+=( "${name}" )
-    elif (( ! ${installed_short[(Ie)${name:t}]} )) && [ ! "${PKGDRIFT_LOWER}" = "true" ]; then
+    elif (( ! ${installed_short[(Ie)${name:t}]} )) && [[ ! "${PKGDRIFT_LOWER}" = "true" ]]; then
       missing+=( "${name}" )
     fi
   done
   for name in "${EXPLICIT[@]}"; do
-    if [ "${PKGDRIFT_LOWER}" = "true" ]; then
+    if [[ "${PKGDRIFT_LOWER}" = "true" ]]; then
       (( ${required_short[(Ie)${name:t:l}]} )) || extra+=( "${name}" )
     else
       (( ${required_short[(Ie)${name:t}]} )) || extra+=( "${name}" )
@@ -889,11 +893,11 @@ run_package_drift () {
   local brew_cmd=""
   if is_osx; then
     brew_cmd="${commands[brew]}"
-    if [ -z "${brew_cmd}" ]; then
+    if [[ -z "${brew_cmd}" ]]; then
       find_brew
       brew_cmd="${BREW_BIN}"
     fi
-    if [ -z "${brew_cmd}" ]; then
+    if [[ -z "${brew_cmd}" ]]; then
       print -r -- "Package drift isn't available: Homebrew is not installed, so there is nothing to compare"
       return 2
     fi
@@ -924,7 +928,7 @@ run_package_drift () {
     ALSO_LISTED=( "${formula_list[@]}" )
     package_drift_group "casks" "not installed" "installed"
   elif is_linux; then
-    if [ -z "${PKG_MANAGER}" ]; then
+    if [[ -z "${PKG_MANAGER}" ]]; then
       print -r -- "Package drift isn't available: Linux distribution '${LSB_ID:-unknown}' has no supported package manager"
       return 2
     fi
@@ -960,7 +964,7 @@ run_package_drift () {
 adopt_packages () {
   local label ext dir file tmp name reply everyone="false" stop="false" total=0
   local -a names accepted existing
-  if [ -z "${REQUIRED_FILE}" ]; then
+  if [[ -z "${REQUIRED_FILE}" ]]; then
     print -r -- "Nothing to adopt: there is no package list for this system"
     return 1
   fi
@@ -970,17 +974,17 @@ adopt_packages () {
     print -r -- "Nothing to adopt: everything installed is already in your lists"
     return 0
   fi
-  if [ ! "${DO_DRYRUN}" = "true" ] && [ ! "${ASSUME_YES}" = "true" ] && [[ ! -t 0 ]]; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && [[ ! "${ASSUME_YES}" = "true" ]] && [[ ! -t 0 ]]; then
     print -u2 -r -- "Error:          --adopt asks about each package, so it needs a terminal (or --yes to add them all, --dryrun to see them)"
     return 1
   fi
-  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && ! have_lock; then
     print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
     return 1
   fi
   print
   for label in taps formulae casks packages; do
-    [ "${stop}" = "true" ] && break
+    [[ "${stop}" = "true" ]] && break
     names=( ${(f)PKGDRIFT_EXTRAS[${label}]} )
     (( ${#names} )) || continue
     case "${label}" in
@@ -996,14 +1000,14 @@ adopt_packages () {
       *)       file="${dir}/local.${ext}" ;;
     esac
     existing=()
-    [ -r "${file}" ] && existing=( "${(@f)$(<${file})}" )
+    [[ -r "${file}" ]] && existing=( "${(@f)$(<${file})}" )
     accepted=()
     for name in "${names[@]}"; do
       # Already there (a name is the whole line)
       (( ${existing[(Ie)${name}]} )) && continue
-      if [ "${DO_DRYRUN}" = "true" ]; then
+      if [[ "${DO_DRYRUN}" = "true" ]]; then
         accepted+=( "${name}" )
-      elif [ "${ASSUME_YES}" = "true" ] || [ "${everyone}" = "true" ]; then
+      elif [[ "${ASSUME_YES}" = "true" ]] || [[ "${everyone}" = "true" ]]; then
         accepted+=( "${name}" )
       else
         reply=""
@@ -1017,7 +1021,7 @@ adopt_packages () {
     done
     (( ${#accepted} )) || continue
     total=$(( total + ${#accepted} ))
-    if [ "${DO_DRYRUN}" = "true" ]; then
+    if [[ "${DO_DRYRUN}" = "true" ]]; then
       print -r -- "Would add to ${file}: ${accepted[*]}"
       continue
     fi
@@ -1026,13 +1030,13 @@ adopt_packages () {
     (( ${#ADOPT_NEW_LINES} == 1 )) && [[ -z "${ADOPT_NEW_LINES[1]}" ]] && ADOPT_NEW_LINES=()
     ADOPT_NEW_LINES+=( "# added by ussuri --drift --adopt, ${DATE}" "${accepted[@]}" )
     execute_command "mkdir -p ${(q)file:h}"
-    if [ -e "${file}" ]; then
+    if [[ -e "${file}" ]]; then
       backup_user_file "${file}" "packages-${ext}${LAYER_NAME:+-${LAYER_KIND}-${LAYER_NAME}}"
       execute_command "cp -p ${(q)file} ${(q)tmp}"
     fi
     execute_command "write_adopted_lines ${(q)tmp}"
     execute_command "mv -f ${(q)tmp} ${(q)file}"
-    if [ -e "${tmp}" ]; then
+    if [[ -e "${tmp}" ]]; then
       rm -f -- "${tmp}"
       print -u2 -r -- "Error:          ${file} was not changed"
       return 1
@@ -1041,7 +1045,7 @@ adopt_packages () {
   done
   if (( total == 0 )); then
     print -r -- "Nothing added"
-  elif [ ! "${DO_DRYRUN}" = "true" ]; then
+  elif [[ ! "${DO_DRYRUN}" = "true" ]]; then
     print -r -- "${total} added. They are installed already, so this only keeps them from being extras: -P installs from the lists on another machine"
   fi
   return 0
@@ -1064,13 +1068,13 @@ run_drift () {
       return 2
       ;;
   esac
-  if [ "${what}" = "all" ] || [ "${what}" = "settings" ]; then
-    [ "${what}" = "all" ] && print -r -- "Settings"
+  if [[ "${what}" = "all" ]] || [[ "${what}" = "settings" ]]; then
+    [[ "${what}" = "all" ]] && print -r -- "Settings"
     run_settings_drift
     settings_rc=$?
   fi
-  if [ "${what}" = "all" ] || [ "${what}" = "packages" ]; then
-    [ "${what}" = "all" ] && print
+  if [[ "${what}" = "all" ]] || [[ "${what}" = "packages" ]]; then
+    [[ "${what}" = "all" ]] && print
     run_package_drift
     packages_rc=$?
   fi
@@ -1092,26 +1096,26 @@ notice_message () {
 execute_command () {
   COMMAND="$1"
   OPTION="$2"
-  if [ "${DO_VERBOSE}" = "true" ] || [ "${DO_DRYRUN}" = "true" ]; then
+  if [[ "${DO_VERBOSE}" = "true" ]] || [[ "${DO_DRYRUN}" = "true" ]]; then
     handle_output "${COMMAND}" "execute"
   fi
-  if [ ! "${DO_DRYRUN}" = "true" ] || [ "${OPTION}" = "run" ]; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] || [[ "${OPTION}" = "run" ]]; then
     DO_EXECUTE="true"
-    if [ "${DO_CONFIRM}" = "true" ] && [ ! "${ASSUME_YES}" = "true" ]; then
+    if [[ "${DO_CONFIRM}" = "true" ]] && [[ ! "${ASSUME_YES}" = "true" ]]; then
       DO_EXECUTE="false"
       RESPONSE=""
       if [[ -t 0 ]]; then
         # The command is part of the prompt so it is shown even without --verbose
         read -r "RESPONSE?Execute: ${COMMAND} [y/n]:  "
-        if [ "${RESPONSE}" = "y" ]; then
+        if [[ "${RESPONSE}" = "y" ]]; then
           DO_EXECUTE="true"
         fi
       else
         echo "Warning:        No terminal to confirm on, skipping: ${COMMAND}"
       fi
     fi
-    if [ "${DO_EXECUTE}" = "true" ]; then
-      if [ "${DO_VERBOSE}" = "true" ] || [ "${OPTION}" = "show" ]; then
+    if [[ "${DO_EXECUTE}" = "true" ]]; then
+      if [[ "${DO_VERBOSE}" = "true" ]] || [[ "${OPTION}" = "show" ]]; then
         eval "${COMMAND}"
       else
         eval "${COMMAND} > /dev/null 2>&1"
@@ -1134,7 +1138,7 @@ cached_eval () {
   CACHE_BIN="$1"
   CACHE_CMD="$2"
   CACHE_SKIP="$3"
-  if [ ! "${DO_CACHE_INIT}" = "true" ]; then
+  if [[ ! "${DO_CACHE_INIT}" = "true" ]]; then
     eval "$( eval "${CACHE_CMD}" )"
     return
   fi
@@ -1145,25 +1149,33 @@ cached_eval () {
   if [[ -s "${CACHE_FILE}" && ! "${CACHE_BIN}" -nt "${CACHE_FILE}" ]]; then
     source "${CACHE_FILE}"
   else
+    # --timing says why the command runs, since a rebuild costs a process every time it happens
+    if [[ "${DO_TIMING}" == "true" ]]; then
+      if [[ -s "${CACHE_FILE}" ]]; then
+        TIMING_NOTES+=( "${CACHE_BIN} is newer than its cache, so ${CACHE_CMD[1,60]} ran again" )
+      else
+        TIMING_NOTES+=( "no cache for ${CACHE_CMD[1,60]} yet, so it ran" )
+      fi
+    fi
     CACHE_OUT=$( eval "${CACHE_CMD}" )
-    if [ -n "${CACHE_OUT}" ]; then
-      if [ ! -d "${CACHE_DIR}" ]; then
+    if [[ -n "${CACHE_OUT}" ]]; then
+      if [[ ! -d "${CACHE_DIR}" ]]; then
         mkdir -p "${CACHE_DIR}"
       fi
       eval "${CACHE_OUT}"
       CACHE_LINES=( "${(@f)CACHE_OUT}" )
-      if [ -n "${CACHE_SKIP}" ]; then
+      if [[ -n "${CACHE_SKIP}" ]]; then
         CACHE_LINES=( ${CACHE_LINES:#${~CACHE_SKIP}} )
       fi
-      if [ -n "${CACHE_BLOCK_START}" ]; then
+      if [[ -n "${CACHE_BLOCK_START}" ]]; then
         CACHE_KEPT=()
         CACHE_IN_BLOCK="false"
         for CACHE_LINE in "${CACHE_LINES[@]}"; do
-          if [ "${CACHE_IN_BLOCK}" = "false" ] && [ "${CACHE_LINE[1,${#CACHE_BLOCK_START}]}" = "${CACHE_BLOCK_START}" ]; then
+          if [[ "${CACHE_IN_BLOCK}" = "false" ]] && [[ "${CACHE_LINE[1,${#CACHE_BLOCK_START}]}" = "${CACHE_BLOCK_START}" ]]; then
             CACHE_IN_BLOCK="true"
           fi
-          if [ "${CACHE_IN_BLOCK}" = "true" ]; then
-            if [ "${CACHE_LINE[-${#CACHE_BLOCK_END},-1]}" = "${CACHE_BLOCK_END}" ]; then
+          if [[ "${CACHE_IN_BLOCK}" = "true" ]]; then
+            if [[ "${CACHE_LINE[-${#CACHE_BLOCK_END},-1]}" = "${CACHE_BLOCK_END}" ]]; then
               CACHE_IN_BLOCK="false"
             fi
             continue
@@ -1196,14 +1208,14 @@ fetch_and_run () {
   INSTALL_SHA="${(L)2}"
   shift 2
   INSTALL_TMP=$( mktemp )
-  if ! fetch_url "${INSTALL_URL}" > "${INSTALL_TMP}" || [ ! -s "${INSTALL_TMP}" ]; then
+  if ! fetch_url "${INSTALL_URL}" > "${INSTALL_TMP}" || [[ ! -s "${INSTALL_TMP}" ]]; then
     echo "Warning:        Could not download ${INSTALL_URL}"
     rm -f "${INSTALL_TMP}"
     return 1
   fi
-  if [ -n "${INSTALL_SHA}" ]; then
+  if [[ -n "${INSTALL_SHA}" ]]; then
     INSTALL_SUM=$( sha256_of "${INSTALL_TMP}" )
-    if [ ! "${INSTALL_SUM}" = "${INSTALL_SHA}" ]; then
+    if [[ ! "${INSTALL_SUM}" = "${INSTALL_SHA}" ]]; then
       echo "Warning:        Checksum mismatch for ${INSTALL_URL} (expected ${INSTALL_SHA}, got ${INSTALL_SUM}), not running it"
       rm -f "${INSTALL_TMP}"
       return 1
@@ -1228,11 +1240,11 @@ git_clone () {
   GIT_REF="$3"
   GIT_DEPTH="$4"
   GIT_OPTS=()
-  if [ -n "${GIT_DEPTH}" ] && [ -z "${GIT_REF}" ]; then
+  if [[ -n "${GIT_DEPTH}" ]] && [[ -z "${GIT_REF}" ]]; then
     GIT_OPTS=( --depth "${GIT_DEPTH}" )
   fi
   git clone "${GIT_OPTS[@]}" "${GIT_URL}" "${GIT_DIR}" || return 1
-  if [ -n "${GIT_REF}" ]; then
+  if [[ -n "${GIT_REF}" ]]; then
     git -C "${GIT_DIR}" checkout --quiet "${GIT_REF}"
   fi
 }
@@ -1348,14 +1360,14 @@ set_osx_transmission_defaults () {
   set_osx_default     "org.m0k.transmission"              "WarningLegal"                                "bool"    "false"
   set_osx_default     "org.m0k.transmission"              "BlocklistNew"                                "bool"    "true"
   TRANSMISSION_WRITE_URL="true"
-  if [ ! "${DO_DRIFT}" = "true" ]; then
+  if [[ ! "${DO_DRIFT}" = "true" ]]; then
     TRANSMISSION_CURRENT=$( defaults read org.m0k.transmission BlocklistURL 2> /dev/null )
-    if [ ! "${TRANSMISSION_CURRENT}" = "${TRANSMISSION_BLOCKLIST_URL}" ] && (( $+commands[curl] || $+commands[wget] )) && ! url_reachable "${TRANSMISSION_BLOCKLIST_URL}"; then
+    if [[ ! "${TRANSMISSION_CURRENT}" = "${TRANSMISSION_BLOCKLIST_URL}" ]] && (( $+commands[curl] || $+commands[wget] )) && ! url_reachable "${TRANSMISSION_BLOCKLIST_URL}"; then
       echo "Warning:        ${TRANSMISSION_BLOCKLIST_URL} is not reachable, leaving the Transmission blocklist URL as it is (${TRANSMISSION_CURRENT:-not set})"
       TRANSMISSION_WRITE_URL="false"
     fi
   fi
-  if [ "${TRANSMISSION_WRITE_URL}" = "true" ]; then
+  if [[ "${TRANSMISSION_WRITE_URL}" = "true" ]]; then
     set_osx_default     "org.m0k.transmission"              "BlocklistURL"                                "string"  "${TRANSMISSION_BLOCKLIST_URL}"
   fi
   set_osx_default     "org.m0k.transmission"              "BlocklistAutoUpdate"                         "bool"    "true"
@@ -1384,11 +1396,11 @@ set_osx_app_defaults () {
   set_osx_default     "com.apple.print.PrintingPrefs"     "Quit When Finished"                          "bool"    "true"
   # USSURI_OS_REL overrides the kernel release, so the tests behave the same on any host
   OS_REL="${USSURI_OS_REL}"
-  if [ -z "${OS_REL}" ]; then
+  if [[ -z "${OS_REL}" ]]; then
     OS_REL=$( uname -r )
   fi
   OS_REL_MAJ="${OS_REL%%.*}"
-  if [ "${OS_REL_MAJ}" -lt 25 ]; then
+  if [[ "${OS_REL_MAJ}" -lt 25 ]]; then
     set_osx_default     "com.apple.systempreferences"       "NSQuitAlwaysKeepsWindows"                    "bool"    "false"
   fi
 }
@@ -1456,8 +1468,8 @@ set_osx_defaults () {
   set_env "INSTALLED_FILE"    "${WORK_DIR}/brew.list"
   set_env "TAPS_FILE"         "${WORK_DIR}/brew.taps"
   set_env "REQUIRED_FILE"     "${WORK_DIR}/files/packages/macos.brew"
-  if [ "${DO_INSTALL}" = "false" ]; then
-    if [ ! -f "${REQUIRED_FILE}" ]; then
+  if [[ "${DO_INSTALL}" = "false" ]]; then
+    if [[ ! -f "${REQUIRED_FILE}" ]]; then
       copy_support_files
     fi
   fi
@@ -1471,7 +1483,7 @@ set_osx_defaults () {
 
 package_layer_files () {
   PACKAGE_LAYERS=()
-  if [ -f "$1" ]; then
+  if [[ -f "$1" ]]; then
     PACKAGE_LAYERS+=( "$1" )
   fi
   local_layer_files "${1:h}" "${1:e}"
@@ -1523,7 +1535,7 @@ apply_osx_defaults () {
 
 read_file_version () {
   FILE_VERSION=""
-  if [ -r "$1" ]; then
+  if [[ -r "$1" ]]; then
     while IFS= read -r VERSION_LINE; do
       if [[ "${VERSION_LINE}" == "# Version: "* ]]; then
         FILE_VERSION="${VERSION_LINE#\# Version: }"
@@ -1545,13 +1557,13 @@ set_linux_id () {
   OS_ID=""
   OS_LIKE=""
   set_env "OS_RELEASE_FILE" "/etc/os-release"
-  if [ -r "${OS_RELEASE_FILE}" ]; then
+  if [[ -r "${OS_RELEASE_FILE}" ]]; then
     while IFS="=" read -r OS_KEY OS_VALUE; do
       OS_VALUE="${(L)${OS_VALUE//\"/}}"
-      if [ "${OS_KEY}" = "ID" ]; then
+      if [[ "${OS_KEY}" = "ID" ]]; then
         OS_ID="${OS_VALUE}"
       fi
-      if [ "${OS_KEY}" = "ID_LIKE" ]; then
+      if [[ "${OS_KEY}" = "ID_LIKE" ]]; then
         OS_LIKE="${OS_VALUE}"
       fi
     done < "${OS_RELEASE_FILE}"
@@ -1570,13 +1582,13 @@ set_linux_id () {
       LSB_ID="${(C)OS_ID}"
       ;;
   esac
-  if [ -z "${LSB_ID}" ] && (( $+commands[lsb_release] )); then
+  if [[ -z "${LSB_ID}" ]] && (( $+commands[lsb_release] )); then
     LSB_ID=$( lsb_release -i -s 2> /dev/null )
     OS_ID="${(L)LSB_ID}"
   fi
   # The package manager is whatever the distro, or what it is derived from, uses. Set
   # PKG_MANAGER yourself (apt, pacman, dnf, apk or nix) to override it, e.g. nix on Ubuntu
-  if [ -z "${PKG_MANAGER}" ]; then
+  if [[ -z "${PKG_MANAGER}" ]]; then
     for OS_CANDIDATE in ${OS_ID} ${=OS_LIKE}; do
       case "${OS_CANDIDATE}" in
         ubuntu|debian)
@@ -1595,7 +1607,7 @@ set_linux_id () {
           PKG_MANAGER="nix"
           ;;
       esac
-      if [ -n "${PKG_MANAGER}" ]; then
+      if [[ -n "${PKG_MANAGER}" ]]; then
         break
       fi
     done
@@ -1625,14 +1637,14 @@ set_pkg_manager () {
       PKG_INSTALL="apt install -y"
       # -y answers apt's own questions, but not debconf's dialogs (configuring a package), which
       # --yes turns off too. env, as sudo would otherwise drop the variable
-      if [ "${ASSUME_YES}" = "true" ]; then
+      if [[ "${ASSUME_YES}" = "true" ]]; then
         PKG_INSTALL="env DEBIAN_FRONTEND=noninteractive apt install -y"
       fi
       ;;
     pacman)
       PKG_TOOL="pacman"
       PKG_LIST_NAME="arch.pacman"
-      if [ "${OS_ID}" = "endeavouros" ]; then
+      if [[ "${OS_ID}" = "endeavouros" ]]; then
         PKG_LIST_NAME="endeavouros.pacman"
       fi
       PKG_LIST_CMD="pacman -Q | awk '{ print \$1 }'"
@@ -1671,7 +1683,7 @@ set_pkg_manager () {
   esac
   # Root: nothing if we are root, else sudo, else doas (Alpine often has only doas)
   PKG_SUDO=""
-  if [ "${PKG_PRIV}" = "true" ] && [ ! "${UID}" = "0" ]; then
+  if [[ "${PKG_PRIV}" = "true" ]] && [[ ! "${UID}" = "0" ]]; then
     if (( $+commands[sudo] )); then
       PKG_SUDO="sudo "
     elif (( $+commands[doas] )); then
@@ -1712,7 +1724,7 @@ set_all_defaults () {
   set_env "DO_PLUGINS"          "true"
   set_env "ZINIT_TURBO"         "true"
   ZINIT_SUFFIX=""
-  if [ "${ZINIT_TURBO}" = "true" ]; then
+  if [[ "${ZINIT_TURBO}" = "true" ]]; then
     ZINIT_SUFFIX="-turbo"
   fi
   set_env "ZINIT_FILE"          "${WORK_DIR}/files/zinit/zinit${ZINIT_SUFFIX}.zsh"
@@ -1834,7 +1846,7 @@ set_inline_defaults () {
   set_env "DO_PLUGINS"          "true"
   set_env "ZINIT_TURBO"         "true"
   ZINIT_SUFFIX=""
-  if [ "${ZINIT_TURBO}" = "true" ]; then
+  if [[ "${ZINIT_TURBO}" = "true" ]]; then
     ZINIT_SUFFIX="-turbo"
   fi
   set_env "ZINIT_FILE"          "${WORK_DIR}/files/zinit/zinit${ZINIT_SUFFIX}.zsh"
@@ -1879,8 +1891,8 @@ copy_support_files () {
   if is_read_only; then
     return
   fi
-  if [ -n "${SCRIPT_DIR}" ] && [ ! "${SCRIPT_DIR}" = "/usr/bin" ] && [ -n "${WORK_DIR}" ]; then
-    if [ -d "${SCRIPT_DIR}/files" ] && [ -d "${WORK_DIR}/files" ]; then
+  if [[ -n "${SCRIPT_DIR}" ]] && [[ ! "${SCRIPT_DIR}" = "/usr/bin" ]] && [[ -n "${WORK_DIR}" ]]; then
+    if [[ -d "${SCRIPT_DIR}/files" ]] && [[ -d "${WORK_DIR}/files" ]]; then
       execute_command "( cd ${(q)SCRIPT_DIR}/files && tar -cpf - . )|( cd ${(q)WORK_DIR}/files && tar -xpf - )" "run"
     fi
   fi
@@ -1894,8 +1906,8 @@ copy_support_file () {
   if is_read_only; then
     return
   fi
-  if [ -n "${SCRIPT_DIR}" ] && [ ! "${SCRIPT_DIR}" = "/usr/bin" ] && [ -n "${WORK_DIR}" ]; then
-    if [ -f "${SCRIPT_DIR}/files/$1" ] && [ ! -f "${WORK_DIR}/files/$1" ] && [ -d "${WORK_DIR}/files/${1:h}" ]; then
+  if [[ -n "${SCRIPT_DIR}" ]] && [[ ! "${SCRIPT_DIR}" = "/usr/bin" ]] && [[ -n "${WORK_DIR}" ]]; then
+    if [[ -f "${SCRIPT_DIR}/files/$1" ]] && [[ ! -f "${WORK_DIR}/files/$1" ]] && [[ -d "${WORK_DIR}/files/${1:h}" ]]; then
       execute_command "cp ${(q)SCRIPT_DIR}/files/${(q)1} ${(q)WORK_DIR}/files/${(q)1}"
     fi
   fi
@@ -1905,7 +1917,7 @@ copy_support_file () {
 
 check_dir_exists () {
   CHECK_DIR="$1"
-  if [ ! -d "${CHECK_DIR}" ] && ! is_read_only; then
+  if [[ ! -d "${CHECK_DIR}" ]] && ! is_read_only; then
     execute_command "mkdir -p ${(q)CHECK_DIR}"
   fi
 }
@@ -1917,8 +1929,8 @@ verbose_message () {
   # made check_osx_package install casks, the Nerd Font included, as plain formulae)
   local MESSAGE="$1"
   local TYPE="$2"
-  if [ "${DO_VERBOSE}" = "true" ]; then
-    if [ "${TYPE}" = "" ]; then
+  if [[ "${DO_VERBOSE}" = "true" ]]; then
+    if [[ "${TYPE}" = "" ]]; then
       handle_output "${MESSAGE}" "info"
     else
       handle_output "${MESSAGE}" "${TYPE}"
@@ -1955,6 +1967,59 @@ timed_plugin_line () {
   execute_command "$1"
   TIMING_LINES+=( "${name}" )
   TIMING_LINE_SECONDS+=( $(( EPOCHREALTIME - started )) )
+}
+
+# --timing, turbo mode: zinit loads each deferred plugin in .zinit-run-task, after the first prompt. This wraps it so each
+# load is timed by plugin. The loads run while the shell waits for input, so timing_deferred_report prints at the first
+# prompt after they ran (the first prompt has none yet). Nothing is wrapped when not timing
+
+timing_wrap_zinit_tasks () {
+  [[ "${DO_TIMING}" == "true" ]] || return 0
+  (( ${+functions[.zinit-run-task]} )) || return 0
+  (( ${+functions[.ussuri-untimed-run-task]} )) && return 0
+  functions -c .zinit-run-task .ussuri-untimed-run-task
+  .zinit-run-task () {
+    local started="${EPOCHREALTIME}" result
+    .ussuri-untimed-run-task "$@"
+    result=$?
+    # Pass 1 is the wait check that loads a deferred plugin, and pass 3 the load that follows it. Others are unloads
+    if [[ "$1" == (1|3) ]]; then
+      TIMING_DEFERRED_NAMES+=( "${(Q)6}" )
+      TIMING_DEFERRED_SECONDS+=( $(( EPOCHREALTIME - started )) )
+    fi
+    return ${result}
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook precmd timing_deferred_report
+}
+
+# The precmd hook behind timing_wrap_zinit_tasks: once the queue has run, print each plugin's load time (slowest first)
+# and stop. Nothing is printed while zinit still has tasks queued, or before any has run
+
+timing_deferred_report () {
+  (( ${#TIMING_DEFERRED_NAMES} )) || return 0
+  (( ${#ZINIT_RUN} )) && return 0
+  local -A sums
+  local -a lines
+  local i name total=0 ms
+  for (( i = 1; i <= ${#TIMING_DEFERRED_NAMES}; i++ )); do
+    name="${TIMING_DEFERRED_NAMES[i]}"
+    sums[${name}]=$(( ${sums[${name}]:-0} + TIMING_DEFERRED_SECONDS[i] ))
+  done
+  for name in "${(@k)sums}"; do
+    ms=$(( sums[${name}] * 1000 ))
+    total=$(( total + ms ))
+    lines+=( "$( printf '%09.3f %s' "${ms}" "${name}" )" )
+  done
+  lines=( ${(On)lines} )
+  print
+  print -r -- "Deferred plugins (zinit turbo, loaded after the first prompt, slowest first)"
+  for name in "${(@)lines}"; do
+    printf '  %-34s %8.1f\n' "${${name#* }[1,34]}" "$(( ${name%% *} ))"
+  done
+  printf '  %-34s %8.1f\n' "all the deferred plugins" "${total}"
+  autoload -Uz add-zsh-hook
+  add-zsh-hook -d precmd timing_deferred_report
 }
 
 # Help information. One row of the help: the short switch (if it has one), the long one with its value, what it does and, if it has
@@ -2091,14 +2156,14 @@ do_install () {
   backup_zshrc
   verbose_message     "${HOME_DIR}/.zshrc with ${SCRIPT_FILE}" "replace"
   execute_command     "cp ${(q)SCRIPT_FILE} ${(q)HOME_DIR}/.zshrc"
-  if [ ! "${DO_INSTALL}" = "true" ]; then
+  if [[ ! "${DO_INSTALL}" = "true" ]]; then
     return
   fi
-  if [ "${SCRIPT_FILE}" = "${HOME_DIR}/.zshrc" ] || [ "${SCRIPT_FILE}" = "${HOME_DIR}/.zprofile" ]; then
+  if [[ "${SCRIPT_FILE}" = "${HOME_DIR}/.zshrc" ]] || [[ "${SCRIPT_FILE}" = "${HOME_DIR}/.zprofile" ]]; then
     return
   fi
   copy_support_files
-  if [ -d "${WORK_DIR}/files" ] && [ ! -f "${P10K_INIT}" ] && [ -f "${SOURCE_P10K_INIT}" ]; then
+  if [[ -d "${WORK_DIR}/files" ]] && [[ ! -f "${P10K_INIT}" ]] && [[ -f "${SOURCE_P10K_INIT}" ]]; then
     execute_command "cp ${(q)SOURCE_P10K_INIT} ${(q)P10K_INIT}"
   fi
 }
@@ -2108,7 +2173,7 @@ do_install () {
 print_changelog () {
   CHANGE_FILE="${SCRIPT_DIR}/CHANGELOG.md"
   echo ""
-  if [ -f "$CHANGE_FILE" ]; then
+  if [[ -f "$CHANGE_FILE" ]]; then
     cat "$CHANGE_FILE"
   else
     CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/CHANGELOG.md"
@@ -2124,24 +2189,24 @@ set_osx_file_state () {
   STATE="$2"
   CHECK="${STATE}"
   verbose_message "File ${FILE} is ${STATE}" "check"
-  if [ "${STATE}" = "nohidden" ]; then
+  if [[ "${STATE}" = "nohidden" ]]; then
     CHECK="-"
   fi
   CURRENT=$( ls -aOl "${FILE}" 2> /dev/null | sed -n 2p | awk '{print $5}' )
   # ls -O (the file flags) is BSD only. Where it can't be read there is nothing to compare, which is
   # not a setting that differs
-  if [ -z "${CURRENT}" ]; then
+  if [[ -z "${CURRENT}" ]]; then
     verbose_message "The flags of ${FILE} can't be read here, skipping" "warn"
     return
   fi
-  if [ "${DO_DRIFT}" = "true" ]; then
+  if [[ "${DO_DRIFT}" = "true" ]]; then
     DRIFT_TOTAL=$(( DRIFT_TOTAL + 1 ))
-    if [ ! "${CURRENT}" = "${CHECK}" ]; then
+    if [[ ! "${CURRENT}" = "${CHECK}" ]]; then
       report_drift "(file flags)" "${FILE}" "${${CURRENT:#-}:-nohidden}" "${STATE}"
     fi
     return
   fi
-  if [ ! "${CURRENT}" = "$CHECK" ]; then
+  if [[ ! "${CURRENT}" = "$CHECK" ]]; then
     verbose_message "File ${FILE} to ${STATE}" "set"
     execute_command "chflags ${STATE} ${(q)FILE}"
   fi
@@ -2163,9 +2228,9 @@ journal_unfield () {
 }
 
 journal_default () {
-  [ "${DO_DRYRUN}" = "true" ] && return 0
+  [[ "${DO_DRYRUN}" = "true" ]] && return 0
   JOURNAL_NOW=$( defaults read "$1" "$2" 2> /dev/null ) || return 0
-  [ "${JOURNAL_NOW}" = "$5" ] || return 0
+  [[ "${JOURNAL_NOW}" = "$5" ]] || return 0
   check_dir_exists "${JOURNAL_FILE:h}"
   print -r -- "${DATE_SUFFIX}"$'\t'"${(q)1}"$'\t'"${(q)2}"$'\t'"${(q)3}"$'\t'"${(q)4}"$'\t'"${(q)5}" >> "${JOURNAL_FILE}"
 }
@@ -2180,12 +2245,12 @@ read_journal () {
   typeset -gA JOURNAL_COUNT JOURNAL_DONE
   JOURNAL_COUNT=()
   JOURNAL_DONE=()
-  [ -f "${JOURNAL_FILE}" ] || return 1
+  [[ -f "${JOURNAL_FILE}" ]] || return 1
   local line fields run
   for line in ${(f)"$(<${JOURNAL_FILE})"}; do
     [[ "${line}" == \#* ]] && continue
     fields=( "${(@ps:\t:)line}" )
-    if [ "${fields[1]}" = "UNDONE" ]; then
+    if [[ "${fields[1]}" = "UNDONE" ]]; then
       JOURNAL_DONE[${fields[2]}]=1
       continue
     fi
@@ -2232,7 +2297,7 @@ do_defaults_undo () {
     print -r -- "Undoing defaults is only available on OS X (the journal is of defaults writes)"
     return 2
   fi
-  if [ "${target}" = "list" ]; then
+  if [[ "${target}" = "list" ]]; then
     print_journal_runs
     return
   fi
@@ -2246,14 +2311,14 @@ do_defaults_undo () {
   fi
   run="${JOURNAL_ACTIVE[-target]}"
   when=$( journal_when "${run}" )
-  [ "${DO_DRYRUN}" = "true" ] && restore_word="Would restore"
+  [[ "${DO_DRYRUN}" = "true" ]] && restore_word="Would restore"
   UNDO_TOTAL=0
   UNDO_DONE=0
   UNDO_SKIPPED=0
   for (( i = ${#JOURNAL_ENTRIES}; i >= 1; i-- )); do
     line="${JOURNAL_ENTRIES[i]}"
     fields=( "${(@ps:\t:)line}" )
-    [ "${fields[1]}" = "${run}" ] || continue
+    [[ "${fields[1]}" = "${run}" ]] || continue
     dom="${(Q)fields[2]}"
     key="${(Q)fields[3]}"
     otype="${(Q)fields[4]}"
@@ -2262,7 +2327,7 @@ do_defaults_undo () {
     UNDO_TOTAL=$(( UNDO_TOTAL + 1 ))
     cur=$( defaults read "${dom}" "${key}" 2> /dev/null )
     if (( $? )); then
-      if [ "${otype}" = "__unset__" ]; then
+      if [[ "${otype}" = "__unset__" ]]; then
         UNDO_DONE=$(( UNDO_DONE + 1 ))
       else
         print -r -- "  skipped ${dom} ${key}: no longer set (it was set to ${nval})"
@@ -2270,7 +2335,7 @@ do_defaults_undo () {
       fi
       continue
     fi
-    if [ ! "${cur}" = "${nval}" ]; then
+    if [[ ! "${cur}" = "${nval}" ]]; then
       print -r -- "  skipped ${dom} ${key}: changed since (now ${cur}, it was set to ${nval})"
       UNDO_SKIPPED=$(( UNDO_SKIPPED + 1 ))
       continue
@@ -2280,7 +2345,7 @@ do_defaults_undo () {
         execute_command "defaults delete ${(q)dom} ${(q)key}"
         ;;
       boolean)
-        if [ "${oval}" = "1" ]; then
+        if [[ "${oval}" = "1" ]]; then
           execute_command "defaults write ${(q)dom} ${(q)key} -bool true"
         else
           execute_command "defaults write ${(q)dom} ${(q)key} -bool false"
@@ -2307,7 +2372,7 @@ do_defaults_undo () {
   done
   print -r -- "${restore_word} ${UNDO_DONE} of ${UNDO_TOTAL} settings from the run of ${when}${${UNDO_SKIPPED#0}:+; ${UNDO_SKIPPED} skipped}"
   # With --confirm some may have been declined, so the run is left to be undone again
-  if [ ! "${DO_DRYRUN}" = "true" ] && [ ! "${DO_CONFIRM}" = "true" ]; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && [[ ! "${DO_CONFIRM}" = "true" ]]; then
     print -r -- "UNDONE"$'\t'"${run}" >> "${JOURNAL_FILE}"
   fi
   restart_osx_services
@@ -2321,29 +2386,29 @@ set_osx_default () {
   D_TYPE="$3"
   D_VALUE="$4"
   D_CHECK="${D_VALUE}"
-  if [ "${D_VALUE}" = "true" ]; then
+  if [[ "${D_VALUE}" = "true" ]]; then
     D_CHECK="1"
   fi
-  if [ "${D_VALUE}" = "false" ]; then
+  if [[ "${D_VALUE}" = "false" ]]; then
     D_CHECK="0"
   fi
   verbose_message "Defaults domain \"${D_DOMAIN}\" has parameter \"${D_PARAM}\" set to \"${D_VALUE}\"" "check"
   D_CURRENT=$( defaults read "${D_DOMAIN}" "${D_PARAM}" 2> /dev/null)
   D_STATUS=$?
-  if [ "${DO_DRIFT}" = "true" ]; then
+  if [[ "${DO_DRIFT}" = "true" ]]; then
     DRIFT_TOTAL=$(( DRIFT_TOTAL + 1 ))
-    if (( D_STATUS )) || [ ! "${D_CURRENT}" = "${D_CHECK}" ]; then
+    if (( D_STATUS )) || [[ ! "${D_CURRENT}" = "${D_CHECK}" ]]; then
       D_SHOWN="${D_CURRENT}"
       if (( D_STATUS )); then
         D_SHOWN="(not set)"
-      elif [ "${D_TYPE}" = "bool" ]; then
+      elif [[ "${D_TYPE}" = "bool" ]]; then
         D_SHOWN="${${D_CURRENT/#1/true}/#0/false}"
       fi
       report_drift "${D_DOMAIN}" "${D_PARAM}" "${D_SHOWN}" "${D_VALUE}"
     fi
     return
   fi
-  if [ ! "${D_CURRENT}" = "${D_CHECK}" ]; then
+  if [[ ! "${D_CURRENT}" = "${D_CHECK}" ]]; then
     if [[ "${D_DOMAIN}" =~ "finder" ]]; then
       set_env "RESTART_FINDER" "true" "force"
     fi
@@ -2371,8 +2436,8 @@ set_env () {
   PARAM="$1"
   VALUE="$2"
   OVERRIDE="$3"
-  if [ ! "${PARAM}" = "" ]; then
-    if [ "${OVERRIDE}" = "force" ] || [ "${SET_ENV_FORCE}" = "true" ] || [ -z "${(P)PARAM}" ]; then
+  if [[ ! "${PARAM}" = "" ]]; then
+    if [[ "${OVERRIDE}" = "force" ]] || [[ "${SET_ENV_FORCE}" = "true" ]] || [[ -z "${(P)PARAM}" ]]; then
       verbose_message "Environment parameter \"${PARAM}\" to \"${VALUE}\"" "set"
       # Only export what child processes need, otherwise a login shell leaks
       # its DO_* flags into manual runs and nested shells, which then inherit them
@@ -2394,7 +2459,7 @@ exp_env () {
   PARAM="$1"
   VALUE="$2"
   # PATH is tied to the path array, so use it rather than splitting strings
-  if [ "${PARAM}" = "PATH" ]; then
+  if [[ "${PARAM}" = "PATH" ]]; then
     if (( ! ${path[(Ie)${VALUE}]} )); then
       handle_output "${VALUE} to ${PARAM}" "add"
       path+=( "${VALUE}" )
@@ -2419,7 +2484,7 @@ exp_env () {
   # Match whole entries only, so /usr/lib isn't "found" inside /usr/local/lib
   if [[ "${SEP}${CURRENT}${SEP}" != *"${SEP}${ITEM}${SEP}"* ]]; then
     handle_output "${VALUE} to ${PARAM}" "add"
-    if [ -z "${CURRENT}" ]; then
+    if [[ -z "${CURRENT}" ]]; then
       typeset -gx "${PARAM}=${ITEM}"
     else
       typeset -gx "${PARAM}=${CURRENT}${SEP}${ITEM}"
@@ -2436,7 +2501,7 @@ check_sudoers_config () {
   SUDO_LINE="${MY_USERNAME} ${SUDOERS_ENTRY}"
   # Try without a password first so a check doesn't prompt unless a change is needed
   SUDO_CHECK=$( sudo -n -l 2> /dev/null | grep -Fc "${SUDO_VALUE}" )
-  if [ "${SUDO_CHECK}" = "0" ]; then
+  if [[ "${SUDO_CHECK}" = "0" ]]; then
     notice_message "Updating ${SUDO_FILE} (sudo may ask for your password)"
     # Validate with visudo before installing, and install 0440 as sudo requires,
     # so a bad entry can't break sudo
@@ -2447,25 +2512,26 @@ check_sudoers_config () {
 # Check zinit config
 
 check_zinit_config () {
-  if [ "${INSTALL_ZINIT}" = "true" ]; then
+  if [[ "${INSTALL_ZINIT}" = "true" ]]; then
     verbose_message "Configuring zinit"
-    if [ ! -d "${ZINIT_HOME}" ]; then
+    if [[ ! -d "${ZINIT_HOME}" ]]; then
       execute_command "git_clone https://github.com/zdharma-continuum/zinit.git ${(q)ZINIT_HOME} ${(q)ZINIT_REF}"
     fi
-    if [ "${DO_ENV_SETUP}" = "true" ]; then
+    if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       execute_command ". ${(q)ZINIT_HOME}/zinit.zsh"
     fi
-    if [ "${PLUGIN_MANAGER}" = "zinit" ]; then
+    if [[ "${PLUGIN_MANAGER}" = "zinit" ]]; then
       # An install from before turbo mode doesn't have the turbo list yet: copy just that file
       # if the repo is next to the script, otherwise use the original list
-      if [ ! -f "${ZINIT_FILE}" ] && have_lock; then
+      if [[ ! -f "${ZINIT_FILE}" ]] && have_lock; then
         copy_support_file "zinit/${ZINIT_FILE:t}"
       fi
-      if [ ! -f "${ZINIT_FILE}" ] && [ "${ZINIT_TURBO}" = "true" ]; then
+      if [[ ! -f "${ZINIT_FILE}" ]] && [[ "${ZINIT_TURBO}" = "true" ]]; then
         verbose_message "${ZINIT_FILE} is missing, using the original plugin list (run --install again to add it)" "warn"
         ZINIT_FILE="${WORK_DIR}/files/zinit/zinit.zsh"
       fi
-      if [ -f "${ZINIT_FILE}" ]; then
+      timing_wrap_zinit_tasks
+      if [[ -f "${ZINIT_FILE}" ]]; then
         execute_from_file "${ZINIT_FILE}"
       fi
       # Your own plugins: files/zinit/local.zsh (and the profile and machine layers), same format, run after
@@ -2483,33 +2549,33 @@ check_zinit_config () {
 # Check rbenv
 
 check_rbenv_config () {
-  if [ "$INSTALL_RBENV" = "true" ]; then
+  if [[ "$INSTALL_RBENV" = "true" ]]; then
     verbose_message "Configuring rbenv"
-    if [ ! -d "${RBENV_HOME}" ]; then
+    if [[ ! -d "${RBENV_HOME}" ]]; then
       verbose_message "Installing rbenv"
       execute_command "git_clone https://github.com/rbenv/rbenv.git ${(q)RBENV_HOME} ${(q)RBENV_REF}"
       verbose_message "Installing rbenv ruby-build plugin"
       execute_command "git_clone https://github.com/rbenv/ruby-build.git ${(q)RBENV_HOME}/plugins/ruby-build ${(q)RUBY_BUILD_REF}"
     fi
-    if [ "${DO_ENV_SETUP}" = "true" ]; then
+    if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       verbose_message "Configuring rbenv environment"
       execute_command "export RBENV_ROOT=${(q)RBENV_HOME}"
       execute_command "export PATH=${(q)RBENV_HOME}/bin:${(q)PATH}"
       execute_command "cached_eval ${(q)RBENV_HOME}/bin/rbenv \"rbenv init - zsh\" \"command rbenv rehash*\""
       # Only look up the latest version when building, listing versions on every login is slow
-      if [ "${RUBY_VER}" = "" ] && [ "${DO_BUILD}" = "true" ]; then
+      if [[ "${RUBY_VER}" = "" ]] && [[ "${DO_BUILD}" = "true" ]]; then
         RUBY_VER=$( rbenv install --list 2> /dev/null | awk '{ print $1 }' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 )
       fi
-      if [ -n "${RUBY_VER}" ]; then
-        if [ "${DO_BUILD}" = "true" ] && [ ! -d "${RBENV_HOME}/versions/${RUBY_VER}" ]; then
+      if [[ -n "${RUBY_VER}" ]]; then
+        if [[ "${DO_BUILD}" = "true" ]] && [[ ! -d "${RBENV_HOME}/versions/${RUBY_VER}" ]]; then
           notice_message "Installing ruby version ${RUBY_VER} (this can take a while)"
           execute_command "rbenv install ${(q)RUBY_VER}" "show"
         fi
         # Only set a version that is installed. Don't use "rbenv local", it writes
         # .ruby-version into whatever directory the shell happens to start in
-        if [ -d "${RBENV_HOME}/versions/${RUBY_VER}" ]; then
+        if [[ -d "${RBENV_HOME}/versions/${RUBY_VER}" ]]; then
           RBENV_GLOBAL=$( rbenv global 2> /dev/null )
-          if [ ! "${RBENV_GLOBAL}" = "${RUBY_VER}" ]; then
+          if [[ ! "${RBENV_GLOBAL}" = "${RUBY_VER}" ]]; then
             verbose_message "Setting ruby global version to ${RUBY_VER}"
             execute_command "rbenv global ${(q)RUBY_VER}"
           fi
@@ -2522,13 +2588,13 @@ check_rbenv_config () {
 # Check pyenv
 
 check_pyenv_config () {
-  if [ "${INSTALL_PYENV}" = "true" ]; then
+  if [[ "${INSTALL_PYENV}" = "true" ]]; then
     verbose_message "Configuring pyenv"
-    if [ ! -d "${PYENV_HOME}" ]; then
+    if [[ ! -d "${PYENV_HOME}" ]]; then
       verbose_message "Installing pyenv"
       execute_command "git_clone https://github.com/pyenv/pyenv.git ${(q)PYENV_HOME} ${(q)PYENV_REF}"
     fi
-    if [ "${DO_ENV_SETUP}" = "true" ]; then
+    if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       verbose_message "Configuring pyenv environment"
       execute_command "export PYENV_ROOT=${(q)PYENV_HOME}"
       execute_command "export PATH=${(q)PYENV_HOME}/bin:${(q)PATH}"
@@ -2538,19 +2604,19 @@ check_pyenv_config () {
       CACHE_BLOCK_START=""
       CACHE_BLOCK_END=""
       # Only look up the latest version when building, listing versions on every login is slow
-      if [ "${PYTHON_VER}" = "" ] && [ "${DO_BUILD}" = "true" ]; then
+      if [[ "${PYTHON_VER}" = "" ]] && [[ "${DO_BUILD}" = "true" ]]; then
         PYTHON_VER=$( pyenv install --list 2> /dev/null | awk '{ print $1 }' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 )
       fi
-      if [ -n "${PYTHON_VER}" ]; then
-        if [ "${DO_BUILD}" = "true" ] && [ ! -d "${PYENV_HOME}/versions/${PYTHON_VER}" ]; then
+      if [[ -n "${PYTHON_VER}" ]]; then
+        if [[ "${DO_BUILD}" = "true" ]] && [[ ! -d "${PYENV_HOME}/versions/${PYTHON_VER}" ]]; then
           notice_message "Installing python version ${PYTHON_VER} (this can take a while)"
           execute_command "pyenv install ${(q)PYTHON_VER}" "show"
         fi
         # Only set a version that is installed. Don't use "pyenv local", it writes
         # .python-version into whatever directory the shell happens to start in
-        if [ -d "${PYENV_HOME}/versions/${PYTHON_VER}" ]; then
+        if [[ -d "${PYENV_HOME}/versions/${PYTHON_VER}" ]]; then
           PYENV_GLOBAL=$( pyenv global 2> /dev/null )
-          if [ ! "${PYENV_GLOBAL}" = "${PYTHON_VER}" ]; then
+          if [[ ! "${PYENV_GLOBAL}" = "${PYTHON_VER}" ]]; then
             verbose_message "Setting python global version to ${PYTHON_VER}"
             execute_command "pyenv global ${(q)PYTHON_VER}"
           fi
@@ -2567,17 +2633,17 @@ check_pyenv_config () {
 
 check_fnm_config () {
   verbose_message "Configuring fnm"
-  if [ ! -x "${FNM_HOME}/fnm" ] && (( ! $+commands[fnm] )) && have_lock; then
+  if [[ ! -x "${FNM_HOME}/fnm" ]] && (( ! $+commands[fnm] )) && have_lock; then
     notice_message "Installing fnm"
     execute_command "fetch_and_run ${(q)FNM_INSTALL_URL} ${(q)FNM_INSTALL_SHA256} --install-dir ${(q)FNM_HOME} --skip-shell" "show"
   fi
-  if [ "${DO_ENV_SETUP}" = "true" ]; then
-    if [ -d "${FNM_HOME}" ]; then
+  if [[ "${DO_ENV_SETUP}" = "true" ]]; then
+    if [[ -d "${FNM_HOME}" ]]; then
       execute_command "export PATH=${(q)FNM_HOME}:${(q)PATH}"
     fi
     # fnm env points at a directory made for each shell, so unlike the others it can't be cached
     execute_command "eval \"\$(fnm env --use-on-cd --shell zsh)\""
-    if [ -n "${FNM_NODE}" ] && [ "${DO_BUILD}" = "true" ]; then
+    if [[ -n "${FNM_NODE}" ]] && [[ "${DO_BUILD}" = "true" ]]; then
       execute_command "fnm install ${(q)FNM_NODE}" "show"
       execute_command "fnm default ${(q)FNM_NODE}"
     fi
@@ -2587,15 +2653,15 @@ check_fnm_config () {
 check_rustup_config () {
   verbose_message "Configuring rustup"
   RUSTUP_BIN_DIR="${CARGO_HOME:-${HOME_DIR}/.cargo}/bin"
-  if [ ! -x "${RUSTUP_BIN_DIR}/rustup" ] && (( ! $+commands[rustup] )) && have_lock; then
+  if [[ ! -x "${RUSTUP_BIN_DIR}/rustup" ]] && (( ! $+commands[rustup] )) && have_lock; then
     notice_message "Installing rustup"
     execute_command "fetch_and_run ${(q)RUSTUP_INSTALL_URL} ${(q)RUSTUP_INSTALL_SHA256} -y --no-modify-path" "show"
   fi
-  if [ "${DO_ENV_SETUP}" = "true" ]; then
-    if [ -d "${RUSTUP_BIN_DIR}" ]; then
+  if [[ "${DO_ENV_SETUP}" = "true" ]]; then
+    if [[ -d "${RUSTUP_BIN_DIR}" ]]; then
       execute_command "export PATH=${(q)RUSTUP_BIN_DIR}:${(q)PATH}"
     fi
-    if [ -n "${RUSTUP_TOOLCHAIN_WANTED}" ] && [ "${DO_BUILD}" = "true" ]; then
+    if [[ -n "${RUSTUP_TOOLCHAIN_WANTED}" ]] && [[ "${DO_BUILD}" = "true" ]]; then
       execute_command "rustup toolchain install ${(q)RUSTUP_TOOLCHAIN_WANTED}" "show"
       execute_command "rustup default ${(q)RUSTUP_TOOLCHAIN_WANTED}"
     fi
@@ -2604,15 +2670,15 @@ check_rustup_config () {
 
 check_uv_config () {
   verbose_message "Configuring uv"
-  if [ ! -x "${UV_BIN_DIR}/uv" ] && (( ! $+commands[uv] )) && have_lock; then
+  if [[ ! -x "${UV_BIN_DIR}/uv" ]] && (( ! $+commands[uv] )) && have_lock; then
     notice_message "Installing uv"
     execute_command "UV_NO_MODIFY_PATH=1 UV_INSTALL_DIR=${(q)UV_BIN_DIR} fetch_and_run ${(q)UV_INSTALL_URL} ${(q)UV_INSTALL_SHA256}" "show"
   fi
-  if [ "${DO_ENV_SETUP}" = "true" ]; then
-    if [ -d "${UV_BIN_DIR}" ]; then
+  if [[ "${DO_ENV_SETUP}" = "true" ]]; then
+    if [[ -d "${UV_BIN_DIR}" ]]; then
       execute_command "export PATH=${(q)UV_BIN_DIR}:${(q)PATH}"
     fi
-    if [ -n "${UV_PYTHON}" ] && [ "${DO_BUILD}" = "true" ]; then
+    if [[ -n "${UV_PYTHON}" ]] && [[ "${DO_BUILD}" = "true" ]]; then
       execute_command "uv python install ${(q)UV_PYTHON}" "show"
     fi
   fi
@@ -2620,16 +2686,16 @@ check_uv_config () {
 
 check_mise_config () {
   verbose_message "Configuring mise"
-  if [ ! -x "${MISE_BIN}" ] && (( ! $+commands[mise] )) && have_lock; then
+  if [[ ! -x "${MISE_BIN}" ]] && (( ! $+commands[mise] )) && have_lock; then
     notice_message "Installing mise"
     execute_command "MISE_INSTALL_PATH=${(q)MISE_BIN} fetch_and_run ${(q)MISE_INSTALL_URL} ${(q)MISE_INSTALL_SHA256}" "show"
   fi
-  if [ "${DO_ENV_SETUP}" = "true" ]; then
-    if [ -x "${MISE_BIN}" ]; then
+  if [[ "${DO_ENV_SETUP}" = "true" ]]; then
+    if [[ -x "${MISE_BIN}" ]]; then
       execute_command "export PATH=${(q)MISE_BIN:h}:${(q)PATH}"
       execute_command "cached_eval ${(q)MISE_BIN} \"${(q)MISE_BIN} activate zsh\""
     fi
-    if [ -n "${MISE_TOOLS}" ] && [ "${DO_BUILD}" = "true" ]; then
+    if [[ -n "${MISE_TOOLS}" ]] && [[ "${DO_BUILD}" = "true" ]]; then
       execute_command "mise use --global ${(j: :)${(q)${=MISE_TOOLS}}}" "show"
     fi
   fi
@@ -2641,13 +2707,13 @@ check_mise_config () {
 # exists when it loads, so this must run after the plugin lists (which is where compdef comes from)
 
 check_zoxide_config () {
-  [ "${INSTALL_ZOXIDE}" = "true" ] || return
+  [[ "${INSTALL_ZOXIDE}" = "true" ]] || return
   verbose_message "Configuring zoxide"
   if (( ! $+commands[zoxide] )); then
     verbose_message "zoxide is not installed (it is in the package lists, -P installs the packages)"
     return
   fi
-  if [ "${DO_ENV_SETUP}" = "true" ]; then
+  if [[ "${DO_ENV_SETUP}" = "true" ]]; then
     execute_command "cached_eval ${(q)commands[zoxide]} \"${(q)commands[zoxide]} init zsh\""
   fi
 }
@@ -2675,7 +2741,7 @@ register_zoxide_completion () {
 atuin_install () {
   if is_osx; then
     check_osx_package "atuin"
-  elif [ "${PKG_MANAGER}" = "pacman" ] || [ "${PKG_MANAGER}" = "nix" ]; then
+  elif [[ "${PKG_MANAGER}" = "pacman" ]] || [[ "${PKG_MANAGER}" = "nix" ]]; then
     check_linux_package "atuin"
   else
     notice_message "atuin has no package for ${PKG_MANAGER:-this system} in its documentation: install it with 'cargo install atuin --locked' (see https://docs.atuin.sh) and ussuri will set it up"
@@ -2692,32 +2758,32 @@ check_atuin_config () {
     verbose_message "atuin is not installed"
     return
   fi
-  if [ "${DO_ENV_SETUP}" = "true" ]; then
+  if [[ "${DO_ENV_SETUP}" = "true" ]]; then
     ATUIN_ARGS=""
-    if [ ! "${ATUIN_BIND_UP}" = "true" ]; then
+    if [[ ! "${ATUIN_BIND_UP}" = "true" ]]; then
       ATUIN_ARGS=" --disable-up-arrow"
     fi
     execute_command "cached_eval ${(q)commands[atuin]} \"${(q)commands[atuin]} init zsh${ATUIN_ARGS}\""
-    if [ "${DO_BUILD}" = "true" ] && [ "${ATUIN_IMPORT}" = "true" ] && have_lock && [ ! -e "${WORK_DIR}/atuin.imported" ]; then
+    if [[ "${DO_BUILD}" = "true" ]] && [[ "${ATUIN_IMPORT}" = "true" ]] && have_lock && [[ ! -e "${WORK_DIR}/atuin.imported" ]]; then
       execute_command "atuin import auto && touch ${(q)WORK_DIR}/atuin.imported" "show"
     fi
   fi
 }
 
 check_tools_config () {
-  if [ "${INSTALL_FNM}" = "true" ]; then
+  if [[ "${INSTALL_FNM}" = "true" ]]; then
     check_fnm_config
   fi
-  if [ "${INSTALL_RUSTUP}" = "true" ]; then
+  if [[ "${INSTALL_RUSTUP}" = "true" ]]; then
     check_rustup_config
   fi
-  if [ "${INSTALL_UV}" = "true" ]; then
+  if [[ "${INSTALL_UV}" = "true" ]]; then
     check_uv_config
   fi
-  if [ "${INSTALL_MISE}" = "true" ]; then
+  if [[ "${INSTALL_MISE}" = "true" ]]; then
     check_mise_config
   fi
-  if [ "${INSTALL_ATUIN}" = "true" ]; then
+  if [[ "${INSTALL_ATUIN}" = "true" ]]; then
     check_atuin_config
   fi
 }
@@ -2725,13 +2791,13 @@ check_tools_config () {
 # Check fonts config
 
 check_fonts_config () {
-  if [ "${INSTALL_FONTS}" = "true" ] && have_lock; then
+  if [[ "${INSTALL_FONTS}" = "true" ]] && have_lock; then
     verbose_message "Configuring fonts"
     if is_osx; then
       check_osx_package "font-fira-code-nerd-font" "cask"
     else
       if is_linux; then
-        if [ ! -d "${WORK_DIR}/nerd-fonts" ]; then
+        if [[ ! -d "${WORK_DIR}/nerd-fonts" ]]; then
           notice_message "Installing nerd fonts (this can take a while)"
           execute_command "git_clone https://github.com/ryanoasis/nerd-fonts.git ${(q)WORK_DIR}/nerd-fonts ${(q)NERD_FONTS_REF} 1" "show"
           execute_command "( cd ${(q)WORK_DIR}/nerd-fonts && ./install.sh )" "show"
@@ -2744,14 +2810,14 @@ check_fonts_config () {
 # Check oh-my-posh config
 
 check_posh_config () {
-  if [ "${INSTALL_POSH}" = "true" ]; then
+  if [[ "${INSTALL_POSH}" = "true" ]]; then
     verbose_message "Configuring oh-my-posh"
-    if [ ! -d "${POSH_HOME}" ] && have_lock; then
+    if [[ ! -d "${POSH_HOME}" ]] && have_lock; then
       notice_message    "Installing oh-my-posh"
       check_dir_exists  "${POSH_HOME}"
       execute_command   "fetch_and_run ${(q)POSH_INSTALL_URL} ${(q)POSH_INSTALL_SHA256} -d ${(q)POSH_HOME}" "show"
     fi
-    if [ "${DO_ENV_SETUP}" = "true" ]; then
+    if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       verbose_message   "Configuring oh-my-posh environment"
       execute_command   "export PATH=${(q)POSH_HOME}:${(q)PATH}"
       execute_command   "eval \"\$(oh-my-posh init zsh)\""
@@ -2762,17 +2828,17 @@ check_posh_config () {
 # Check oh-my-zsh config
 
 check_zosh_config () {
-  if [ "${INSTALL_OZSH}" = "true" ]; then
+  if [[ "${INSTALL_OZSH}" = "true" ]]; then
     verbose_message "Configuring oh-my-zsh"
-    if [ ! -d "${ZOSH_HOME}" ] && have_lock; then
+    if [[ ! -d "${ZOSH_HOME}" ]] && have_lock; then
       verbose_message "Installing oh-my-zsh"
       execute_command "git_clone https://github.com/ohmyzsh/ohmyzsh.git ${(q)ZOSH_HOME} ${(q)ZOSH_REF}"
     fi
-    if [ "${DO_ENV_SETUP}" = "true" ]; then
+    if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       verbose_message "Configuring oh-my-zsh environment"
       execute_command "source ${(q)ZOSH_HOME}/oh-my-zsh.sh"
     fi
-    if [ "${PLUGIN_MANAGER}" = "oh-my-zsh" ]; then
+    if [[ "${PLUGIN_MANAGER}" = "oh-my-zsh" ]]; then
       plugins=( git ansible aliases brew common-aliases copyfile copypath \
                 debian docker docker-compose docker-machine ubuntu ufw \
                 systemd sudo ssh-agent screen ruby rsync python pip perl \
@@ -2784,19 +2850,19 @@ check_zosh_config () {
 # Check Powerlevel10k config
 
 check_p10k_config () {
-  if [ "${INSTALL_P10K}" = "true" ]; then
+  if [[ "${INSTALL_P10K}" = "true" ]]; then
     verbose_message "Configuring p10k"
-    if [ "${INSTALL_ZINIT}" = "false" ]; then
-      if [ ! -d "${P10K_HOME}" ]; then
+    if [[ "${INSTALL_ZINIT}" = "false" ]]; then
+      if [[ ! -d "${P10K_HOME}" ]]; then
         verbose_message "Installing p10k"
         execute_command "git_clone https://github.com/romkatv/powerlevel10k.git ${(q)P10K_HOME} ${(q)P10K_REF} 1"
       fi
-      if [ "${DO_ENV_SETUP}" = "true" ]; then
+      if [[ "${DO_ENV_SETUP}" = "true" ]]; then
         verbose_message "Configuring p10k environment"
         execute_command "typeset -g POWERLEVEL9K_INSTANT_PROMPT=off"
-        if [ "${INSTALL_ZINIT}" = "false" ]; then
-          if [ ! -f "${P10K_INIT}" ]; then
-            if [ -f "${SOURCE_P10K_INIT}" ]; then
+        if [[ "${INSTALL_ZINIT}" = "false" ]]; then
+          if [[ ! -f "${P10K_INIT}" ]]; then
+            if [[ -f "${SOURCE_P10K_INIT}" ]]; then
               execute_command "cp ${(q)SOURCE_P10K_INIT} ${(q)P10K_INIT}"
             else
               execute_command "p10k configure"
@@ -2804,14 +2870,14 @@ check_p10k_config () {
           fi
           execute_command "source ${(q)P10K_INIT}"
           execute_command "apply_prompt_top_line" "show"
-          if [ -f "${P10K_THEME}" ]; then
+          if [[ -f "${P10K_THEME}" ]]; then
             execute_command "source ${(q)P10K_THEME}"
           fi
         fi
       fi
     else
-      if [ ! -f "${P10K_INIT}" ] && have_lock; then
-        if [ -f "${SOURCE_P10K_INIT}" ]; then
+      if [[ ! -f "${P10K_INIT}" ]] && have_lock; then
+        if [[ -f "${SOURCE_P10K_INIT}" ]]; then
           execute_command "cp ${(q)SOURCE_P10K_INIT} ${(q)P10K_INIT}"
         else
           execute_command "p10k configure"
@@ -2819,7 +2885,7 @@ check_p10k_config () {
       fi
       execute_command "source ${(q)P10K_INIT}"
       execute_command "apply_prompt_top_line" "show"
-      if [ -f "${P10K_THEME}" ]; then
+      if [[ -f "${P10K_THEME}" ]]; then
         execute_command "source ${(q)P10K_THEME}"
       fi
     fi
@@ -2829,14 +2895,14 @@ check_p10k_config () {
 # Set Linux defaults
 
 set_linux_defaults () {
-  if [ -n "${PKG_MANAGER}" ]; then
+  if [[ -n "${PKG_MANAGER}" ]]; then
     set_pkg_manager
     set_env "REQUIRED_FILE"  "${WORK_DIR}/files/packages/${PKG_LIST_NAME}"
     set_env "INSTALL_PKG"    "true"
     set_env "INSTALLED_FILE" "${WORK_DIR}/${PKG_MANAGER}.list"
   fi
-  if [ "${DO_INSTALL}" = "false" ]; then
-    if [ -n "${REQUIRED_FILE}" ] && [ ! -f "${REQUIRED_FILE}" ] && have_lock; then
+  if [[ "${DO_INSTALL}" = "false" ]]; then
+    if [[ -n "${REQUIRED_FILE}" ]] && [[ ! -f "${REQUIRED_FILE}" ]] && have_lock; then
       copy_support_files
     fi
   fi
@@ -2849,7 +2915,7 @@ write_installed_list () {
     execute_command "brew list 2> /dev/null | sort > ${(q)INSTALLED_FILE}"
     execute_command "brew tap 2> /dev/null | sort > ${(q)TAPS_FILE}"
   else
-    if is_linux && [ -n "${PKG_LIST_CMD}" ]; then
+    if is_linux && [[ -n "${PKG_LIST_CMD}" ]]; then
       execute_command "${PKG_LIST_CMD} > ${(q)INSTALLED_FILE}"
     fi
   fi
@@ -2861,18 +2927,18 @@ write_installed_list () {
 load_installed_list () {
   INSTALLED_LIST=()
   TAPS_LIST=()
-  if [ -f "${INSTALLED_FILE}" ]; then
+  if [[ -f "${INSTALLED_FILE}" ]]; then
     INSTALLED_LIST=( ${(f)"$(<${INSTALLED_FILE})"} )
   fi
   # Taps are shown by brew in lower case
-  if [ -n "${TAPS_FILE}" ] && [ -f "${TAPS_FILE}" ]; then
+  if [[ -n "${TAPS_FILE}" ]] && [[ -f "${TAPS_FILE}" ]]; then
     TAPS_LIST=( ${(L)${(f)"$(<${TAPS_FILE})"}} )
   fi
   INSTALLED_LOADED="true"
 }
 
 tap_installed () {
-  if [ ! "${INSTALLED_LOADED}" = "true" ]; then
+  if [[ ! "${INSTALLED_LOADED}" = "true" ]]; then
     load_installed_list
   fi
   (( ${TAPS_LIST[(Ie)${(L)1}]} ))
@@ -2881,7 +2947,7 @@ tap_installed () {
 # Compares the short name, as brew list doesn't include the tap prefix
 
 package_installed () {
-  if [ ! "${INSTALLED_LOADED}" = "true" ]; then
+  if [[ ! "${INSTALLED_LOADED}" = "true" ]]; then
     load_installed_list
   fi
   (( ${INSTALLED_LIST[(Ie)${1:t}]} ))
@@ -2891,11 +2957,11 @@ update_package_list () {
   if have_lock; then
     # (Nm+2) matches a list last modified more than 2 days ago
     INSTALLED_OLD=( ${INSTALLED_FILE}(Nm+2) )
-    if [ ! -f "${INSTALLED_FILE}" ] || (( ${#INSTALLED_OLD} )) || [ "${DO_UPDATE_LIST}" = "true" ]; then
+    if [[ ! -f "${INSTALLED_FILE}" ]] || (( ${#INSTALLED_OLD} )) || [[ "${DO_UPDATE_LIST}" = "true" ]]; then
       write_installed_list
       DO_UPDATE_LIST="false"
       INSTALLED_LOADED="false"
-    elif is_osx && [ ! -f "${TAPS_FILE}" ]; then
+    elif is_osx && [[ ! -f "${TAPS_FILE}" ]]; then
       # An install from before taps were checked has no list of them yet: write just that
       execute_command "brew tap 2> /dev/null | sort > ${(q)TAPS_FILE}"
       INSTALLED_LOADED="false"
@@ -2913,12 +2979,12 @@ package_list_changed () {
   (( ${#PACKAGE_LAYERS} )) || return 1
   # Every layer is in the checksum, so adding a package to your own list is noticed, and so is switching
   # to a profile (added only when there is one, so the checksums of existing installs don't change)
-  PACKAGE_SUM=$( { cat "${PACKAGE_LAYERS[@]}" 2> /dev/null; [ -n "${PROFILE}" ] && print -r -- "profile:${PROFILE}"; } | cksum )
+  PACKAGE_SUM=$( { cat "${PACKAGE_LAYERS[@]}" 2> /dev/null; [[ -n "${PROFILE}" ]] && print -r -- "profile:${PROFILE}"; } | cksum )
   PACKAGE_OLD=""
-  if [ -f "${PACKAGE_STAMP}" ]; then
+  if [[ -f "${PACKAGE_STAMP}" ]]; then
     PACKAGE_OLD=$(<"${PACKAGE_STAMP}")
   fi
-  if [ "${PACKAGE_EXPLICIT}" = "true" ] || [ "${DO_FORCE}" = "true" ] || [ ! "${PACKAGE_SUM}" = "${PACKAGE_OLD}" ]; then
+  if [[ "${PACKAGE_EXPLICIT}" = "true" ]] || [[ "${DO_FORCE}" = "true" ]] || [[ ! "${PACKAGE_SUM}" = "${PACKAGE_OLD}" ]]; then
     return 0
   fi
   return 1
@@ -2959,7 +3025,7 @@ process_package_list () {
 check_linux_defaults () {
   have_lock || return
   # Unlike on OS X these are not applied on every login unless asked for (--defaults, or DO_GNOME_DEFAULTS=true)
-  if [ ! "${DEFAULTS_EXPLICIT}" = "true" ] && [ ! "${DO_GNOME_DEFAULTS}" = "true" ]; then
+  if [[ ! "${DEFAULTS_EXPLICIT}" = "true" ]] && [[ ! "${DO_GNOME_DEFAULTS}" = "true" ]]; then
     return
   fi
   if ! linux_defaults_available; then
@@ -2980,15 +3046,15 @@ check_linux_defaults () {
 # Restart what a settings change needs restarting to show (flags are set as settings change)
 
 restart_osx_services () {
-  if [ "${RESTART_FINDER}" = "true" ]; then
+  if [[ "${RESTART_FINDER}" = "true" ]]; then
     verbose_message "Finder" "restart"
     execute_command "killall Finder"
   fi
-  if [ "${RESTART_UISERVER}" = "true" ]; then
+  if [[ "${RESTART_UISERVER}" = "true" ]]; then
     verbose_message "SystemUIServer" "restart"
     execute_command "killall SystemUIServer"
   fi
-  if [ "${RESTART_DOCK}" = "true" ]; then
+  if [[ "${RESTART_DOCK}" = "true" ]]; then
     verbose_message "Dock" "restart"
     execute_command "killall Dock"
   fi
@@ -2997,7 +3063,7 @@ restart_osx_services () {
 defaults_due () {
   DEFAULTS_STAMP="${WORK_DIR}/defaults.stamp"
   DEFAULTS_OLD=( ${DEFAULTS_STAMP}(Nm+${DEFAULTS_MAX_AGE}) )
-  [ "${DEFAULTS_EXPLICIT}" = "true" ] || [ "${DO_FORCE}" = "true" ] || [ ! -f "${DEFAULTS_STAMP}" ] || [ "${SCRIPT_FILE}" -nt "${DEFAULTS_STAMP}" ] || (( ${#DEFAULTS_OLD} ))
+  [[ "${DEFAULTS_EXPLICIT}" = "true" ]] || [[ "${DO_FORCE}" = "true" ]] || [[ ! -f "${DEFAULTS_STAMP}" ]] || [[ "${SCRIPT_FILE}" -nt "${DEFAULTS_STAMP}" ]] || (( ${#DEFAULTS_OLD} ))
 }
 
 check_osx_defaults () {
@@ -3022,10 +3088,10 @@ check_linux_package () {
   have_lock || return
   verbose_message "Configuring Linux package \"${PACKAGE}\""
   is_linux || return
-  [ "${INSTALL_PKG}" = "true" ] || return
-  [ -n "${PKG_INSTALL}" ] || return
+  [[ "${INSTALL_PKG}" = "true" ]] || return
+  [[ -n "${PKG_INSTALL}" ]] || return
   package_installed "${PACKAGE}" && return
-  if [ -n "${PKG_PREPARE}" ] && [ ! "${PKG_PREPARED}" = "true" ]; then
+  if [[ -n "${PKG_PREPARE}" ]] && [[ ! "${PKG_PREPARED}" = "true" ]]; then
     notice_message "Refreshing the ${PKG_MANAGER} package index"
     execute_command "${PKG_SUDO}${PKG_PREPARE}" "show"
     PKG_PREPARED="true"
@@ -3042,13 +3108,13 @@ check_osx_package () {
   local PACKAGE_TYPE="$2"
   have_lock || return
   verbose_message "Configuring OS X package \"${PACKAGE}\""
-  [ "${INSTALL_BREW}" = "true" ] || return
-  if [ ! -f "${INSTALLED_FILE}" ]; then
+  [[ "${INSTALL_BREW}" = "true" ]] || return
+  if [[ ! -f "${INSTALLED_FILE}" ]]; then
     update_package_list
   fi
   package_installed "${PACKAGE}" && return
   notice_message "Installing package ${PACKAGE}"
-  if [ "${PACKAGE_TYPE}" = "cask" ]; then
+  if [[ "${PACKAGE_TYPE}" = "cask" ]]; then
     execute_command "brew install --cask ${(q)PACKAGE}" "show"
   else
     execute_command "brew install ${(q)PACKAGE}" "show"
@@ -3062,8 +3128,8 @@ check_osx_tap () {
   PACKAGE="$1"
   have_lock || return
   verbose_message "Configuring brew tap \"${PACKAGE}\""
-  [ "${INSTALL_BREW}" = "true" ] || return
-  if [ ! -f "${TAPS_FILE}" ]; then
+  [[ "${INSTALL_BREW}" = "true" ]] || return
+  if [[ ! -f "${TAPS_FILE}" ]]; then
     update_package_list
   fi
   tap_installed "${PACKAGE}" && return
@@ -3082,7 +3148,7 @@ check_osx_cask () {
 
 check_linux_packages () {
   have_lock || return
-  [ "${INSTALL_PKG}" = "true" ] || return
+  [[ "${INSTALL_PKG}" = "true" ]] || return
   process_package_list "check_linux_package"
 }
 
@@ -3092,7 +3158,7 @@ find_brew () {
   BREW_BIN=""
   BREW_BASE=""
   for BREW_FILE in /opt/homebrew/bin/brew /usr/local/homebrew/bin/brew /usr/local/bin/brew; do
-    if [ -x "${BREW_FILE}" ]; then
+    if [[ -x "${BREW_FILE}" ]]; then
       BREW_BIN="${BREW_FILE}"
       BREW_BASE="${BREW_BIN:h:h}"
       break
@@ -3104,9 +3170,9 @@ find_brew () {
 
 setup_brew_env () {
   find_brew
-  if [ -n "${BREW_BIN}" ]; then
+  if [[ -n "${BREW_BIN}" ]]; then
     execute_command "export PATH=${(q)BREW_BASE}/bin:${(q)BREW_BASE}/sbin:${(q)PATH}"
-    if [ "${DO_ENV_SETUP}" = "true" ]; then
+    if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       verbose_message "Configuring brew environment"
       execute_command "cached_eval ${(q)BREW_BIN} \"${(q)BREW_BIN} shellenv\""
     fi
@@ -3116,23 +3182,23 @@ setup_brew_env () {
 # Check OSX Applications
 
 check_osx_packages () {
-  if [ "${INSTALL_BREW}" = "true" ] && have_lock; then
+  if [[ "${INSTALL_BREW}" = "true" ]] && have_lock; then
     verbose_message "Configuring brew"
     BREW_TEST="${commands[brew]}"
-    if [ -z "${BREW_TEST}" ]; then
+    if [[ -z "${BREW_TEST}" ]]; then
       find_brew
-      if [ -z "${BREW_BIN}" ]; then
+      if [[ -z "${BREW_BIN}" ]]; then
         notice_message "Installing Homebrew"
         # NONINTERACTIVE=1 stops the installer waiting for RETURN. It still needs sudo to work
         BREW_INSTALL_ENV=""
-        if [ "${ASSUME_YES}" = "true" ]; then
+        if [[ "${ASSUME_YES}" = "true" ]]; then
           BREW_INSTALL_ENV="NONINTERACTIVE=1 "
         fi
         execute_command "${BREW_INSTALL_ENV}fetch_and_run ${(q)BREW_INSTALL_URL} ${(q)BREW_INSTALL_SHA256}" "show"
       fi
       setup_brew_env
     else
-      if [ "${DO_ENV_SETUP}" = "true" ]; then
+      if [[ "${DO_ENV_SETUP}" = "true" ]]; then
         verbose_message "Configuring brew environment"
         execute_command "cached_eval ${(q)BREW_TEST} \"${(q)BREW_TEST} shellenv\""
       fi
@@ -3179,11 +3245,11 @@ compare_versions () {
   fi
   LOCAL_VERSION="${SCRIPT_VERSION//./}"
   REMOTE_NUMBER="${REMOTE_VERSION//./}"
-  if [ "${LOCAL_VERSION}" -lt "${REMOTE_NUMBER}" ]; then
+  if [[ "${LOCAL_VERSION}" -lt "${REMOTE_NUMBER}" ]]; then
     VERSION_STATE="older"
     handle_output "Local version is older than remote version" "info"
   else
-    if [ "${LOCAL_VERSION}" -gt "${REMOTE_NUMBER}" ]; then
+    if [[ "${LOCAL_VERSION}" -gt "${REMOTE_NUMBER}" ]]; then
       VERSION_STATE="newer"
       handle_output "Local version is newer than remote version" "info"
     else
@@ -3212,10 +3278,10 @@ fetch_update_archive () {
   UPDATE_SRC=""
   UPDATE_ARCHIVE="$1/release.tgz"
   fetch_url "${UPDATE_URL}" > "${UPDATE_ARCHIVE}" || return 1
-  [ -s "${UPDATE_ARCHIVE}" ] || return 1
-  if [ -n "${UPDATE_SHA256}" ]; then
+  [[ -s "${UPDATE_ARCHIVE}" ]] || return 1
+  if [[ -n "${UPDATE_SHA256}" ]]; then
     UPDATE_SUM=$( sha256_of "${UPDATE_ARCHIVE}" )
-    if [ ! "${UPDATE_SUM}" = "${(L)UPDATE_SHA256}" ]; then
+    if [[ ! "${UPDATE_SUM}" = "${(L)UPDATE_SHA256}" ]]; then
       echo "Warning:        Checksum mismatch for ${UPDATE_URL} (expected ${UPDATE_SHA256}, got ${UPDATE_SUM}), not updating"
       return 2
     fi
@@ -3226,7 +3292,7 @@ fetch_update_archive () {
   fi
   mkdir "$1/src" && tar -xzf "${UPDATE_ARCHIVE}" -C "$1/src" 2> /dev/null || return 1
   UPDATE_TOPS=( $1/src/*(/N) )
-  (( ${#UPDATE_TOPS} == 1 )) && [ -f "${UPDATE_TOPS[1]}/ussuri.zsh" ] || return 1
+  (( ${#UPDATE_TOPS} == 1 )) && [[ -f "${UPDATE_TOPS[1]}/ussuri.zsh" ]] || return 1
   UPDATE_SRC="${UPDATE_TOPS[1]}"
 }
 
@@ -3243,7 +3309,7 @@ sync_support_files () {
   for SYNC_FILE in ${SYNC_SRC}/**/*(D.N); do
     SYNC_REL="${SYNC_FILE#${SYNC_SRC}/}"
     SYNC_TARGET="${WORK_DIR}/files/${SYNC_REL}"
-    if [ -f "${SYNC_TARGET}" ]; then
+    if [[ -f "${SYNC_TARGET}" ]]; then
       cmp -s "${SYNC_FILE}" "${SYNC_TARGET}" && continue
       [[ "${SYNC_FILE:t}" == local.* ]] && continue
       check_dir_exists "${SYNC_BACKUP}/${SYNC_REL:h}"
@@ -3255,7 +3321,7 @@ sync_support_files () {
     check_dir_exists "${SYNC_TARGET:h}"
     execute_command "cp ${(q)SYNC_FILE} ${(q)SYNC_TARGET}"
   done
-  if (( SYNC_NEW + SYNC_CHANGED )) && [ ! "${DO_DRYRUN}" = "true" ]; then
+  if (( SYNC_NEW + SYNC_CHANGED )) && [[ ! "${DO_DRYRUN}" = "true" ]]; then
     notice_message "Updated $(( SYNC_NEW + SYNC_CHANGED )) supporting files (${SYNC_NEW} new, ${SYNC_CHANGED} replaced${${SYNC_CHANGED#0}:+, the old copies are in ${SYNC_BACKUP}})"
   fi
 }
@@ -3273,7 +3339,7 @@ update_script () {
   set_env "SCRIPT_URL" "https://raw.githubusercontent.com/lateralblast/ussuri/refs/heads/main/ussuri.zsh"
   set_env "UPDATE_URL" "https://github.com/lateralblast/ussuri/archive/refs/heads/main.tar.gz"
   compare_versions "${SCRIPT_URL}" "^# Version"
-  [ "${VERSION_STATE}" = "older" ] || return 0
+  [[ "${VERSION_STATE}" = "older" ]] || return 0
   UPDATE_DIR=$( mktemp -d ) || return 1
   UPDATE_NEW="${UPDATE_DIR}/ussuri.zsh"
   fetch_update_archive "${UPDATE_DIR}"
@@ -3294,7 +3360,7 @@ update_script () {
   # The script itself is checked on its own too, whichever way it was fetched: UPDATE_SHA256 pins the whole archive,
   # SCRIPT_SHA256 pins just the script, and its checksum is always shown so it can be compared with a published one
   UPDATE_NEW_SUM=$( sha256_of "${UPDATE_NEW}" )
-  if [ -n "${SCRIPT_SHA256}" ] && [ ! "${UPDATE_NEW_SUM}" = "${(L)SCRIPT_SHA256}" ]; then
+  if [[ -n "${SCRIPT_SHA256}" ]] && [[ ! "${UPDATE_NEW_SUM}" = "${(L)SCRIPT_SHA256}" ]]; then
     echo "Warning:        Checksum mismatch for the downloaded script (expected ${SCRIPT_SHA256}, got ${UPDATE_NEW_SUM:-none}), not updating"
     rm -rf "${UPDATE_DIR:?}"
     return 1
@@ -3303,8 +3369,8 @@ update_script () {
     verbose_message "${SCRIPT_FILE} to version ${REMOTE_VERSION} (sha256 ${UPDATE_NEW_SUM})" "replace"
     check_dir_exists "${WORK_DIR}"
     execute_command "cp ${(q)SCRIPT_FILE} ${(q)WORK_DIR}/${SCRIPT_NAME}.zsh.${DATE_SUFFIX} && cp ${(q)UPDATE_NEW} ${(q)SCRIPT_FILE}.new && mv ${(q)SCRIPT_FILE}.new ${(q)SCRIPT_FILE}"
-    [ "${DO_DRYRUN}" = "true" ] || notice_message "Updated ${SCRIPT_FILE} to version ${REMOTE_VERSION} (script sha256 ${UPDATE_NEW_SUM})"
-    if [ -n "${UPDATE_SRC}" ] && [ -d "${UPDATE_SRC}/files" ]; then
+    [[ "${DO_DRYRUN}" = "true" ]] || notice_message "Updated ${SCRIPT_FILE} to version ${REMOTE_VERSION} (script sha256 ${UPDATE_NEW_SUM})"
+    if [[ -n "${UPDATE_SRC}" ]] && [[ -d "${UPDATE_SRC}/files" ]]; then
       sync_support_files "${UPDATE_SRC}/files"
     fi
   else
@@ -3325,11 +3391,11 @@ update_script () {
 
 dotfiles_layers () {
   DOT_LAYERS=( "${DOTFILES_DIR}/common" )
-  if [ -n "${DOTFILES_PROFILE}" ]; then
+  if [[ -n "${DOTFILES_PROFILE}" ]]; then
     DOT_LAYERS+=( "${DOTFILES_DIR}/profiles/${DOTFILES_PROFILE}" )
   fi
   # Without a host name this would be the hosts directory itself, and so every machine's files
-  if [ -n "${DOTFILES_HOST}" ]; then
+  if [[ -n "${DOTFILES_HOST}" ]]; then
     DOT_LAYERS+=( "${DOTFILES_DIR}/hosts/${DOTFILES_HOST}" )
   fi
 }
@@ -3341,7 +3407,7 @@ dotfiles_map () {
   DOT_MAP=()
   dotfiles_layers
   for DOT_LAYER in "${DOT_LAYERS[@]}"; do
-    if [ -d "${DOT_LAYER}" ]; then
+    if [[ -d "${DOT_LAYER}" ]]; then
       for DOT_FILE in ${DOT_LAYER}/**/*(DN^/); do
         if [[ "${DOT_FILE:t}" != (.DS_Store|.gitkeep) ]]; then
           DOT_MAP[${DOT_FILE#${DOT_LAYER}/}]="${DOT_FILE}"
@@ -3356,15 +3422,15 @@ dotfiles_map () {
 
 dotfile_state () {
   DOT_STATE="missing"
-  if [ -L "$1" ]; then
+  if [[ -L "$1" ]]; then
     zmodload -F zsh/stat b:zstat 2> /dev/null
     zstat -A DOT_LINK +link -- "$1"
-    if [ "${DOT_LINK[1]}" = "$2" ]; then
+    if [[ "${DOT_LINK[1]}" = "$2" ]]; then
       DOT_STATE="ok"
     else
       DOT_STATE="wrong"
     fi
-  elif [ -e "$1" ]; then
+  elif [[ -e "$1" ]]; then
     DOT_STATE="conflict"
   fi
 }
@@ -3394,32 +3460,32 @@ dotfiles_repo_sync () {
     return 1
   fi
   [[ "${INTERACTIVE_SYNC}" == true ]] || env+=" GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND=${(q)GIT_SSH_COMMAND:-ssh -o BatchMode=yes}"
-  [ -d "${dir}" ] && entries=( ${dir}/*(D) )
-  if [ ! -e "${dir}" ] || { [ -d "${dir}" ] && (( ! ${#entries} )); }; then
+  [[ -d "${dir}" ]] && entries=( ${dir}/*(D) )
+  if [[ ! -e "${dir}" ]] || { [[ -d "${dir}" ]] && (( ! ${#entries} )); }; then
     execute_command "${env} git_clone ${(q)url} ${(q)dir} ${(q)ref}" || return 1
-    [ -d "${dir}/.git" ] || [ "${DO_DRYRUN}" = "true" ] || { print -r -- "could not clone ${url}"; return 1; }
-    print -r -- "$( [ "${DO_DRYRUN}" = "true" ] && print -rn "would clone" || print -rn "cloned" ) ${url}${ref:+ at ${ref}}"
+    [[ -d "${dir}/.git" ]] || [[ "${DO_DRYRUN}" = "true" ]] || { print -r -- "could not clone ${url}"; return 1; }
+    print -r -- "$( [[ "${DO_DRYRUN}" = "true" ]] && print -rn "would clone" || print -rn "cloned" ) ${url}${ref:+ at ${ref}}"
     return 0
   fi
-  if [ ! -d "${dir}/.git" ]; then
+  if [[ ! -d "${dir}/.git" ]]; then
     print -r -- "${dir} is not a clone, leaving it alone (move it aside, or point DOTFILES_DIR elsewhere)"
     return 1
   fi
   remote=$( git -C "${dir}" remote get-url origin 2> /dev/null )
-  if [ ! "${remote}" = "${url}" ]; then
+  if [[ ! "${remote}" = "${url}" ]]; then
     print -r -- "${dir} is a clone of ${remote:-something else}, not ${url}: leaving it alone"
     return 1
   fi
-  if [ -n "$( git -C "${dir}" status --porcelain 2> /dev/null )" ]; then
+  if [[ -n "$( git -C "${dir}" status --porcelain 2> /dev/null )" ]]; then
     print -r -- "${dir} has changes that are not committed, not pulling over them"
     return 1
   fi
-  if [ -n "${ref}" ]; then
+  if [[ -n "${ref}" ]]; then
     execute_command "${env} git -C ${(q)dir} fetch --quiet --tags origin && git -C ${(q)dir} checkout --quiet ${(q)ref}" || { print -r -- "could not fetch and check out ${ref}"; return 1; }
-    print -r -- "$( [ "${DO_DRYRUN}" = "true" ] && print -rn "would be" || print -rn "now" ) at ${ref}"
+    print -r -- "$( [[ "${DO_DRYRUN}" = "true" ]] && print -rn "would be" || print -rn "now" ) at ${ref}"
   else
     execute_command "${env} git -C ${(q)dir} fetch --quiet origin && git -C ${(q)dir} merge --ff-only --quiet FETCH_HEAD" || { print -r -- "could not fast forward (the local copy has commits of its own, or the fetch failed)"; return 1; }
-    print -r -- "$( [ "${DO_DRYRUN}" = "true" ] && print -rn "would be up to date" || print -rn "up to date" ) with ${url}"
+    print -r -- "$( [[ "${DO_DRYRUN}" = "true" ]] && print -rn "would be up to date" || print -rn "up to date" ) with ${url}"
   fi
 }
 
@@ -3432,7 +3498,7 @@ dotfiles_repo_sync_background () {
 }
 
 check_dotfiles_sync () {
-  [ -n "${DOTFILES_REPO}" ] || return 0
+  [[ -n "${DOTFILES_REPO}" ]] || return 0
   have_lock || return 0
   if (( ${#ARGS} )); then
     return 0
@@ -3446,7 +3512,7 @@ check_dotfiles_sync () {
 }
 
 check_dotfiles_config () {
-  if [ -n "${DOTFILES_REPO}" ] && (( ${#ARGS} )); then
+  if [[ -n "${DOTFILES_REPO}" ]] && (( ${#ARGS} )); then
     local synced
     synced=$( INTERACTIVE_SYNC=true dotfiles_repo_sync 2>&1 ) && notice_message "dotfiles: ${synced}" || print -u2 -r -- "Warning:        dotfiles: ${synced}"
   fi
@@ -3463,11 +3529,11 @@ check_dotfiles_config () {
     DOT_SOURCE="${DOT_MAP[${DOT_REL}]}"
     DOT_TARGET="${HOME_DIR}/${DOT_REL}"
     dotfile_state "${DOT_TARGET}" "${DOT_SOURCE}"
-    if [ "${DOT_STATE}" = "ok" ]; then
+    if [[ "${DOT_STATE}" = "ok" ]]; then
       continue
     fi
     check_dir_exists "${DOT_TARGET:h}"
-    if [ ! "${DOT_STATE}" = "missing" ]; then
+    if [[ ! "${DOT_STATE}" = "missing" ]]; then
       check_dir_exists "${DOT_BACKUP}/${DOT_REL:h}"
       verbose_message "${DOT_TARGET} to ${DOT_BACKUP}/${DOT_REL}" "save"
       execute_command "mv ${(q)DOT_TARGET} ${(q)DOT_BACKUP}/${(q)DOT_REL}"
@@ -3477,7 +3543,7 @@ check_dotfiles_config () {
     execute_command "ln -s ${(q)DOT_SOURCE} ${(q)DOT_TARGET}"
     DOT_LINKED=$(( DOT_LINKED + 1 ))
   done
-  if (( DOT_LINKED )) && [ ! "${DO_DRYRUN}" = "true" ]; then
+  if (( DOT_LINKED )) && [[ ! "${DO_DRYRUN}" = "true" ]]; then
     notice_message "Linked ${DOT_LINKED} dotfiles${${DOT_BACKED_UP:#0}:+, ${DOT_BACKED_UP} replaced (kept in ${DOT_BACKUP})}"
   fi
 }
@@ -3490,7 +3556,7 @@ dotfiles_unlink () {
   DOT_REMOVED=0
   for DOT_REL in ${(ko)DOT_MAP}; do
     DOT_TARGET="${HOME_DIR}/${DOT_REL}"
-    if [ -L "${DOT_TARGET}" ]; then
+    if [[ -L "${DOT_TARGET}" ]]; then
       zmodload -F zsh/stat b:zstat 2> /dev/null
       zstat -A DOT_LINK +link -- "${DOT_TARGET}"
       if [[ "${DOT_LINK[1]}" == "${DOTFILES_DIR}/"* ]]; then
@@ -3499,7 +3565,7 @@ dotfiles_unlink () {
       fi
     fi
   done
-  if [ ! "${DO_DRYRUN}" = "true" ]; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]]; then
     notice_message "Removed ${DOT_REMOVED} dotfile links (backups of anything they replaced are in ${WORK_DIR}/dotfile-backups)"
   fi
 }
@@ -3516,7 +3582,7 @@ list_backups () {
 # Does a file look like this script? (as opposed to a .zshrc you wrote yourself)
 
 is_ussuri_script () {
-  [ -r "$1" ] || return 1
+  [[ -r "$1" ]] || return 1
   while IFS= read -r SCRIPT_LINE; do
     if [[ "${SCRIPT_LINE}" == 'SCRIPT_NAME="ussuri"'* ]]; then
       return 0
@@ -3531,7 +3597,7 @@ is_ussuri_script () {
 backup_zshrc () {
   BACKUP_FILE="${WORK_DIR}/.zshrc.${DATE_SUFFIX}"
   BACKUP_N=0
-  while [ -e "${BACKUP_FILE}" ]; do
+  while [[ -e "${BACKUP_FILE}" ]]; do
     BACKUP_N=$(( BACKUP_N + 1 ))
     BACKUP_FILE="${WORK_DIR}/.zshrc.${DATE_SUFFIX}_${BACKUP_N}"
   done
@@ -3577,18 +3643,18 @@ resolve_backup () {
   list_backups
   if [[ "$1" == <-> ]]; then
     BACKUP_CHOSEN="${BACKUPS[$1]}"
-  elif [ -f "$1" ]; then
+  elif [[ -f "$1" ]]; then
     BACKUP_CHOSEN="$1"
-  elif [ -f "${WORK_DIR}/$1" ]; then
+  elif [[ -f "${WORK_DIR}/$1" ]]; then
     BACKUP_CHOSEN="${WORK_DIR}/$1"
   fi
-  [ -n "${BACKUP_CHOSEN}" ]
+  [[ -n "${BACKUP_CHOSEN}" ]]
 }
 
 # Put a file back as ~/.zshrc, keeping the current one as a backup first so this can be undone
 
 restore_zshrc () {
-  if [ -f "${HOME_DIR}/.zshrc" ]; then
+  if [[ -f "${HOME_DIR}/.zshrc" ]]; then
     if [[ "$(<"${HOME_DIR}/.zshrc")" == "$(<"$1")" ]]; then
       print -r -- "${HOME_DIR}/.zshrc is already the same as ${1:t}"
       return 0
@@ -3596,7 +3662,7 @@ restore_zshrc () {
     backup_zshrc
   fi
   execute_command "cp ${(q)1} ${(q)HOME_DIR}/.zshrc"
-  if [ "${DO_DRYRUN}" = "true" ]; then
+  if [[ "${DO_DRYRUN}" = "true" ]]; then
     print -r -- "Would restore ${1:t} as ${HOME_DIR}/.zshrc"
   else
     print -r -- "Restored ${1:t} as ${HOME_DIR}/.zshrc (the one it replaced is in ${WORK_DIR})"
@@ -3641,17 +3707,17 @@ do_rollback_update () {
     print -r -- "${old:t} is not a script that parses, not restoring it"
     return 1
   fi
-  if [ -f "${SCRIPT_FILE}" ] && cmp -s "${old}" "${SCRIPT_FILE}"; then
+  if [[ -f "${SCRIPT_FILE}" ]] && cmp -s "${old}" "${SCRIPT_FILE}"; then
     print -r -- "${SCRIPT_FILE} is already the same as ${old:t}"
     return 0
   fi
   stamp="${old:t}"
   stamp="${stamp#${SCRIPT_NAME}.zsh.}"
   saved="${WORK_DIR}/${SCRIPT_NAME}.zsh.${DATE_SUFFIX}"
-  [ -e "${saved}" ] && saved="${saved}_1"
+  [[ -e "${saved}" ]] && saved="${saved}_1"
   execute_command "cp ${(q)SCRIPT_FILE} ${(q)saved} && cp ${(q)old} ${(q)SCRIPT_FILE}.new && mv ${(q)SCRIPT_FILE}.new ${(q)SCRIPT_FILE}"
   dir="${WORK_DIR}/files.bak/${stamp}"
-  if [ -d "${dir}" ]; then
+  if [[ -d "${dir}" ]]; then
     for rel in ${dir}/**/*(DN.); do
       rel="${rel#${dir}/}"
       check_dir_exists "${WORK_DIR}/files/${rel:h}"
@@ -3659,7 +3725,7 @@ do_rollback_update () {
       replaced=$(( replaced + 1 ))
     done
   fi
-  if [ "${DO_DRYRUN}" = "true" ]; then
+  if [[ "${DO_DRYRUN}" = "true" ]]; then
     print -r -- "Would restore ${old:t} as ${SCRIPT_FILE} and put back ${replaced} supporting files from files.bak/${stamp}"
   else
     print -r -- "Restored ${old:t} as ${SCRIPT_FILE} and put back ${replaced} supporting files (the script it replaced is in ${saved})"
@@ -3670,7 +3736,7 @@ do_rollback_update () {
 # If you had none, ussuri's is moved aside. ~/.ussuri (components, backups) is left alone
 
 do_uninstall () {
-  if [ ! -f "${HOME_DIR}/.zshrc" ] || ! is_ussuri_script "${HOME_DIR}/.zshrc"; then
+  if [[ ! -f "${HOME_DIR}/.zshrc" ]] || ! is_ussuri_script "${HOME_DIR}/.zshrc"; then
     print -r -- "${HOME_DIR}/.zshrc is not ussuri, nothing to uninstall"
     return 0
   fi
@@ -3682,12 +3748,12 @@ do_uninstall () {
       break
     fi
   done
-  if [ -n "${UNINSTALL_BACKUP}" ]; then
+  if [[ -n "${UNINSTALL_BACKUP}" ]]; then
     restore_zshrc "${UNINSTALL_BACKUP}"
   else
     backup_zshrc
     execute_command "rm ${(q)HOME_DIR}/.zshrc"
-    if [ "${DO_DRYRUN}" = "true" ]; then
+    if [[ "${DO_DRYRUN}" = "true" ]]; then
       print -r -- "Would move ${HOME_DIR}/.zshrc aside (there is no .zshrc from before ussuri to restore)"
     else
       print -r -- "Moved ${HOME_DIR}/.zshrc aside (there is no .zshrc from before ussuri to restore)"
@@ -3723,11 +3789,11 @@ bundle_stage () {
   for rel in "${BUNDLE_FILES[@]}"; do
     mkdir -p "${stage}/${rel:h}" && cp -p "${WORK_DIR}/${rel}" "${stage}/${rel}" || return 1
   done
-  if [ -f "${P10K_INIT}" ]; then
+  if [[ -f "${P10K_INIT}" ]]; then
     mkdir -p "${stage}/HOME" && cp -p "${P10K_INIT}" "${stage}/HOME/.p10k.zsh" || return 1
   fi
   local count=${#BUNDLE_FILES}
-  [ -f "${P10K_INIT}" ] && count=$(( count + 1 ))
+  [[ -f "${P10K_INIT}" ]] && count=$(( count + 1 ))
   {
     print -r -- "ussuri-export 1"
     print -r -- "version ${SCRIPT_VERSION}"
@@ -3743,17 +3809,17 @@ export_bundle () {
   local -a tops
   [[ "${out}" == ":default:" ]] && out="${PWD}/${SCRIPT_NAME}-export-${MACHINE}-${DATE_SUFFIX}.tgz"
   [[ "${out}" == */* ]] || out="${PWD}/${out}"
-  if [ -e "${out}" ] && [ ! "${DO_FORCE}" = "true" ]; then
+  if [[ -e "${out}" ]] && [[ ! "${DO_FORCE}" = "true" ]]; then
     print -u2 -r -- "Error:          ${out} already exists (--force replaces it)"
     return 1
   fi
   bundle_files
-  if (( ! ${#BUNDLE_FILES} )) && [ ! -f "${P10K_INIT}" ]; then
+  if (( ! ${#BUNDLE_FILES} )) && [[ ! -f "${P10K_INIT}" ]]; then
     print -u2 -r -- "Error:          nothing of yours to export in ${WORK_DIR} (no config, layers, local lists or dotfiles)"
     return 1
   fi
-  if [ "${DO_DRYRUN}" = "true" ]; then
-    print -r -- "Would write ${out} with ${#BUNDLE_FILES} files from ${WORK_DIR}$( [ -f "${P10K_INIT}" ] && print -rn -- " and ${P10K_INIT}" ):"
+  if [[ "${DO_DRYRUN}" = "true" ]]; then
+    print -r -- "Would write ${out} with ${#BUNDLE_FILES} files from ${WORK_DIR}$( [[ -f "${P10K_INIT}" ]] && print -rn -- " and ${P10K_INIT}" ):"
     (( ${#BUNDLE_FILES} )) && print -rl -- "  ${(@)BUNDLE_FILES}"
     return 0
   fi
@@ -3766,7 +3832,7 @@ export_bundle () {
   tops=( ${stage}/*(N:t) )
   execute_command "COPYFILE_DISABLE=1 tar -czf ${(q)out} -C ${(q)stage} ${(j: :)${(@q)tops}}"
   rm -rf "${stage:?}"
-  if [ ! -s "${out}" ]; then
+  if [[ ! -s "${out}" ]]; then
     rm -f "${out}"
     print -u2 -r -- "Error:          ${out} was not written"
     return 1
@@ -3794,11 +3860,11 @@ bundle_path_ok () {
 import_bundle () {
   local archive="$1" line name type tmp rel target backup new=0 changed=0 same=0 file idx=0 verb info
   local -a names manifest
-  if [ ! -f "${archive}" ]; then
+  if [[ ! -f "${archive}" ]]; then
     print -u2 -r -- "Error:          ${archive} is not a file"
     return 1
   fi
-  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && ! have_lock; then
     print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
     return 1
   fi
@@ -3825,7 +3891,7 @@ import_bundle () {
     return 1
   fi
   tmp=$( mktemp -d ) || return 1
-  if ! tar -xzf "${archive}" -C "${tmp}" 2> /dev/null || [ ! -f "${tmp}/MANIFEST" ] || [[ "$(<${tmp}/MANIFEST)" != "ussuri-export 1"* ]]; then
+  if ! tar -xzf "${archive}" -C "${tmp}" 2> /dev/null || [[ ! -f "${tmp}/MANIFEST" ]] || [[ "$(<${tmp}/MANIFEST)" != "ussuri-export 1"* ]]; then
     rm -rf "${tmp:?}"
     print -u2 -r -- "Error:          ${archive} is not a ussuri export (no MANIFEST)"
     return 1
@@ -3839,7 +3905,7 @@ import_bundle () {
     else
       target="${WORK_DIR}/${rel}"
     fi
-    if [ -f "${target}" ]; then
+    if [[ -f "${target}" ]]; then
       if cmp -s "${file}" "${target}"; then
         same=$(( same + 1 ))
         continue
@@ -3857,11 +3923,11 @@ import_bundle () {
   manifest=( "${(@f)$(<${tmp}/MANIFEST)}" )
   info="${${(M)manifest:#version *}[1]#version } from ${${(M)manifest:#machine *}[1]#machine }"
   verb="Imported"
-  [ "${DO_DRYRUN}" = "true" ] && verb="Would import"
+  [[ "${DO_DRYRUN}" = "true" ]] && verb="Would import"
   print -r -- "${verb} ${archive:t} (version ${info}): ${new} new, ${changed} replaced, ${same} already the same"
-  (( changed )) && [ ! "${DO_DRYRUN}" = "true" ] && print -r -- "The ${changed} files it replaced are in ${backup}"
+  (( changed )) && [[ ! "${DO_DRYRUN}" = "true" ]] && print -r -- "The ${changed} files it replaced are in ${backup}"
   rm -rf "${tmp:?}"
-  [ "${DO_DRYRUN}" = "true" ] || print -r -- "Next: ${SCRIPT_NAME}.zsh --dotfiles to link the dotfiles, --doctor to check the setup."
+  [[ "${DO_DRYRUN}" = "true" ]] || print -r -- "Next: ${SCRIPT_NAME}.zsh --dotfiles to link the dotfiles, --doctor to check the setup."
 }
 
 # Print a config file with every setting commented out
@@ -3965,9 +4031,9 @@ CONFIG
 # Create the config file if there isn't one, and say where it is (--config)
 
 init_config () {
-  if [ -e "${CONFIG_FILE}" ]; then
+  if [[ -e "${CONFIG_FILE}" ]]; then
     print -r -- "${CONFIG_FILE} exists, edit it to change the defaults"
-  elif [ "${DO_DRYRUN}" = "true" ]; then
+  elif [[ "${DO_DRYRUN}" = "true" ]]; then
     print -r -- "Would create ${CONFIG_FILE}"
   else
     check_dir_exists "${CONFIG_FILE:h}"
@@ -3982,7 +4048,7 @@ init_config () {
 # a value is written quoted and is never evaluated here, and the file is replaced with one rename so a shell
 # starting at that moment reads the old file or the new one, never half of one
 
-typeset -ga CONFIG_NEW_LINES CONFIG_PRESET
+typeset -ga CONFIG_NEW_LINES CONFIG_PRESET CONFIG_REMOVED
 typeset -gA CONFIG_EXAMPLE
 
 # The settings the template lists, with the example value it shows for each
@@ -4005,7 +4071,7 @@ check_config_setting () {
     print -u2 -r -- "Error:          '${name}' is not a setting name (upper case letters, digits and underscores)"
     return 1
   fi
-  [ "${DO_FORCE}" = "true" ] && return 0
+  [[ "${DO_FORCE}" = "true" ]] && return 0
   if (( ! ${+CONFIG_EXAMPLE[${name}]} )); then
     print -u2 -r -- "Error:          '${name}' is not a setting ussuri knows (--config lists them, --force sets it anyway)"
     return 1
@@ -4034,19 +4100,19 @@ write_config_lines () {
 layer_choice () {
   LAYER_KIND="base"
   LAYER_NAME=""
-  if [ "${PROFILE_SWITCH}" = "true" ] && [ "${MACHINE_SWITCH}" = "true" ]; then
+  if [[ "${PROFILE_SWITCH}" = "true" ]] && [[ "${MACHINE_SWITCH}" = "true" ]]; then
     print -u2 -r -- "Error:          choose one of --profile and --host: a change goes in one file"
     return 1
   fi
-  if [ "${PROFILE_SWITCH}" = "true" ]; then
-    if [ -z "${PROFILE}" ]; then
+  if [[ "${PROFILE_SWITCH}" = "true" ]]; then
+    if [[ -z "${PROFILE}" ]]; then
       print -u2 -r -- "Error:          that profile name is not usable"
       return 1
     fi
     LAYER_KIND="profile"
     LAYER_NAME="${PROFILE}"
-  elif [ "${MACHINE_SWITCH}" = "true" ]; then
-    if [ -z "${MACHINE}" ]; then
+  elif [[ "${MACHINE_SWITCH}" = "true" ]]; then
+    if [[ -z "${MACHINE}" ]]; then
       print -u2 -r -- "Error:          that machine name is not usable"
       return 1
     fi
@@ -4091,7 +4157,7 @@ config_layer_header () {
 backup_user_file () {
   local source="$1" label="$2" backup n=0 old
   backup="${WORK_DIR}/${label}.${DATE_SUFFIX}"
-  while [ -e "${backup}" ]; do
+  while [[ -e "${backup}" ]]; do
     n=$(( n + 1 ))
     backup="${WORK_DIR}/${label}.${DATE_SUFFIX}_${n}"
   done
@@ -4099,7 +4165,7 @@ backup_user_file () {
   execute_command "cp -p ${(q)source} ${(q)backup}"
   # Only the backups themselves (the label, a date and perhaps a number), not a .rejected, .broken or temp file beside them
   old=( ${WORK_DIR}/${label}.[0-9][0-9]_[0-9][0-9]_[0-9][0-9][0-9][0-9]_*(Nom[11,-1]) )
-  if (( ${#old} )) && [ ! "${DO_DRYRUN}" = "true" ]; then
+  if (( ${#old} )) && [[ ! "${DO_DRYRUN}" = "true" ]]; then
     rm -f -- "${old[@]}"
   fi
 }
@@ -4109,24 +4175,37 @@ backup_config () {
 }
 
 config_get () {
-  local name="$1" file="${CONFIG_FILE}" value layer where=""
+  local name="$1" file="${CONFIG_FILE}" value raw="" layer where="" i
   local -a lines=()
   if [[ ! "${name}" =~ '^[A-Z][A-Z0-9_]*$' ]]; then
     print -u2 -r -- "Error:          '${name}' is not a setting name (upper case letters, digits and underscores)"
     return 1
   fi
   value="${(P)name}"
-  # The last of the config and its layers to set it is the one that counts
+  # The last of the config and its layers to set it is the one that counts, and its last active line is the value
+  # it will have when the file is read. The shell's own copy is from before any --set, so the file is the source.
   for layer in "${file}" "${CONFIG_LAYER_FILES[@]}"; do
     lines=()
-    [ -r "${layer}" ] && lines=( "${(@f)$(<${layer})}" )
-    (( ${lines[(I)${name}=*]} )) && where="${layer}"
+    [[ -r "${layer}" ]] && lines=( "${(@f)$(<${layer})}" )
+    i=${lines[(I)${name}=*]}
+    if (( i )); then
+      where="${layer}"
+      raw="${lines[i]#${name}=}"
+    fi
   done
-  if [ -n "${where}" ]; then
+  if [[ -n "${where}" ]]; then
+    # The line is written quoted (or as ~ or ~/... for a home directory), so take the quoting off and expand the ~
+    value="${(Q)raw}"
+    if [[ "${value}" == "~" || "${value}" == "~/"* ]]; then
+      value="${HOME}${value#\~}"
+    fi
     print -r -- "${name}=${(q)value}  (config: ${where})"
+  elif (( ${CONFIG_REMOVED[(Ie)${name}]} )); then
+    # The shell still holds the value the config gave it when this run started (the default applies in new shells)
+    print -r -- "${name}=${(q)value}  (removed from the config by this run: new shells use the default)"
   elif (( ${CONFIG_PRESET[(Ie)${name}]} )); then
     print -r -- "${name}=${(q)value}  (environment)"
-  elif [ -n "${value}" ]; then
+  elif [[ -n "${value}" ]]; then
     print -r -- "${name}=${(q)value}  (default)"
   else
     print -r -- "${name} is not set"
@@ -4140,7 +4219,7 @@ config_get_all () {
   local line name file result=0
   local -a names=( ${(ko)CONFIG_EXAMPLE} )
   for file in "${CONFIG_FILE}" "${CONFIG_LAYER_FILES[@]}"; do
-    [ -r "${file}" ] || continue
+    [[ -r "${file}" ]] || continue
     for line in "${(@f)$(<${file})}"; do
       [[ "${line}" =~ '^([A-Z][A-Z0-9_]*)=' ]] && names+=( "${match[1]}" )
     done
@@ -4157,14 +4236,14 @@ config_edit () {
   local file="${CONFIG_TARGET}" arg name value quoted line i changed="false"
   local -a lines=() before removed
   load_config_names
-  if [ -e "${file}" ]; then
-    if [ ! -f "${file}" ] || [ ! -w "${file}" ] || [ ! -r "${file}" ]; then
+  if [[ -e "${file}" ]]; then
+    if [[ ! -f "${file}" ]] || [[ ! -w "${file}" ]] || [[ ! -r "${file}" ]]; then
       print -u2 -r -- "Error:          ${file} is not a file you can read and write"
       return 1
     fi
     lines=( "${(@f)$(<${file})}" )
     (( ${#lines} == 1 )) && [[ -z "${lines[1]}" ]] && lines=()
-  elif [ "${CONFIG_TARGET}" = "${CONFIG_FILE}" ]; then
+  elif [[ "${CONFIG_TARGET}" = "${CONFIG_FILE}" ]]; then
     lines=( "${(@f)$( print_config_template )}" )
     changed="true"
   else
@@ -4184,8 +4263,14 @@ config_edit () {
       print -u2 -r -- "Error:          the value of ${name} has a line break in it"
       return 1
     fi
-    quoted="${(q)value}"
-    [[ "${quoted}" == *\\* ]] && quoted="${(qq)value}"
+    # A home directory path is written as ~ or ~/... without quotes, so zsh expands the ~ when the config is read (a
+    # quoted ~ is literal text). Only plain characters are left bare; anything else is quoted as before
+    if [[ "${value}" =~ '^~(/[A-Za-z0-9_.+,:=%@/-]*)?$' ]]; then
+      quoted="${value}"
+    else
+      quoted="${(q)value}"
+      [[ "${quoted}" == *\\* ]] && quoted="${(qq)value}"
+    fi
     line="${name}=${quoted}"
     # The last active line is the one that counts when the file is sourced, so it is the one replaced. Failing
     # that the line goes in under the commented example, so the explanation stays with it, or at the end
@@ -4210,6 +4295,8 @@ config_edit () {
     removed=( "${(@M)lines:#${name}=*}" )
     lines=( "${(@)lines:#${name}=*}" )
     if (( ${#removed} )); then
+      # --get in this run must not call the value that is still in the shell a setting of the file
+      CONFIG_REMOVED+=( "${name}" )
       print -r -- "${name} will be removed from ${file}"
     else
       print -r -- "${name} is not set in ${file}"
@@ -4219,20 +4306,20 @@ config_edit () {
     print -r -- "Nothing to change in ${file}"
     return 0
   }
-  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && ! have_lock; then
     print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
     return 1
   fi
   check_dir_exists "${file:h}"
-  [ -e "${file}" ] && backup_config
+  [[ -e "${file}" ]] && backup_config
   CONFIG_NEW_LINES=( "${lines[@]}" )
   local tmp="${file}.tmp.$$"
-  [ -e "${file}" ] && execute_command "cp -p ${(q)file} ${(q)tmp}"
+  [[ -e "${file}" ]] && execute_command "cp -p ${(q)file} ${(q)tmp}"
   execute_command "write_config_lines ${(q)tmp}"
   execute_command "mv -f ${(q)tmp} ${(q)file}"
-  if [ "${DO_DRYRUN}" = "true" ]; then
+  if [[ "${DO_DRYRUN}" = "true" ]]; then
     print -r -- "Would write ${file}"
-  elif [ -e "${tmp}" ]; then
+  elif [[ -e "${tmp}" ]]; then
     rm -f -- "${tmp}"
     print -u2 -r -- "Error:          ${file} was not changed"
     return 1
@@ -4250,33 +4337,33 @@ edit_config () {
   local file="${CONFIG_TARGET}" editor="${VISUAL:-${EDITOR:-vi}}" tmp="${CONFIG_TARGET}.edit.$$" line name
   local -a lines=()
   load_config_names
-  if [ -e "${file}" ] && { [ ! -f "${file}" ] || [ ! -r "${file}" ] || [ ! -w "${file}" ]; }; then
+  if [[ -e "${file}" ]] && { [[ ! -f "${file}" ]] || [[ ! -r "${file}" ]] || [[ ! -w "${file}" ]]; }; then
     print -u2 -r -- "Error:          ${file} is not a file you can read and write"
     return 1
   fi
-  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && ! have_lock; then
     print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
     return 1
   fi
   check_dir_exists "${file:h}"
-  if [ -e "${file}" ]; then
+  if [[ -e "${file}" ]]; then
     execute_command "cp -p ${(q)file} ${(q)tmp}"
-  elif [ "${file}" = "${CONFIG_FILE}" ]; then
+  elif [[ "${file}" = "${CONFIG_FILE}" ]]; then
     execute_command "print_config_template > ${(q)tmp}"
   else
     execute_command "config_layer_header > ${(q)tmp}"
   fi
   # The editor is yours (it may have arguments), the file is quoted
   execute_command "${editor} ${(q)tmp}" "show"
-  if [ "${DO_DRYRUN}" = "true" ]; then
+  if [[ "${DO_DRYRUN}" = "true" ]]; then
     print -r -- "Would edit ${file} with ${editor}"
     return 0
   fi
-  if [ ! -e "${tmp}" ]; then
+  if [[ ! -e "${tmp}" ]]; then
     print -u2 -r -- "Error:          ${editor} did not leave a file to keep, ${file} is unchanged"
     return 1
   fi
-  if [ -e "${file}" ] && cmp -s "${file}" "${tmp}"; then
+  if [[ -e "${file}" ]] && cmp -s "${file}" "${tmp}"; then
     rm -f -- "${tmp}"
     print -r -- "No changes to ${file}"
     return 0
@@ -4293,7 +4380,7 @@ edit_config () {
       (( ${+CONFIG_EXAMPLE[${name}]} )) || print -r -- "Note:           ${name} is not a setting ussuri lists (a typo? --config shows the ones it knows)"
     fi
   done
-  [ -e "${file}" ] && backup_config
+  [[ -e "${file}" ]] && backup_config
   execute_command "mv -f ${(q)tmp} ${(q)file}"
   print -r -- "Saved ${file}, it applies to new shells (run exec zsh to start one in this window)"
   return 0
@@ -4302,6 +4389,18 @@ edit_config () {
 run_config_commands () {
   local name result=0
   load_config_names
+  # A bad target (-M with -H, say) stops the changes but not the --get lines, which read the config either way
+  local target_ok="true"
+  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )) || [[ "${DO_CONFIG_EDIT}" = "true" ]]; then
+    config_target || { target_ok="false"; result=1; }
+  fi
+  if [[ "${target_ok}" = "true" ]] && (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )); then
+    config_edit || result=1
+  fi
+  if [[ "${target_ok}" = "true" ]] && [[ "${DO_CONFIG_EDIT}" = "true" ]]; then
+    edit_config || result=1
+  fi
+  # --get comes after the changes, so it reports what the file says now, not what it said before this run
   for name in "${CONFIG_GETS[@]}"; do
     if [[ "${name}" == all ]]; then
       config_get_all || result=1
@@ -4309,15 +4408,6 @@ run_config_commands () {
       config_get "${name}" || result=1
     fi
   done
-  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )) || [ "${DO_CONFIG_EDIT}" = "true" ]; then
-    config_target || return 1
-  fi
-  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} )); then
-    config_edit || result=1
-  fi
-  if [ "${DO_CONFIG_EDIT}" = "true" ]; then
-    edit_config || result=1
-  fi
   return ${result}
 }
 
@@ -4412,8 +4502,8 @@ doctor_fix_worked () {
   case "$1" in
     chmod)   DOCTOR_STILL=( ${2}(Nf:go+w:) ); (( ! ${#DOCTOR_STILL} )) ;;
     restore) zsh -n "$2" 2> /dev/null ;;
-    p10k)    [ -f "$2" ] ;;
-    remove)  [ ! -e "$2" ] ;;
+    p10k)    [[ -f "$2" ]] ;;
+    remove)  [[ ! -e "$2" ]] ;;
   esac
 }
 
@@ -4423,14 +4513,14 @@ apply_doctor_fixes () {
     print -r -- "Nothing to repair"
     return
   fi
-  if [ ! "${DO_DRYRUN}" = "true" ] && ! have_lock; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]] && ! have_lock; then
     print -u2 -r -- "Error:          another ussuri run holds the lock (${LOCK_FILE}), try again in a moment"
     return
   fi
   print -r -- "Repairing"
   for (( i = 1; i <= ${#DOCTOR_FIX_KIND}; i++ )); do
     kind="${DOCTOR_FIX_KIND[i]}"; sev="${DOCTOR_FIX_SEV[i]}"; arg="${DOCTOR_FIX_ARG[i]}"; arg2="${DOCTOR_FIX_ARG2[i]}"; text="${DOCTOR_FIX_TEXT[i]}"
-    if [ "${DO_DRYRUN}" = "true" ]; then
+    if [[ "${DO_DRYRUN}" = "true" ]]; then
       print -r -- "  would ${text}"
       continue
     fi
@@ -4452,7 +4542,7 @@ apply_doctor_fixes () {
     if doctor_fix_worked "${kind}" "${arg}"; then
       print -r -- "  fixed  ${text}"
       fixed=$(( fixed + 1 ))
-      if [ "${sev}" = "fail" ]; then
+      if [[ "${sev}" = "fail" ]]; then
         DOCTOR_FAIL=$(( DOCTOR_FAIL - 1 ))
       else
         DOCTOR_WARN=$(( DOCTOR_WARN - 1 ))
@@ -4463,7 +4553,7 @@ apply_doctor_fixes () {
       failed=$(( failed + 1 ))
     fi
   done
-  if [ ! "${DO_DRYRUN}" = "true" ]; then
+  if [[ ! "${DO_DRYRUN}" = "true" ]]; then
     print
     print -r -- "${fixed} repaired${${failed#0}:+, ${failed} not repaired}"
     print -r -- "${DOCTOR_OK} ok, ${DOCTOR_WARN} warnings, ${DOCTOR_FAIL} failures"
@@ -4531,7 +4621,7 @@ doctor_tools () {
     else
       doctor_warn "gsettings is not installed, GNOME settings are skipped"
     fi
-    if [ -z "${PKG_MANAGER}" ]; then
+    if [[ -z "${PKG_MANAGER}" ]]; then
       doctor_warn "Linux distribution '${LSB_ID:-unknown}' isn't supported, packages won't be managed (set PKG_MANAGER to apt, pacman, dnf, apk or nix to choose one)"
     else
       set_pkg_manager
@@ -4540,7 +4630,7 @@ doctor_tools () {
       else
         doctor_fail "${PKG_TOOL} is not installed (${PKG_MANAGER}${LSB_ID:+, ${LSB_ID}})"
       fi
-      if [ "${PKG_PRIV}" = "true" ] && [ ! "${UID}" = "0" ] && (( ! $+commands[sudo] && ! $+commands[doas] )); then
+      if [[ "${PKG_PRIV}" = "true" ]] && [[ ! "${UID}" = "0" ]] && (( ! $+commands[sudo] && ! $+commands[doas] )); then
         doctor_warn "neither sudo nor doas is installed and you are not root, packages can't be installed"
       fi
     fi
@@ -4549,13 +4639,13 @@ doctor_tools () {
 
 doctor_install () {
   print -r -- "Install"
-  if [ "${SCRIPT_FILE}" = "${HOME_DIR}/.zshrc" ]; then
+  if [[ "${SCRIPT_FILE}" = "${HOME_DIR}/.zshrc" ]]; then
     doctor_ok "running as ${HOME_DIR}/.zshrc, version ${SCRIPT_VERSION}"
-  elif [ -f "${HOME_DIR}/.zshrc" ]; then
+  elif [[ -f "${HOME_DIR}/.zshrc" ]]; then
     read_file_version "${HOME_DIR}/.zshrc"
-    if [ -z "${FILE_VERSION}" ]; then
+    if [[ -z "${FILE_VERSION}" ]]; then
       doctor_warn "${HOME_DIR}/.zshrc is not this script (run --install to use it)"
-    elif [ "${FILE_VERSION}" = "${SCRIPT_VERSION}" ]; then
+    elif [[ "${FILE_VERSION}" = "${SCRIPT_VERSION}" ]]; then
       doctor_ok "${HOME_DIR}/.zshrc is version ${FILE_VERSION}, the same as this script"
     else
       doctor_warn "${HOME_DIR}/.zshrc is version ${FILE_VERSION} but this script is ${SCRIPT_VERSION} (run --install to update it)"
@@ -4563,13 +4653,13 @@ doctor_install () {
   else
     doctor_warn "${HOME_DIR}/.zshrc does not exist (run --install)"
   fi
-  if [ -d "${WORK_DIR}/files" ]; then
+  if [[ -d "${WORK_DIR}/files" ]]; then
     doctor_ok "${WORK_DIR}/files exists"
   else
     doctor_fail "${WORK_DIR}/files is missing (run --install from a copy of the repo)"
   fi
-  if [ -n "${REQUIRED_FILE}" ]; then
-    if [ -f "${REQUIRED_FILE}" ]; then
+  if [[ -n "${REQUIRED_FILE}" ]]; then
+    if [[ -f "${REQUIRED_FILE}" ]]; then
       doctor_ok "package list ${REQUIRED_FILE:t}"
     else
       doctor_warn "package list ${REQUIRED_FILE} is missing, no packages will be installed"
@@ -4583,17 +4673,17 @@ doctor_install () {
     DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_FILE})"}:#(\#*|[[:space:]]#)} )
     doctor_ok "local plugin list ${DOCTOR_FILE#${WORK_DIR}/files/}: ${#DOCTOR_LINES} lines"
   done
-  if [ -n "${REQUIRED_FILE}" ]; then
+  if [[ -n "${REQUIRED_FILE}" ]]; then
     local_layer_files "${REQUIRED_FILE:h}" "${REQUIRED_FILE:e}"
     for DOCTOR_FILE in "${LOCAL_LAYERS[@]}"; do
       DOCTOR_LINES=( ${${(f)"$(<${DOCTOR_FILE})"}:#(\#*|[[:space:]]#)} )
       doctor_ok "local package list ${DOCTOR_FILE#${WORK_DIR}/files/}: ${#DOCTOR_LINES} lines"
     done
   fi
-  if [ "${INSTALL_ZINIT}" = "true" ] && [ "${PLUGIN_MANAGER}" = "zinit" ]; then
-    if [ -f "${ZINIT_FILE}" ]; then
+  if [[ "${INSTALL_ZINIT}" = "true" ]] && [[ "${PLUGIN_MANAGER}" = "zinit" ]]; then
+    if [[ -f "${ZINIT_FILE}" ]]; then
       doctor_ok "plugin list ${ZINIT_FILE:t}"
-    elif [ -f "${WORK_DIR}/files/zinit/zinit.zsh" ]; then
+    elif [[ -f "${WORK_DIR}/files/zinit/zinit.zsh" ]]; then
       doctor_warn "plugin list ${ZINIT_FILE:t} is missing, the original list is used (run --install to add it)"
     else
       doctor_fail "plugin list ${ZINIT_FILE} is missing, no plugins will load"
@@ -4613,7 +4703,7 @@ doctor_config_layers () {
 
 doctor_config () {
   print -r -- "Config"
-  if [ ! -e "${CONFIG_FILE}" ]; then
+  if [[ ! -e "${CONFIG_FILE}" ]]; then
     doctor_ok "no config file, the defaults are used (--config creates one)"
     doctor_config_layers
     return
@@ -4623,14 +4713,14 @@ doctor_config () {
 }
 
 doctor_dotfiles_repo () {
-  [ -n "${DOTFILES_REPO}" ] || return 0
+  [[ -n "${DOTFILES_REPO}" ]] || return 0
   local line epoch result msg age
   print -r -- "Dotfiles repository"
   if ! dotfiles_repo_url_ok "${DOTFILES_REPO}"; then
     doctor_fail "DOTFILES_REPO is not an https://, ssh:// or file:// URL (or git@host:path), so it is not used: ${DOTFILES_REPO}"
     return
   fi
-  if [ ! -f "${WORK_DIR}/dotfiles.sync" ]; then
+  if [[ ! -f "${WORK_DIR}/dotfiles.sync" ]]; then
     doctor_ok "${DOTFILES_REPO} (not synced yet: a login does it once a day in the background, --dotfiles does it now)"
     return
   fi
@@ -4640,7 +4730,7 @@ doctor_dotfiles_repo () {
   msg="${${line#* }#* }"
   age="some time ago"
   [[ "${epoch}" == <-> ]] && age="$(( (EPOCHSECONDS - epoch) / 3600 )) hours ago"
-  if [ "${result}" = "ok" ]; then
+  if [[ "${result}" = "ok" ]]; then
     doctor_ok "${DOTFILES_REPO}: ${msg} (${age})"
   else
     doctor_warn "${DOTFILES_REPO}: the last sync failed (${age}): ${msg}"
@@ -4649,7 +4739,7 @@ doctor_dotfiles_repo () {
 
 doctor_dotfiles () {
   doctor_dotfiles_repo
-  if [ ! -d "${DOTFILES_DIR}" ]; then
+  if [[ ! -d "${DOTFILES_DIR}" ]]; then
     return
   fi
   print -r -- "Dotfiles"
@@ -4708,7 +4798,7 @@ doctor_prompt_segments () {
     doctor_warn "'${word}' in PROMPT_TOP_ELEMENTS or PROMPT_TOP_RIGHT_ELEMENTS is not a segment name (letters, digits and underscores), it is ignored"
     bad=1
   done
-  [ -r "${P10K_INIT}" ] || return
+  [[ -r "${P10K_INIT}" ]] || return
   for row in "${(@f)$( prompt_layout_report )}"; do
     cols=( "${(@ps:\t:)row}" )
     [[ "${cols[1]}" == top ]] || continue
@@ -4729,54 +4819,54 @@ doctor_prompt_segments () {
 
 doctor_components () {
   print -r -- "Components"
-  if [ "${INSTALL_ZINIT}" = "true" ]; then
-    if [ -d "${ZINIT_HOME}" ]; then doctor_ok "zinit"; else doctor_warn "zinit is not installed (${ZINIT_HOME})"; fi
+  if [[ "${INSTALL_ZINIT}" = "true" ]]; then
+    if [[ -d "${ZINIT_HOME}" ]]; then doctor_ok "zinit"; else doctor_warn "zinit is not installed (${ZINIT_HOME})"; fi
   fi
-  if [ "${INSTALL_RBENV}" = "true" ]; then
-    if [ ! -d "${RBENV_HOME}" ]; then
+  if [[ "${INSTALL_RBENV}" = "true" ]]; then
+    if [[ ! -d "${RBENV_HOME}" ]]; then
       doctor_warn "rbenv is not installed (${RBENV_HOME})"
-    elif [ ! -d "${RBENV_HOME}/plugins/ruby-build" ]; then
+    elif [[ ! -d "${RBENV_HOME}/plugins/ruby-build" ]]; then
       doctor_warn "rbenv is installed but ruby-build is missing"
     else
       doctor_ok "rbenv and ruby-build"
     fi
   fi
-  if [ "${INSTALL_PYENV}" = "true" ]; then
-    if [ -d "${PYENV_HOME}" ]; then doctor_ok "pyenv"; else doctor_warn "pyenv is not installed (${PYENV_HOME})"; fi
+  if [[ "${INSTALL_PYENV}" = "true" ]]; then
+    if [[ -d "${PYENV_HOME}" ]]; then doctor_ok "pyenv"; else doctor_warn "pyenv is not installed (${PYENV_HOME})"; fi
   fi
   doctor_ok "prompt engine: ${PROMPT_ENGINE}"
   if prompt_engine_is p10k; then
-    if [ "${PROMPT_TWO_LINE}" = "true" ]; then
+    if [[ "${PROMPT_TWO_LINE}" = "true" ]]; then
       doctor_ok "two line prompt, top line: ${PROMPT_TOP_ELEMENTS:-nothing}${PROMPT_TOP_RIGHT_ELEMENTS:+ (right: ${PROMPT_TOP_RIGHT_ELEMENTS})}"
       doctor_prompt_segments
     else
       doctor_ok "single line prompt (PROMPT_TWO_LINE=false)"
     fi
   fi
-  if { [ "${DO_POSH_CHECK}" = "true" ] && [ ! "${PROMPT_ENGINE}" = "posh" ]; } || { [ "${DO_P10K_CHECK}" = "true" ] && [ ! "${PROMPT_ENGINE}" = "p10k" ]; }; then
+  if { [[ "${DO_POSH_CHECK}" = "true" ]] && [[ ! "${PROMPT_ENGINE}" = "posh" ]]; } || { [[ "${DO_P10K_CHECK}" = "true" ]] && [[ ! "${PROMPT_ENGINE}" = "p10k" ]]; }; then
     doctor_warn "two prompt engines are switched on (the engine is ${PROMPT_ENGINE}, but DO_POSH_CHECK or DO_P10K_CHECK is set for the other): both hook every prompt and fight over it"
   fi
-  if [ "${INSTALL_POSH}" = "true" ]; then
-    if [ -x "${POSH_HOME}/oh-my-posh" ] || (( $+commands[oh-my-posh] )); then
+  if [[ "${INSTALL_POSH}" = "true" ]]; then
+    if [[ -x "${POSH_HOME}/oh-my-posh" ]] || (( $+commands[oh-my-posh] )); then
       doctor_ok "oh-my-posh"
     else
       doctor_warn "oh-my-posh is not installed (${POSH_HOME})"
     fi
   fi
-  if [ "${INSTALL_P10K}" = "true" ]; then
-    if [ -f "${P10K_INIT}" ]; then
+  if [[ "${INSTALL_P10K}" = "true" ]]; then
+    if [[ -f "${P10K_INIT}" ]]; then
       doctor_ok "powerlevel10k config ${P10K_INIT}"
     else
       doctor_warn "powerlevel10k config ${P10K_INIT} is missing"
-      if [ -f "${SOURCE_P10K_INIT}" ]; then
+      if [[ -f "${SOURCE_P10K_INIT}" ]]; then
         doctor_fixable "p10k" "warn" "${P10K_INIT}" "${SOURCE_P10K_INIT}" "copy ${SOURCE_P10K_INIT} to ${P10K_INIT}"
       fi
     fi
   fi
-  if [ "${INSTALL_OZSH}" = "true" ]; then
-    if [ -d "${ZOSH_HOME}" ]; then doctor_ok "oh-my-zsh"; else doctor_warn "oh-my-zsh is not installed (${ZOSH_HOME})"; fi
+  if [[ "${INSTALL_OZSH}" = "true" ]]; then
+    if [[ -d "${ZOSH_HOME}" ]]; then doctor_ok "oh-my-zsh"; else doctor_warn "oh-my-zsh is not installed (${ZOSH_HOME})"; fi
   fi
-  if [ "${INSTALL_ZOXIDE}" = "true" ]; then
+  if [[ "${INSTALL_ZOXIDE}" = "true" ]]; then
     if (( $+commands[zoxide] )); then
       doctor_ok "zoxide"
     else
@@ -4786,7 +4876,7 @@ doctor_components () {
   # Only the tools that have been asked for (INSTALL_<NAME>=true, --tool)
   for DOCTOR_TOOL in fnm rustup uv mise atuin; do
     DOCTOR_WANTED="INSTALL_${(U)DOCTOR_TOOL}"
-    if [ "${(P)DOCTOR_WANTED}" = "true" ]; then
+    if [[ "${(P)DOCTOR_WANTED}" = "true" ]]; then
       case "${DOCTOR_TOOL}" in
         fnm)    DOCTOR_PATH="${FNM_HOME}/fnm" ;;
         rustup) DOCTOR_PATH="${CARGO_HOME:-${HOME_DIR}/.cargo}/bin/rustup" ;;
@@ -4794,7 +4884,7 @@ doctor_components () {
         mise)   DOCTOR_PATH="${MISE_BIN}" ;;
         atuin)  DOCTOR_PATH="atuin (brew, pacman or nix install atuin, or cargo install atuin --locked)" ;;
       esac
-      if [ -x "${DOCTOR_PATH}" ] || (( $+commands[${DOCTOR_TOOL}] )); then
+      if [[ -x "${DOCTOR_PATH}" ]] || (( $+commands[${DOCTOR_TOOL}] )); then
         doctor_ok "${DOCTOR_TOOL}"
       else
         doctor_warn "${DOCTOR_TOOL} is wanted but not installed (${DOCTOR_PATH})"
@@ -4804,13 +4894,13 @@ doctor_components () {
 }
 
 doctor_fonts () {
-  if [ ! "${INSTALL_FONTS}" = "true" ]; then
+  if [[ ! "${INSTALL_FONTS}" = "true" ]]; then
     return
   fi
   print -r -- "Fonts"
   DOCTOR_FONT=""
   for DOCTOR_DIR in "${HOME_DIR}/Library/Fonts" /Library/Fonts "${HOME_DIR}/.local/share/fonts" "${HOME_DIR}/.fonts" /usr/share/fonts /usr/local/share/fonts; do
-    if [ -d "${DOCTOR_DIR}" ]; then
+    if [[ -d "${DOCTOR_DIR}" ]]; then
       DOCTOR_MATCH=( ${DOCTOR_DIR}/**/*[Nn]erd*(N[1]) )
       if (( ${#DOCTOR_MATCH} )); then
         DOCTOR_FONT="${DOCTOR_MATCH[1]}"
@@ -4818,7 +4908,7 @@ doctor_fonts () {
       fi
     fi
   done
-  if [ -n "${DOCTOR_FONT}" ]; then
+  if [[ -n "${DOCTOR_FONT}" ]]; then
     doctor_ok "a Nerd Font is installed (${DOCTOR_FONT:t})"
   else
     doctor_warn "no Nerd Font found, prompt icons won't display (it is installed when fonts are checked)"
@@ -4846,21 +4936,21 @@ doctor_state () {
   print -r -- "State"
   if is_osx; then
     DOCTOR_STAMP="${WORK_DIR}/defaults.stamp"
-    if [ -f "${DOCTOR_STAMP}" ]; then
+    if [[ -f "${DOCTOR_STAMP}" ]]; then
       zmodload -F zsh/stat b:zstat 2> /dev/null
       zstat -A DOCTOR_TIMES +mtime "${DOCTOR_STAMP}"
       doctor_ok "OS X defaults were last applied $(( (EPOCHSECONDS - DOCTOR_TIMES[1]) / 86400 )) days ago"
     else
       doctor_warn "OS X defaults have not been applied yet (they are on the next login, or run --defaults)"
     fi
-    if [ "${UPDATE_HINT}" = "true" ]; then
+    if [[ "${UPDATE_HINT}" = "true" ]]; then
       DOCTOR_LATEST=""
-      if [ -f "${WORK_DIR}/update.latest" ]; then
+      if [[ -f "${WORK_DIR}/update.latest" ]]; then
         DOCTOR_LATEST=$(<"${WORK_DIR}/update.latest")
       fi
       if [[ "${DOCTOR_LATEST}" == [0-9].[0-9].[0-9] ]] && (( ${DOCTOR_LATEST//./} > ${SCRIPT_VERSION//./} )); then
         doctor_warn "${DOCTOR_LATEST} is available (this is ${SCRIPT_VERSION}): run ${SCRIPT_NAME}.zsh --update"
-      elif [ -f "${WORK_DIR}/update.check" ]; then
+      elif [[ -f "${WORK_DIR}/update.check" ]]; then
         doctor_ok "update hint is on, the latest known version is ${DOCTOR_LATEST:-not known yet}"
       else
         doctor_ok "update hint is on, not checked yet (the next login does it)"
@@ -4878,7 +4968,7 @@ doctor_state () {
   DOCTOR_OWN=( /usr/local/bin /usr/local/sbin /opt/local/bin /opt/local/sbin "${HOME_DIR}/.local/bin" "${HOME_DIR}/.cargo/bin" "${GO_HOME}" )
   DOCTOR_MISSING=()
   for DOCTOR_DIR in ${path}; do
-    if [ ! -d "${DOCTOR_DIR}" ] && (( ! ${DOCTOR_OWN[(Ie)${DOCTOR_DIR}]} )); then
+    if [[ ! -d "${DOCTOR_DIR}" ]] && (( ! ${DOCTOR_OWN[(Ie)${DOCTOR_DIR}]} )); then
       DOCTOR_MISSING+=( "${DOCTOR_DIR}" )
     fi
   done
@@ -4911,7 +5001,7 @@ run_doctor () {
   doctor_state
   print
   print -r -- "${DOCTOR_OK} ok, ${DOCTOR_WARN} warnings, ${DOCTOR_FAIL} failures"
-  if [ "${DO_FIX}" = "true" ]; then
+  if [[ "${DO_FIX}" = "true" ]]; then
     print
     apply_doctor_fixes
   elif (( ${#DOCTOR_FIX_KIND} )); then
@@ -4971,11 +5061,11 @@ update_hint_fetch () {
 }
 
 check_update_hint () {
-  [ "${UPDATE_HINT}" = "true" ] || return 0
+  [[ "${UPDATE_HINT}" = "true" ]] || return 0
   (( ${#ARGS} )) && return 0
   [[ -o interactive ]] || return 0
   local latest="" recent
-  if [ -f "${WORK_DIR}/update.latest" ]; then
+  if [[ -f "${WORK_DIR}/update.latest" ]]; then
     latest=$(<"${WORK_DIR}/update.latest")
   fi
   # Versions are compared with the dots removed, as everywhere else (each part is a single digit)
@@ -5000,7 +5090,7 @@ set_defaults () {
   set_env "WORK_DIR" "${HOME_DIR}/.${SCRIPT_NAME}"
   check_dir_exists   "${WORK_DIR}/files"
   set_all_defaults
-  if [ "${DO_INSTALL}" = "false" ]; then
+  if [[ "${DO_INSTALL}" = "false" ]]; then
     if is_osx; then
       set_osx_defaults
     fi
@@ -5038,7 +5128,7 @@ check_package_config () {
 check_cppflags_config () {
   for CHECK_DIR in "/usr" "/usr/local" "/usr/local/share" "/opt/local" \
     "/opt/local/share" "/opt/homebrew" "/usr/local/homebrew"; do
-    if [ -d "${CHECK_DIR}/include" ]; then
+    if [[ -d "${CHECK_DIR}/include" ]]; then
       exp_env "CPPFLAGS" "${CHECK_DIR}/include" 
     fi
   done
@@ -5049,7 +5139,7 @@ check_cppflags_config () {
 check_ldflags_config () {
   for CHECK_DIR in "/usr" "/usr/local" "/usr/local/share" "/opt/local" \
     "/opt/local/share" "/opt/homebrew" "/usr/local/homebrew"; do
-    if [ -d "${CHECK_DIR}/lib" ]; then
+    if [[ -d "${CHECK_DIR}/lib" ]]; then
       exp_env "LDFLAGS" "${CHECK_DIR}/lib" 
     fi
   done
@@ -5060,10 +5150,10 @@ check_ldflags_config () {
 check_pkgconfig_config () {
   for CHECK_DIR in "/usr" "/usr/local" "/usr/local/share" "/opt/local" \
     "/opt/local/share" "/opt/homebrew" "/usr/local/homebrew"; do
-    if [ -d "${CHECK_DIR}/pkgconfig" ]; then
+    if [[ -d "${CHECK_DIR}/pkgconfig" ]]; then
       exp_env "PKG_CONFIG_PATH" "${CHECK_DIR}/pkgconfig" 
     fi
-    if [ -d "${CHECK_DIR}/lib/pkgconfig" ]; then
+    if [[ -d "${CHECK_DIR}/lib/pkgconfig" ]]; then
       exp_env "PKG_CONFIG_PATH" "${CHECK_DIR}/lib/pkgconfig" 
     fi
   done
@@ -5112,6 +5202,9 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   TIMING_NAMES=()
   TIMING_SECONDS=()
   TIMING_LINES=()
+  TIMING_NOTES=()
+  TIMING_DEFERRED_NAMES=()
+  TIMING_DEFERRED_SECONDS=()
   TIMING_LINE_SECONDS=()
   DO_ADOPT="false"
   DO_FIX="false"
@@ -5157,7 +5250,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     SWITCH_VALUE="false"
     for (( ARG_INDEX = 1; ARG_INDEX <= $#; ARG_INDEX++ )); do
       ARG="${@[ARG_INDEX]}"
-      if [ "${SWITCH_VALUE}" = "true" ]; then
+      if [[ "${SWITCH_VALUE}" = "true" ]]; then
         SWITCHES+=( "${ARG}" )
         SWITCH_VALUE="false"
         continue
@@ -5523,7 +5616,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # and stray blanks. HISTFILE is chosen if nothing has, as without one nothing is saved.
   # DO_HISTORY=false leaves all of this to the system, HISTORY_SIZE changes the size
 
-  if [ "${DO_HISTORY}" = "true" ]; then
+  if [[ "${DO_HISTORY}" = "true" ]]; then
     HISTSIZE="${HISTORY_SIZE}"
     SAVEHIST="${HISTORY_SIZE}"
     HISTFILE="${HISTFILE:-${ZDOTDIR:-${HOME_DIR}}/.zsh_history}"
@@ -5532,31 +5625,31 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     setopt hist_find_no_dups
     setopt hist_reduce_blanks
   fi
-  if [ "${SHARE_HISTORY}" = "true" ]; then
+  if [[ "${SHARE_HISTORY}" = "true" ]]; then
     setopt inc_append_history
     setopt share_history
   fi
 
   # Handle dryrun
 
-  if [ "${DO_DRYRUN}" = "true" ]; then
+  if [[ "${DO_DRYRUN}" = "true" ]]; then
     handle_output "Running without executing commands" "info"
   fi
 
   # Set debug
 
-  if [ "${DO_DEBUG}" = "true" ]; then
+  if [[ "${DO_DEBUG}" = "true" ]]; then
     set -x
   fi
 
   # --adopt and --fix modify --drift and --doctor, and mean nothing without them
 
-  if [ "${DO_ADOPT}" = "true" ] && [ ! "${DO_DRIFT}" = "true" ]; then
+  if [[ "${DO_ADOPT}" = "true" ]] && [[ ! "${DO_DRIFT}" = "true" ]]; then
     print -u2 -r -- "Error:          --adopt goes with --drift (--drift packages --adopt)"
     release_lock
     exit 1
   fi
-  if [ "${DO_FIX}" = "true" ] && [ ! "${DO_DOCTOR}" = "true" ]; then
+  if [[ "${DO_FIX}" = "true" ]] && [[ ! "${DO_DOCTOR}" = "true" ]]; then
     print -u2 -r -- "Error:          --fix goes with --doctor (--doctor --fix)"
     release_lock
     exit 1
@@ -5564,7 +5657,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Print help
 
-  if [ "${DO_HELP}" = "true" ]; then
+  if [[ "${DO_HELP}" = "true" ]]; then
     print_help
     release_lock
     exit
@@ -5572,7 +5665,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Print version
 
-  if [ "${DO_VERSION}" = "true" ]; then
+  if [[ "${DO_VERSION}" = "true" ]]; then
     echo "${SCRIPT_VERSION}"
     release_lock
     exit
@@ -5580,7 +5673,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Show the prompt layout (read only)
 
-  if [ "${DO_PROMPT_PREVIEW}" = "true" ]; then
+  if [[ "${DO_PROMPT_PREVIEW}" = "true" ]]; then
     print_prompt_preview
     release_lock
     exit
@@ -5588,7 +5681,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Set the terminal title and nothing else (no login steps, no files touched)
 
-  if [ "${DO_TITLE}" = "true" ]; then
+  if [[ "${DO_TITLE}" = "true" ]]; then
     TITLE_STATUS=0
     set_terminal_title "${TITLE_TEXT}" || TITLE_STATUS=1
     release_lock
@@ -5597,12 +5690,12 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Write or read a bundle of your setup
 
-  if [ "${DO_EXPORT}" = "true" ] || [ "${DO_IMPORT}" = "true" ]; then
+  if [[ "${DO_EXPORT}" = "true" ]] || [[ "${DO_IMPORT}" = "true" ]]; then
     BUNDLE_STATUS=0
-    if [ "${DO_EXPORT}" = "true" ] && [ "${DO_IMPORT}" = "true" ]; then
+    if [[ "${DO_EXPORT}" = "true" ]] && [[ "${DO_IMPORT}" = "true" ]]; then
       print -u2 -r -- "Error:          --export and --import are two jobs, run one at a time"
       BUNDLE_STATUS=1
-    elif [ "${DO_EXPORT}" = "true" ]; then
+    elif [[ "${DO_EXPORT}" = "true" ]]; then
       export_bundle "${EXPORT_TARGET}" || BUNDLE_STATUS=1
     else
       import_bundle "${IMPORT_TARGET}" || BUNDLE_STATUS=1
@@ -5613,7 +5706,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do the doctor (read only)
 
-  if [ "${DO_DOCTOR}" = "true" ]; then
+  if [[ "${DO_DOCTOR}" = "true" ]]; then
     run_doctor
     DOCTOR_STATUS=$?
     release_lock
@@ -5622,11 +5715,11 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do the drift report (read only)
 
-  if [ "${DO_DRIFT}" = "true" ]; then
+  if [[ "${DO_DRIFT}" = "true" ]]; then
     run_drift "${DRIFT_WHAT}"
     DRIFT_STATUS=$?
-    if [ "${DO_ADOPT}" = "true" ]; then
-      if [ "${DRIFT_WHAT}" = "settings" ]; then
+    if [[ "${DO_ADOPT}" = "true" ]]; then
+      if [[ "${DRIFT_WHAT}" = "settings" ]]; then
         print -u2 -r -- "Error:          --adopt is for packages: --drift packages --adopt"
         DRIFT_STATUS=1
       else
@@ -5639,7 +5732,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do config
 
-  if [ "${DO_CONFIG}" = "true" ]; then
+  if [[ "${DO_CONFIG}" = "true" ]]; then
     init_config
     release_lock
     exit
@@ -5647,7 +5740,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do --set, --unset and --get
 
-  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} + ${#CONFIG_GETS} )) || [ "${DO_CONFIG_EDIT}" = "true" ]; then
+  if (( ${#CONFIG_SETS} + ${#CONFIG_UNSETS} + ${#CONFIG_GETS} )) || [[ "${DO_CONFIG_EDIT}" = "true" ]]; then
     run_config_commands
     CONFIG_STATUS=$?
     release_lock
@@ -5663,20 +5756,20 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Set Go PATH
 
-  if [ -d "$GO_HOME" ]; then
+  if [[ -d "$GO_HOME" ]]; then
     exp_env "PATH"    "${GO_HOME}"
     set_env "GOPATH"  "${GO_HOME}"  
   fi
 
   # Do sudoers
 
-  if [ "${DO_SUDOERS_CHECK}" = "true" ]; then
+  if [[ "${DO_SUDOERS_CHECK}" = "true" ]]; then
     phase sudoers check_sudoers_config
   fi
 
   # Do install
 
-  if [ "${DO_INSTALL}" = "true" ]; then
+  if [[ "${DO_INSTALL}" = "true" ]]; then
     DO_ENV_SETUP="false"
     do_install "" "set"
     release_lock
@@ -5685,21 +5778,21 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do check defaults
 
-  if [ "${DO_DEFAULTS_CHECK}" = "true" ]; then
+  if [[ "${DO_DEFAULTS_CHECK}" = "true" ]]; then
     phase defaults check_defaults
   fi
 
   # Do backups, rollback and uninstall
 
-  if [ "${DO_BACKUPS}" = "true" ] || [ "${DO_ROLLBACK}" = "true" ] || [ "${DO_UNINSTALL}" = "true" ]; then
+  if [[ "${DO_BACKUPS}" = "true" ]] || [[ "${DO_ROLLBACK}" = "true" ]] || [[ "${DO_UNINSTALL}" = "true" ]]; then
     BACKUP_STATUS=0
-    if [ "${DO_BACKUPS}" = "true" ]; then
+    if [[ "${DO_BACKUPS}" = "true" ]]; then
       print_backups || BACKUP_STATUS=1
     fi
-    if [ "${DO_ROLLBACK}" = "true" ]; then
+    if [[ "${DO_ROLLBACK}" = "true" ]]; then
       do_rollback "${ROLLBACK_TARGET}" || BACKUP_STATUS=1
     fi
-    if [ "${DO_UNINSTALL}" = "true" ]; then
+    if [[ "${DO_UNINSTALL}" = "true" ]]; then
       do_uninstall || BACKUP_STATUS=1
     fi
     release_lock
@@ -5708,7 +5801,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do list or undo of the defaults the script has changed
 
-  if [ "${DO_DEFAULTS_UNDO}" = "true" ]; then
+  if [[ "${DO_DEFAULTS_UNDO}" = "true" ]]; then
     do_defaults_undo "${DEFAULTS_UNDO_TARGET}"
     UNDO_STATUS=$?
     release_lock
@@ -5717,20 +5810,20 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do dotfiles
 
-  if [ "${DO_UNLINK}" = "true" ]; then
+  if [[ "${DO_UNLINK}" = "true" ]]; then
     dotfiles_unlink
     release_lock
     exit
   fi
-  if [ "${DO_DOTFILES_CHECK}" = "true" ]; then
+  if [[ "${DO_DOTFILES_CHECK}" = "true" ]]; then
     phase dotfiles check_dotfiles_config
   fi
   phase dotfiles-sync check_dotfiles_sync
 
   # Do check for updates
 
-  if [ "${DO_UPDATE_CHECK}" = "true" ] || [ "${DO_VERSION_CHECK}" = "true" ]; then
-    if [ "${DO_UPDATE_CHECK}" = "true" ]; then
+  if [[ "${DO_UPDATE_CHECK}" = "true" ]] || [[ "${DO_VERSION_CHECK}" = "true" ]]; then
+    if [[ "${DO_UPDATE_CHECK}" = "true" ]]; then
       update_script
     else
       check_for_update
@@ -5742,84 +5835,84 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   # Handle brew config
 
   if is_osx; then
-    if [ "${DO_BREW_CHECK}" = "true" ]; then
+    if [[ "${DO_BREW_CHECK}" = "true" ]]; then
       phase brew check_brew_config
     fi
   fi
 
   # Do package check
 
-  if [ "${DO_PACKAGE_CHECK}" = "true" ]; then
+  if [[ "${DO_PACKAGE_CHECK}" = "true" ]]; then
     phase packages check_package_config
   fi
 
   # Do font(s) check
 
-  if [ "${DO_FONTS_CHECK}" = "true" ]; then
+  if [[ "${DO_FONTS_CHECK}" = "true" ]]; then
     phase fonts check_fonts_config
   fi
 
-  if [ "${DO_POSH_CHECK}" = "true" ]; then
+  if [[ "${DO_POSH_CHECK}" = "true" ]]; then
     phase posh check_posh_config
   fi
 
   # Do zinit checks
 
-  if [ "${DO_ZINIT_CHECK}" = "true" ]; then
+  if [[ "${DO_ZINIT_CHECK}" = "true" ]]; then
     phase zinit check_zinit_config
   fi
 
   # Do pyenv checks
 
-  if [ "${DO_PYENV_CHECK}" = "true" ]; then
+  if [[ "${DO_PYENV_CHECK}" = "true" ]]; then
     phase pyenv check_pyenv_config
   fi
 
   # Do rbenv checks
 
-  if [ "${DO_RBENV_CHECK}" = "true" ]; then
+  if [[ "${DO_RBENV_CHECK}" = "true" ]]; then
     phase rbenv check_rbenv_config
   fi
 
   # Do language and tool managers (fnm, rustup, uv, mise, atuin)
 
-  if [ "${DO_TOOLS_CHECK}" = "true" ]; then
+  if [[ "${DO_TOOLS_CHECK}" = "true" ]]; then
     phase tools check_tools_config
   fi
 
   # Do zoxide (after the plugin lists, which provide compdef for its completions)
 
-  if [ "${DO_ZOXIDE_CHECK}" = "true" ]; then
+  if [[ "${DO_ZOXIDE_CHECK}" = "true" ]]; then
     phase zoxide check_zoxide_config
   fi
 
   # Do Powerlevel10k config
 
-  if [ "${DO_P10K_CHECK}" = "true" ]; then
+  if [[ "${DO_P10K_CHECK}" = "true" ]]; then
     phase p10k check_p10k_config
   fi
 
   # Do oh-my-zsh config
 
-  if [ "${DO_ZOSH_CHECK}" = "true" ]; then
+  if [[ "${DO_ZOSH_CHECK}" = "true" ]]; then
     phase zosh check_zosh_config
   fi
 
   # Handle zsh theme
 
-  if [ "${DO_ZSH_THEME}" = "false" ]; then
+  if [[ "${DO_ZSH_THEME}" = "false" ]]; then
     ZSH_THEME=""
   fi
 
-  if [ ! "${START_DIR}" = "none" ] && [ ! "${START_DIR}" = "" ]; then
-    if [ -d "${START_DIR}" ]; then
+  if [[ ! "${START_DIR}" = "none" ]] && [[ ! "${START_DIR}" = "" ]]; then
+    if [[ -d "${START_DIR}" ]]; then
       cd "${START_DIR}" || return
     fi
   fi
 
   # Update package list
 
-  if [ "${DO_UPDATE_LIST}" = "true" ]; then
+  if [[ "${DO_UPDATE_LIST}" = "true" ]]; then
     phase package-list update_package_list
   fi
 
@@ -5829,19 +5922,19 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Do LDFLAGS check
 
-  if [ "${DO_LDFLAGS_CHECK}" = "true" ]; then
+  if [[ "${DO_LDFLAGS_CHECK}" = "true" ]]; then
     phase ldflags check_ldflags_config
   fi
 
   # Do PKGCONFIG check
 
-  if [ "${DO_PKGCONFIG_CHECK}" = "true" ]; then
+  if [[ "${DO_PKGCONFIG_CHECK}" = "true" ]]; then
     phase pkgconfig check_pkgconfig_config
   fi
 
   # Do CPPFLAGS check
 
-  if [ "${DO_CPPFLAGS_CHECK}" = "true" ]; then
+  if [[ "${DO_CPPFLAGS_CHECK}" = "true" ]]; then
     phase cppflags check_cppflags_config
   fi
 
@@ -5851,7 +5944,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # The default window title, before each prompt (once, and not at all when TERMINAL_TITLE is "none")
 
-  if [ "${TERMINAL_TITLE}" != "none" ] && [[ -o interactive ]]; then
+  if [[ "${TERMINAL_TITLE}" != "none" ]] && [[ -o interactive ]]; then
     (( ${precmd_functions[(Ie)apply_terminal_title]} )) || precmd_functions+=( apply_terminal_title )
     # Claude Code would overwrite that title with its own, so tell it not to (set it to 0 to let it)
     export CLAUDE_CODE_DISABLE_TERMINAL_TITLE="${CLAUDE_CODE_DISABLE_TERMINAL_TITLE:-1}"
@@ -5859,10 +5952,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   # Change to start directory
 
-  if [ "${START_DIR}" = "none" ] || [ "${START_DIR}" = "" ]; then
+  if [[ "${START_DIR}" = "none" ]] || [[ "${START_DIR}" = "" ]]; then
     cd "${INIT_DIR}"
   else
-    if [ -d "${START_DIR}" ]; then
+    if [[ -d "${START_DIR}" ]]; then
       cd "${START_DIR}"
     else
       cd "${INIT_DIR}"
@@ -5878,7 +5971,7 @@ fi
 
 # Set prompt
 
-if [ "${MY_USERID}" = "0" ]; then
+if [[ "${MY_USERID}" = "0" ]]; then
   export PS1="%n@%m %1#:"
 else
   export PS1="%n@%m %1~:"
