@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 2.2.0
+Current Version: 2.4.1
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -192,6 +192,7 @@ from run to run.)
   that is printed at the first prompt after they have loaded, slowest first, with each plugin's load time.
 - **Cache rebuilds** are listed under the report as `Cache rebuilt: ...`, with the reason. A steady login has none. If the `brew` step is slow on
   a login that has them, the cost is the tool running again, not the cache being read. A `brew` update is the expected cause, not yet seen on a Mac.
+- **Several logins:** `./ussuri.zsh --runs N` (1 to 50) runs N timed logins and prints, for each step, the median, the least and the most, and how many logins gave a value. Use it before and after a change, since one login can be slow for reasons of its own. Each login is a real one, so the first run does the one off work
 - **What it costs when you are not timing:** the marks are one array append each and the per line timing is only done under `--timing`, so a normal
   login pays nothing measurable for them.
 - **No processes** is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of every executable in
@@ -234,6 +235,7 @@ Settings (~/.ussuri/config)
   -k, --config                    Create the config file
       --title TEXT                Set this window's title, and nothing else
       --selftest                  Check the plugin lists in a throwaway home and report
+      --runs N                    Time N logins (1 to 50) and report the median of each step
       --set NAME VALUE            Save a setting, for every new shell
       --unset NAME                Remove a setting
       --get [NAME]                Show a setting (or all) and where it is from
@@ -461,6 +463,7 @@ text. Under `--dryrun` nothing is written, but `--get` in the same run shows the
 | `ATUIN_BIND_UP` | false (history substring search keeps the up arrow) |
 | `ATUIN_IMPORT` | true (import existing history once, when building) |
 | `VI_MODE` | false (the Emacs key bindings; `true` loads jeffreytse/zsh-vi-mode, which is loaded before the other key binding plugins) |
+| `PLUGIN_EXCLUDE` | empty (plugins from the lists to leave out, by the name the list gives them, space separated, e.g. `OMZP::sudo wfxr/forgit`; matched exactly, in the shipped lists and your own) |
 
 **What a login checks** (`DO_..._CHECK`; the switches turn these on for a manual run)
 
