@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.1.9
+# Version: 2.2.0
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -2020,6 +2020,17 @@ ussuri_compinit () {
   if (( ${#left_out} )); then
     print -u2 -r -- "Note:           compinit left out insecure completion directories: ${(j:, :)left_out} (compaudit lists them)"
   fi
+}
+
+# Homebrew's command-not-found handler (sourced by OMZP::command-not-found on a Mac) is called with the whole command line
+# as one word ("$*"), so `ncdu --version` looked up "ncdu --version" and got no install hint. Call it with the command name
+# only. Run after the snippet has loaded; without Homebrew's handler there is nothing to change and the others stay.
+
+ussuri_command_not_found () {
+  (( $+functions[homebrew_command_not_found_handle] )) || return 0
+  command_not_found_handler () {
+    homebrew_command_not_found_handle "$1"
+  }
 }
 
 # --runs N: run N timed logins (each is --timing, so the report is the one you would get from it) and print, for each

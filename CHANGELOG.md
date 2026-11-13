@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-11-13
+
+### Fixed
+
+- `command-not-found` on a Mac gave the install hint only for a bare command: `ncdu` got `brew install ncdu`, but `ncdu --version` got `zsh: command not found: ncdu --version`. Homebrew's handler is called with the whole command line, so `ussuri_command_not_found` (run after the snippet loads, in both zinit lists) makes the handler get the command name only. Tested with a stand-in handler (`test_command_not_found_args`) and with Homebrew's real handler in a pty. Other platforms' handlers are not changed
+
 ## [2.1.9] - 2026-11-13
 
 ### Removed
