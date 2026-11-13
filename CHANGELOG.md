@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.8] - 2026-11-13
+
+### Changed
+
+- `files/packages/macos.brew` no longer lists `blackhole-2ch`, `multipass`, `utm`, `warp` and `xquartz`, which are casks. They are in `files/packages/macos.cask` now, so they are installed with `brew install --cask` (`brew install` falls back to the cask for a name in the formula list, but `--drift` reports them as missing formulae). The cask list's header no longer says nothing is installed by default. Existing installs keep their copy of the lists until `--install` or `--update`
+
+## [2.1.7] - 2026-11-13
+
+### Fixed
+
+- The Homebrew init cache was never written on a Mac. `brew shellenv` prints nothing when its own bin is already first in `PATH`, and the login puts it there first, so the cache stayed empty and every login ran `brew shellenv` again (`--timing` said `Cache rebuilt: no cache for brew yet` each time). The cache now runs `brew shellenv` with a PATH that does not start with Homebrew's prefix. Its output expands `$PATH` itself, so the cached text is the same. On this Mac the `brew` step went from 12 to 14 ms per login to about 0.5 ms once cached
+
+## [2.1.6] - 2026-11-13
+
+### Fixed
+
+- `--prompt-preview` and `--doctor` showed the architecture from `$CPUTYPE` (`arm64` on Apple Silicon), while the prompt's `cpu_arch` segment shows what powerlevel10k reads (`machine`, which says `arm64e`). The preview now reads it the same way: `/proc/sys/kernel/arch`, else `machine`, else `arch`. Tested on macOS only; the `/proc` branch is not run here
+
 ## [2.1.5] - 2026-11-13
 
 ### Fixed

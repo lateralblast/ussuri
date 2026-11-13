@@ -1,6 +1,11 @@
 # Homebrew casks (applications, fonts) to install with -P, one per line, installed with brew install --cask.
 # This file is replaced by updates: put your own in ~/.ussuri/files/packages/local.cask, which never is.
-# Nothing is installed by default. Examples:
+# Examples of others, commented out (uncomment one to install it):
 #   firefox
 #   visual-studio-code
 #   font-fira-code-nerd-font
+blackhole-2ch
+multipass
+utm
+warp
+xquartz

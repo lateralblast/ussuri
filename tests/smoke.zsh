@@ -86,6 +86,7 @@ make_stubs () {
   : > "${TMP}/installed.txt"
   : > "${TMP}/taps.txt"
   : > "${TMP}/casks.txt"
+  grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.cask" > "${TMP}/shipped-casks.txt"
   : > "${TMP}/leaves.txt"
   stub defaults "echo \"defaults \$*\" >> ${LOG}; [ \"\$1\" = write ] && exit 0; exit 1"
   stub chflags  "echo \"chflags \$*\" >> ${LOG}"
@@ -96,14 +97,16 @@ make_stubs () {
 #!/bin/sh
 echo "brew $*" >> __LOG__
 case "$1 $2" in
-  "list --cask") cat __TMP__/casks.txt; exit 0 ;;
+  "list --cask") cat __TMP__/casks.txt __TMP__/shipped-casks.txt; exit 0 ;;
   "list --formula") cat __TMP__/installed.txt; exit 0 ;;
 esac
 # plain "brew list" is the formulae and the casks together, as the real one is
-[ "$1" = list ] && { cat __TMP__/installed.txt; cat __TMP__/casks.txt; }
+# (shipped-casks.txt is the casks in files/packages/macos.cask, counted as installed: the fixtures are a machine that has them)
+[ "$1" = list ] && { cat __TMP__/installed.txt; cat __TMP__/casks.txt __TMP__/shipped-casks.txt; }
 [ "$1" = leaves ] && cat __TMP__/leaves.txt
 [ "$1" = tap ] && [ -z "$2" ] && cat __TMP__/taps.txt
-[ "$1" = shellenv ] && echo 'export HOMEBREW_PREFIX=/stub'
+# As the real one: no output when its bin is already first in PATH (the script puts it there), so a cache built that way is empty
+[ "$1" = shellenv ] && case "${PATH}" in __TMP__/brew/bin:__TMP__/brew/sbin:*) ;; *) echo 'export HOMEBREW_PREFIX=/stub' ;; esac
 exit 0
 EOF
   sed -i.bak "s#__LOG__#${LOG}#; s#__TMP__#${TMP}#g" "${STUBS}/brew"
@@ -153,7 +156,7 @@ new_home () {
   print -r -- 'zinit () { :; }' > "${H}/.zinit/zinit.zsh"
   print -r -- 'font-fira-code-nerd-font' > "${TMP}/installed.txt"
   : > "${TMP}/taps.txt"; : > "${TMP}/casks.txt"; : > "${TMP}/leaves.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   : > "${LOG}"
 }
 
@@ -1444,7 +1447,8 @@ test_timing_cache_rebuilds () {
   local out
   out=$( run --timing 2>&1 )
   check "a steady login rebuilds no cache, so --timing reports none" "$( print -r -- "${out}" | grep -c '^Cache rebuilt' )" "0"
-  local cache=( "${H}"/.ussuri/cache/*shellenv*(N) )
+  # The name is the command, cut to 120 characters, and the test's temp path makes it long enough to cut "shellenv" off
+  local cache=( "${H}"/.ussuri/cache/*_brew-*(N) )
   check "the brew shellenv cache is there to check" "${#cache}" "1"
   touch -t 200001010000 "${cache[1]}"
   out=$( run --timing 2>&1 )
@@ -3005,12 +3009,12 @@ test_local_packages () {
   grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
   print -r -- "my-extra-tool" > "${H}/.ussuri/files/packages/local.brew"
   printf '%s\n' "# a comment" "ansible" >> "${H}/.ussuri/files/packages/local.brew"
-  print -r -- "git" > "${H}/.ussuri/brew.list"; cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  print -r -- "git" > "${H}/.ussuri/brew.list"; cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   local out
   out=$( run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew install' | sed 's/.*install //' | sort | tr '\n' ' ' )
   check "packages in packages/local.<ext> are added to the shipped list" "${out}" "ansible autoconf my-extra-tool "
   : > "${LOG}"
-  cp "${ROOT}/files/packages/macos.brew" "${H}/.ussuri/brew.list"; print -r -- "my-extra-tool" >> "${H}/.ussuri/brew.list"
+  cat "${ROOT}/files/packages/macos.brew" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"; print -r -- "my-extra-tool" >> "${H}/.ussuri/brew.list"
   run -P > /dev/null 2>&1
   check "once everything is installed a stamp is saved" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
   : > "${LOG}"
@@ -3283,7 +3287,7 @@ test_casks_and_taps () {
   # Everything in the formula list and the font is installed, one of the casks is, and one tap is (in lower case, as brew shows them)
   { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "another-app"; } > "${TMP}/installed.txt"
   print -r -- "other/repo" > "${TMP}/taps.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
   : > "${LOG}"
   run -P > /dev/null 2>&1
   check "a cask that is missing is installed as a cask" "$( grep -c '^brew install --cask some-app$' "${LOG}" )" "1"
@@ -3296,7 +3300,7 @@ test_casks_and_taps () {
   # Now everything is there: each list is stamped separately
   { cat "${TMP}/installed.txt"; print -r -- "some-app"; } > "${TMP}/installed2.txt"; cp "${TMP}/installed2.txt" "${TMP}/installed.txt"
   printf '%s\n' "other/repo" "someone/tools" > "${TMP}/taps.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
   rm -f "${H}"/.ussuri/macos.*.sum
   : > "${LOG}"
   run -P > /dev/null 2>&1
@@ -3315,14 +3319,14 @@ test_casks_and_taps_dryrun () {
 
 test_casks_and_taps_defaults () {
   local f
-  for f in macos.cask macos.tap; do
-    check "files/packages/${f} ships with nothing to install (examples are comments)" "$( grep -c -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/${f}" )" "0"
-  done
+  check "files/packages/macos.tap ships with nothing to install (examples are comments)" "$( grep -c -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.tap" )" "0"
+  # The casks that were formulae in macos.brew (installed, so the list is no longer empty)
+  check "files/packages/macos.cask ships with the five casks that used to be in macos.brew" "$( grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.cask" | tr '\n' ' ' )" "blackhole-2ch multipass utm warp xquartz "
   new_home
   rm -f "${H}/.ussuri/files/packages/macos.cask" "${H}/.ussuri/files/packages/macos.tap"
   : > "${LOG}"
   grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   local out
   out=$( run -P 2>&1 )
   check "an install from before these lists existed still works, and processes the formulae" "$( grep -c -E '^brew install (ansible|autoconf)$' "${LOG}" )" "2"
@@ -3350,7 +3354,7 @@ layered_home () {
   new_home
   # the shipped formulae and the font (a login also checks the font), so only what a test adds is missing
   { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; } > "${TMP}/installed.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   LF="${H}/.ussuri/files/packages"
   mkdir -p "${LF}/profiles/work" "${LF}/profiles/home" "${LF}/hosts/box" "${LF}/hosts/other"
 }
@@ -3380,7 +3384,7 @@ test_profile_layers () {
 test_profile_exclusions () {
   layered_home
   grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   printf '%s\n' '!ansible' '!not-in-the-list' > "${LF}/profiles/work/local.brew"
   EXTRA_ENV=( MACHINE=box )
   check "without the profile both missing packages are installed" "$( dryrun_brew_installs )" "ansible autoconf "
@@ -3852,6 +3856,19 @@ test_color_contrast () {
   color_rgb 244;              check "the grey ramp" "${COLOR_RGB[*]}" "128 128 128"
 }
 
+test_prompt_preview_cpu_arch () {
+  new_home
+  local out expected
+  out=$( run --prompt-preview 2>&1 )
+  # powerlevel10k's cpu_arch: /proc/sys/kernel/arch, else machine, else arch
+  if [[ -r /proc/sys/kernel/arch ]]; then
+    expected="$(</proc/sys/kernel/arch)"
+  else
+    expected="$( command -v machine > /dev/null && command machine 2> /dev/null || command arch 2> /dev/null )"
+  fi
+  check "the preview shows the architecture the way the prompt does" "$( print -r -- "${out}" | grep -c -E "^  left +cpu_arch +${expected} " )" "1"
+}
+
 test_prompt_preview () {
   new_home
   local out before after
@@ -4167,7 +4184,7 @@ test_linux_id () {
 test_packages () {
   new_home
   grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
-  cp "${TMP}/installed.txt" "${H}/.ussuri/brew.list"
+  cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   check "dry run proposes exactly the missing packages" "$( run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew install' | sed 's/.*install //' | tr '\n' ' ' )" "ansible autoconf "
   : > "${LOG}"
   run -P > /dev/null 2>&1
@@ -4178,6 +4195,7 @@ test_packages () {
   check "stamp once everything is installed" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
   printf 'hashicorp/tap/terraform\n# comment\n\nfoo\n' > "${H}/.ussuri/files/packages/macos.brew"
   printf 'terraform\nfoo\n' > "${H}/.ussuri/brew.list"
+  cat "${TMP}/shipped-casks.txt" >> "${H}/.ussuri/brew.list"
   cp "${H}/.ussuri/brew.list" "${TMP}/installed.txt"
   : > "${LOG}"
   run -P > /dev/null 2>&1
