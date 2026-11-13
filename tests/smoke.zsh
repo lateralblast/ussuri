@@ -730,7 +730,8 @@ test_guards () {
   check "no copy when the work directory does not exist" "$( wc -l < "${TMP}/copy.log" | tr -d ' ' )" "0"
   mkdir -p "${WORK_DIR}/files"
   copy_support_files
-  check "copies when both exist" "$( wc -l < "${TMP}/copy.log" | tr -d ' ' )" "1"
+  check "copies the files when both exist" "$( grep -c 'tar -cpf' "${TMP}/copy.log" )" "1"
+  check "and the changelog, when the script has one next to it" "$( grep -c 'CHANGELOG.md' "${TMP}/copy.log" )" "1"
   SCRIPT_DIR="/usr/bin"; : > "${TMP}/copy.log"
   copy_support_files
   check "never copies from /usr/bin" "$( wc -l < "${TMP}/copy.log" | tr -d ' ' )" "0"
@@ -2160,6 +2161,32 @@ test_compinit_insecure () {
   chmod 755 "${bad}"
 }
 
+test_plugin_exclude () {
+  # PLUGIN_EXCLUDE leaves out the plugins it names, matched exactly, in the shipped lists and every login
+  healthy_home
+  local log="${TMP}/zinit.log"
+  check "off by default" "$( run --get PLUGIN_EXCLUDE 2>&1 )" "PLUGIN_EXCLUDE is not set"
+  print -r -- 'zinit () { print -r -- "zinit $*" >> '"${log}"' }' > "${H}/.zinit/zinit.zsh"
+  rm -f "${log}"; run > /dev/null 2>&1
+  check "by default a snippet in the list is loaded" "$( grep -c 'snippet OMZP::sudo' "${log}" )" "1"
+  rm -f "${log}"; EXTRA_ENV=( PLUGIN_EXCLUDE="OMZP::sudo wfxr/forgit" ); run > /dev/null 2>&1; EXTRA_ENV=()
+  check "an excluded snippet is not loaded" "$( grep -c 'snippet OMZP::sudo' "${log}" )" "0"
+  check "an excluded plugin is not" "$( grep -c 'light wfxr/forgit' "${log}" )" "0"
+  check "the others are" "$( grep -c 'snippet OMZP::git' "${log}" )" "1"
+  rm -f "${log}"; EXTRA_ENV=( PLUGIN_EXCLUDE="OMZP::sud wfxr" ); run > /dev/null 2>&1; EXTRA_ENV=()
+  check "a name is matched exactly, so a part of one excludes nothing" "$( grep -c 'snippet OMZP::sudo' "${log}" )" "1"
+  rm -f "${log}"; run --set PLUGIN_EXCLUDE "OMZP::git" > /dev/null 2>&1; run > /dev/null 2>&1
+  check "a setting saved with --set applies at the next login" "$( grep -c 'snippet OMZP::git' "${log}" )" "0"
+  check "and --get shows it" "$( run --get PLUGIN_EXCLUDE 2>&1 )" "PLUGIN_EXCLUDE=OMZP::git  (config: ${H}/.ussuri/config)"
+  local excl
+  excl=$( load_function plugin_excluded; PLUGIN_EXCLUDE="OMZP::sudo wfxr/forgit"
+    plugin_excluded "zinit ice wait lucid; zinit snippet OMZP::sudo" && print -r -- yes || print -r -- no
+    plugin_excluded "zinit ice wait lucid; zinit light wfxr/forgit" && print -r -- yes || print -r -- no
+    plugin_excluded "zinit ice wait lucid; zinit snippet OMZP::sudoers" && print -r -- yes || print -r -- no
+    plugin_excluded "bind_history_search" && print -r -- yes || print -r -- no )
+  check "the names are matched in the lines that load them, and nothing else is" "$( print -r -- "${excl}" | tr '\n' ' ' )" "yes yes no no "
+}
+
 test_vi_mode () {
   # VI_MODE is off by default: no vi plugin is loaded, and the Emacs bindings stay. On, the plugin is loaded by both
   # lists, before the other key binding plugins
@@ -2179,6 +2206,51 @@ test_vi_mode () {
   check "turbo (the default) defers it, like the other plugins" "$( grep -B1 'light jeffreytse/zsh-vi-mode' "${log}" | head -1 )" "zinit ice wait lucid"
   check "it is loaded before syntax highlighting" "$( awk '/light jeffreytse\/zsh-vi-mode/ {v=NR} /light zsh-users\/zsh-syntax-highlighting/ {h=NR} END {print (v && h && v < h) ? "yes" : "no"}' "${log}" )" "yes"
   check "both lists guard it" "$( grep -c 'if \[\[ "${VI_MODE}" == true \]\]; then zinit' "${ROOT}/files/zinit/zinit.zsh" "${ROOT}/files/zinit/zinit-turbo.zsh" | awk -F: '{s+=$2} END {print s}' )" "2"
+}
+
+test_changelog () {
+  # --changelog prints the changelog next to the script, or the copy in the work directory (an installed script has none
+  # next to it). Its newest entry is this version, and the entries are in order, newest first (the order is checked by
+  # the version numbers, as the update check compares them)
+  healthy_home
+  local out version heads
+  version=$( run --version 2>&1 )
+  cp "${ROOT}/CHANGELOG.md" "${TMP}/CHANGELOG.md"
+  out=$( run --changelog 2>&1 )
+  check "prints the changelog next to the script" "$( print -r -- "${out}" | grep -c '^# Changelog' )" "1"
+  check "its newest entry is this version" "$( print -r -- "${out}" | grep -m1 '^## \[' | cut -d' ' -f2 )" "[${version}]"
+  heads=$( print -r -- "${out}" | grep -o -E '^## \[[0-9.]+\]' | tr -d '#[] ' )
+  check "the entries are newest first" "$( print -r -- "${heads}" | diff -q - <( print -r -- "${heads}" | sort -t. -k1,1nr -k2,2nr -k3,3nr ) > /dev/null && echo yes || echo no )" "yes"
+  rm -f "${TMP}/CHANGELOG.md"
+  mkdir -p "${H}/.ussuri"; cp "${ROOT}/CHANGELOG.md" "${H}/.ussuri/CHANGELOG.md"
+  out=$( run --changelog 2>&1 )
+  check "with none next to it, the copy in the work directory is printed" "$( print -r -- "${out}" | grep -m1 '^## \[' | cut -d' ' -f2 )" "[${version}]"
+}
+
+test_timing_runs () {
+  # --runs N runs N real timed logins and reports each step's median, least, most and how many logins gave it a value.
+  # The median is between the least and the most, for an odd and an even number of logins
+  healthy_home
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  local out rc rows
+  out=$( run --runs 3 2>&1 ); rc=$?
+  check "reports the median of three logins" "$( print -r -- "${out}" | grep -c '^Startup timing, the median of 3 logins' )" "1"
+  check "and exits 0" "${rc}" "0"
+  rows=$( print -r -- "${out}" | grep -c -E '^  [a-z]' )
+  check "a row for each step, each from all three logins" "$( print -r -- "${out}" | grep -c -E '^  [a-z].* +3$' )" "$(( rows - 1 ))"
+  check "the total's median is between its least and its most" "$( print -r -- "${out}" | awk '/^  total/ {print ($2 >= $3 && $2 <= $4) ? "yes" : "no"}' )" "yes"
+  check "the first step's median is between its least and its most" "$( print -r -- "${out}" | awk '/^  config files/ {print ($(NF-3) >= $(NF-2) && $(NF-3) <= $(NF-1)) ? "yes" : "no"}' )" "yes"
+  out=$( run --runs 2 2>&1 )
+  check "two logins: the median is the mean of the two" "$( print -r -- "${out}" | awk '/^  total/ {print ($2 >= $3 && $2 <= $4) ? "yes" : "no"}' )" "yes"
+  check "and each row says two" "$( print -r -- "${out}" | grep -c -E '^  total .* 2$' )" "1"
+  out=$( run --runs 0 2>&1 ); rc=$?
+  check "0 logins is refused" "$( print -r -- "${out}" | grep -c 'needs a number from 1 to 50' )" "1"
+  check "(and exits 1)" "${rc}" "1"
+  out=$( run --runs 51 2>&1 ); rc=$?
+  check "more than 50 is refused" "$( print -r -- "${out}" | grep -c 'needs a number from 1 to 50' )" "1"
+  out=$( run --runs many 2>&1 ); rc=$?
+  check "and a word" "$( print -r -- "${out}" | grep -c 'needs a number from 1 to 50' )" "1"
 }
 
 test_selftest () {

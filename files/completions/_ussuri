@@ -65,6 +65,7 @@ _ussuri_settings () {
     UPDATE_SHA256
     UV_INSTALL_SHA256
     UV_PYTHON
+    PLUGIN_EXCLUDE
     VI_MODE
     ZINIT_REF
     ZINIT_TURBO
@@ -160,6 +161,7 @@ _ussuri () {
     '--prompt-preview[show the top line of the prompt, its colours and checks]' \
     '--title[set this window'"'"'s title and do nothing else]:title:' \
     '--selftest[check the plugin lists in a throwaway home and report]' \
+    '--runs[time N logins and report the median of each step]:logins:' \
     '--export[write your config, local lists and dotfiles to a file]:: :_files' \
     '--import[read an export back, keeping what it replaces]:export file:_files' \
     '*:: :_nothing'

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.2.0
+# Version: 2.4.1
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1786,6 +1786,7 @@ set_all_defaults () {
   set_env "INSTALL_ATUIN"       "false"
   set_env "ATUIN_BIND_UP"       "false"
   set_env "VI_MODE"             "false"
+  set_env "PLUGIN_EXCLUDE"      ""
   set_env "ATUIN_IMPORT"        "true"
   set_env "FNM_HOME"            "${HOME_DIR}/.local/share/fnm"
   set_env "UV_BIN_DIR"          "${HOME_DIR}/.local/bin"
@@ -1896,6 +1897,10 @@ copy_support_files () {
     if [[ -d "${SCRIPT_DIR}/files" ]] && [[ -d "${WORK_DIR}/files" ]]; then
       execute_command "( cd ${(q)SCRIPT_DIR}/files && tar -cpf - . )|( cd ${(q)WORK_DIR}/files && tar -xpf - )" "run"
     fi
+    # The changelog, for --changelog from an installed copy (see print_changelog)
+    if [[ -f "${SCRIPT_DIR}/CHANGELOG.md" ]] && [[ -d "${WORK_DIR}" ]]; then
+      execute_command "cp -p ${(q)SCRIPT_DIR}/CHANGELOG.md ${(q)WORK_DIR}/CHANGELOG.md"
+    fi
   fi
 }
 
@@ -1941,10 +1946,22 @@ verbose_message () {
 
 # Read file into array and process
 
+# PLUGIN_EXCLUDE: a plugin line whose plugin is named there is skipped, matched exactly on the name the line gives it
+# (user/repo for a plugin, OMZP::name for a snippet). Pure zsh, and it costs nothing when the list is empty
+
+plugin_excluded () {
+  local -a excluded=( ${=PLUGIN_EXCLUDE} )
+  [[ "$1" =~ 'zinit (light|snippet|load) ([^ ;]+)' ]] || return 1
+  (( ${excluded[(Ie)${match[2]}]} ))
+}
+
 execute_from_file () {
   FILE="$1"
   for LINE in "${(@f)"$(<${FILE})"}"; do
     if [[ ! "${LINE}" =~ "^#" ]]; then
+      if [[ -n "${PLUGIN_EXCLUDE}" ]] && plugin_excluded "${LINE}"; then
+        continue
+      fi
       if [[ "${LINE}" =~ "Finder" ]]; then
         set_env "RESTART_FINDER" "true" "force"
       fi
@@ -1984,6 +2001,65 @@ ussuri_compinit () {
   if (( ${#left_out} )); then
     print -u2 -r -- "Note:           compinit left out insecure completion directories: ${(j:, :)left_out} (compaudit lists them)"
   fi
+}
+
+# --runs N: run N timed logins (each is --timing, so the report is the one you would get from it) and print, for each
+# step, the median and the least and most of the N, with how many logins gave a value for it. Each login is a real
+# one, so the first run does the one off work, as with --timing on its own
+
+timing_runs_main () {
+  local runs="$1" i out line step median min max
+  local -a order vals sorted
+  local -A samples
+  local -i count=0 failed=0
+  if [[ ! "${runs}" == <1-50> ]]; then
+    print -u2 -r -- "Error:          --runs needs a number from 1 to 50, not '${runs}'"
+    return 1
+  fi
+  for (( i = 1; i <= runs; i++ )); do
+    out="$( zsh "${CALLER:A}" --timing 2>&1 )" || failed+=1
+    count+=1
+    step=""
+    for line in "${(@f)out}"; do
+      if [[ "${line}" == "Startup timing"* ]]; then
+        step="report"
+        continue
+      fi
+      [[ "${step}" == "report" ]] || continue
+      [[ "${line}" == Slowest:* ]] && break
+      if [[ "${line}" =~ '^  (.*[^ ]) +(-?[0-9]+\.[0-9])$' ]]; then
+        if (( ! ${+samples[${match[1]}]} )); then
+          order+=( "${match[1]}" )
+          samples[${match[1]}]=""
+        fi
+        samples[${match[1]}]+=" ${match[2]}"
+      fi
+    done
+    step=""
+  done
+  if (( ${#order} == 0 )); then
+    print -u2 -r -- "Error:          no login reported its timing (run zsh ${CALLER:A} --timing to see why)"
+    return 1
+  fi
+  print -r -- "Startup timing, the median of ${runs} logins (milliseconds): the least, the most, and how many logins gave the step a value"
+  printf '  %-26s %8s %8s %8s %4s\n' "step" "median" "least" "most" "n"
+  for step in "${order[@]}"; do
+    vals=( ${=samples[${step}]} )
+    sorted=( ${(n)vals} )
+    local -i n=${#sorted} mid
+    mid=$(( (n + 1) / 2 ))
+    if (( n % 2 )); then
+      median=$(( sorted[mid] ))
+    else
+      median=$(( (sorted[mid] + sorted[mid + 1]) / 2.0 ))
+    fi
+    printf '  %-26s %8.1f %8.1f %8.1f %4d\n' "${step}" "${median}" "${sorted[1]}" "${sorted[-1]}" "${n}"
+  done
+  if (( failed )); then
+    print -r -- "${failed} of the ${count} logins did not finish cleanly (their exit status was not 0); the figures above are from the rest"
+    return 1
+  fi
+  return 0
 }
 
 # --selftest: load the eager plugin list (zinit.zsh, so every plugin loads here) in a throwaway home, and report each line.
@@ -2176,6 +2252,7 @@ print_help () {
   help_row "-k" "--config"         "Create the config file"
   help_row ""   "--title TEXT"     "Set this window's title, and nothing else"
   help_row ""   "--selftest"       "Check the plugin lists in a throwaway home and report"
+  help_row ""   "--runs N"         "Time N logins (1 to 50) and report the median of each step"
   help_row ""   "--set NAME VALUE" "Save a setting, for every new shell"
   help_row ""   "--unset NAME"     "Remove a setting"
   help_row ""   "--get [NAME]"     "Show a setting (or all) and where it is from"
@@ -2267,15 +2344,22 @@ do_install () {
 
 # Print changelog
 
+# The changelog next to the script, else the copy in the work directory (copy_support_files puts it there on an install
+# or an update), else the one on GitHub. A script run from ~/.zshrc has no changelog next to it, so the copy is the one
+
 print_changelog () {
-  CHANGE_FILE="${SCRIPT_DIR}/CHANGELOG.md"
+  local file
   echo ""
-  if [[ -f "$CHANGE_FILE" ]]; then
-    cat "$CHANGE_FILE"
-  else
-    CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/CHANGELOG.md"
-    curl -fsSL "$CHANGE_URL" 2> /dev/null
-  fi
+  # WORK_DIR is not set yet when the switches are read, so the work directory is worked out here
+  for file in "${SCRIPT_DIR}/CHANGELOG.md" "${HOME_DIR}/.${SCRIPT_NAME}/CHANGELOG.md"; do
+    if [[ -r "${file}" ]]; then
+      cat "${file}"
+      echo ""
+      return 0
+    fi
+  done
+  CHANGE_URL="https://raw.githubusercontent.com/lateralblast/ussuri/main/CHANGELOG.md"
+  curl -fsSL "$CHANGE_URL" 2> /dev/null || print -u2 -r -- "Error:          no changelog here, and GitHub could not be reached ($CHANGE_URL)"
   echo ""
 }
 
@@ -4093,6 +4177,7 @@ print_config_template () {
 #INSTALL_ATUIN=true
 #ATUIN_BIND_UP=true         # let atuin have the up arrow (default: history substring search keeps it)
 #VI_MODE=true              # vi key bindings, with jeffreytse/zsh-vi-mode (default: off, the Emacs bindings)
+#PLUGIN_EXCLUDE="OMZP::sudo wfxr/forgit"  # plugins from the lists to leave out, by the name the list gives them (space separated)
 #ATUIN_IMPORT=false         # do not import existing history when building
 
 # Versions built by --rbenv and --pyenv (default is the latest stable)
@@ -5328,6 +5413,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   DO_FIX="false"
   DO_TITLE="false"
   DO_SELFTEST="false"
+  TIMING_RUNS=""
   TITLE_TEXT=""
   PROFILE_SWITCH="false"
   MACHINE_SWITCH="false"
@@ -5365,6 +5451,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --title -5
       --export -2       --import -3
       --selftest -6
+      --runs -7
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -5428,7 +5515,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 5: 6 || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 5: 6 7: || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -5703,6 +5790,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           DO_SELFTEST="true"
           shift OPTS
           ;;
+        -7)
+          TIMING_RUNS="${OPTS[2]}"
+          shift 2 OPTS
+          ;;
         -z)
           DO_ZINIT_CHECK="true"
           shift OPTS
@@ -5819,6 +5910,15 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     selftest_main || SELFTEST_STATUS=$?
     release_lock
     exit ${SELFTEST_STATUS}
+  fi
+
+  # --runs N: N timed logins, reported as the median (and the least and most) of each step
+
+  if [[ -n "${TIMING_RUNS}" ]]; then
+    RUNS_STATUS=0
+    timing_runs_main "${TIMING_RUNS}" || RUNS_STATUS=$?
+    release_lock
+    exit ${RUNS_STATUS}
   fi
 
   # Write or read a bundle of your setup
