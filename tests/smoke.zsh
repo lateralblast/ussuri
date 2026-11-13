@@ -3321,7 +3321,7 @@ test_casks_and_taps_defaults () {
   local f
   check "files/packages/macos.tap ships with nothing to install (examples are comments)" "$( grep -c -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.tap" )" "0"
   # The casks that were formulae in macos.brew (installed, so the list is no longer empty)
-  check "files/packages/macos.cask ships with the five casks that used to be in macos.brew" "$( grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.cask" | tr '\n' ' ' )" "blackhole-2ch multipass utm warp xquartz "
+  check "files/packages/macos.cask ships with the casks that used to be in macos.brew" "$( grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.cask" | tr '\n' ' ' )" "blackhole-2ch multipass utm xquartz "
   new_home
   rm -f "${H}/.ussuri/files/packages/macos.cask" "${H}/.ussuri/files/packages/macos.tap"
   : > "${LOG}"
