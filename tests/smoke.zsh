@@ -2805,6 +2805,38 @@ test_export_import () {
   check "and it says where" "$( print -r -- "${out}" | grep -c 'it replaced are in' )" "1"
 }
 
+test_import_bundle_from_macos () {
+  # tests/fixtures/export-macos.tgz was made by --export on macOS (BSD tar, COPYFILE_DISABLE set). Importing it on any
+  # host (the Ubuntu runner has GNU tar) checks a bundle from the other tar, and that the names in it pass the import
+  new_home
+  local b="${TMP}/macos.tgz" out
+  cp "${ROOT}/tests/fixtures/export-macos.tgz" "${b}"
+  out=$( run --import "${b}" --dryrun 2>&1 ); check "a bundle from macOS passes the import check (dry run)" "$( print -r -- "${out}" | grep -c -i 'error' )" "0"
+  check "and the dry run names the version and machine it was made on (the MANIFEST is read)" "$( print -r -- "${out}" | grep -c -E 'Would import macos.tgz \(version [0-9.]+ from fixture\): [0-9]+ new, [0-9]+ replaced' )" "1"
+  out=$( run --import "${b}" 2>&1 )
+  check "importing it puts the config back" "$( grep -c "PROMPT_TOP_ELEMENTS='context'" "${H}/.ussuri/config" )" "1"
+  check "and the layer files" "$( grep -c 'MACHINE_VAR=1' "${H}/.ussuri/hosts/box/local.config" )" "1"
+  check "and the local package list" "$( grep -c 'my own package' "${H}/.ussuri/files/packages/local.brew" )" "1"
+  check "and the p10k config" "$( [[ -s "${H}/.p10k.zsh" ]] && echo yes )" "yes"
+}
+
+test_import_linux_bundle () {
+  # The bundle the Ubuntu job makes with tests/make-bundle.zsh (GNU tar) and uploads: the cross-OS job sets LINUX_BUNDLE to
+  # the downloaded file. Without it there is nothing to import, and this says so rather than passing
+  if [[ -z "${LINUX_BUNDLE}" || ! -s "${LINUX_BUNDLE}" ]]; then
+    print -r -- "  skip  no LINUX_BUNDLE (the cross-OS job sets it to the bundle the Ubuntu job made)"
+    return 0
+  fi
+  new_home
+  local b="${TMP}/linux.tgz" out
+  cp "${LINUX_BUNDLE}" "${b}"
+  out=$( run --import "${b}" 2>&1 )
+  check "a bundle made on Linux (GNU tar) imports on macOS without an error" "$( print -r -- "${out}" | grep -c -i 'error' )" "0"
+  check "the config comes back" "$( grep -c "PROMPT_TOP_ELEMENTS='context'" "${H}/.ussuri/config" )" "1"
+  check "the local package list" "$( grep -c 'my own package' "${H}/.ussuri/files/packages/local.brew" )" "1"
+  check "and the layer file" "$( grep -c 'MACHINE_VAR=1' "${H}/.ussuri/hosts/box/local.config" )" "1"
+}
+
 test_import_refusals () {
   new_home
   local u="${H}/.ussuri" out b="${TMP}/evil.tgz" before after

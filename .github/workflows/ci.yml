@@ -5,6 +5,8 @@
 # distros: the same on Debian, Ubuntu, Fedora, Arch and Alpine in containers, plus the read-only commands run for
 #        real on each: --doctor and --drift packages, which use the real package manager's queries. These are the
 #        paths the smoke tests can only check against stubs.
+# cross-os: the export bundle the Ubuntu smoke job makes (GNU tar) is imported on macOS, so a bundle from one tar
+#        is checked on the other.
 #
 # Nothing here installs packages from the lists or changes the runner: the tests run in a throwaway home with
 # stubbed commands, the name check only looks names up, and --doctor and --drift are read only.
@@ -35,6 +37,17 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh
 
+      - name: Make an export bundle with GNU tar (Linux, for the cross-os job)
+        if: runner.os == 'Linux'
+        run: zsh tests/make-bundle.zsh "${RUNNER_TEMP}/export-linux.tgz"
+
+      - name: Upload the export bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-linux
+          path: ${{ runner.temp }}/export-linux.tgz
+
       - name: Syntax check
         run: zsh -n ussuri.zsh
 
@@ -48,6 +61,26 @@ jobs:
       - name: Package names exist (apt)
         if: runner.os == 'Linux'
         run: zsh tests/package-names.zsh
+
+  cross-os:
+    name: bundle from Linux, imported on macOS
+    needs: smoke
+    # The bundle is uploaded before the Ubuntu smoke tests run, so this still runs when they fail
+    if: always()
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the export bundle the Ubuntu job made
+        uses: actions/download-artifact@v4
+        with:
+          name: export-linux
+          path: ${{ runner.temp }}/linux-bundle
+
+      - name: Import the Linux bundle on macOS
+        env:
+          LINUX_BUNDLE: ${{ runner.temp }}/linux-bundle/export-linux.tgz
+        run: zsh tests/smoke.zsh import_linux_bundle
 
   distros:
     name: ${{ matrix.image }}

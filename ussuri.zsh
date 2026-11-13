@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.2.1
+# Version: 2.2.2
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -4134,7 +4134,8 @@ import_bundle () {
     [[ "${rel}" == (config|*/local.config) ]] && execute_command "chmod 600 ${(q)target}"
   done
   manifest=( "${(@f)$(<${tmp}/MANIFEST)}" )
-  info="${${(M)manifest:#version *}[1]#version } from ${${(M)manifest:#machine *}[1]#machine }"
+  # (r) takes the first line that matches; (M) with :# gives the matched text joined, which made the message blank
+  info="${${manifest[(r)version *]}#version } from ${${manifest[(r)machine *]}#machine }"
   verb="Imported"
   [[ "${DO_DRYRUN}" = "true" ]] && verb="Would import"
   print -r -- "${verb} ${archive:t} (version ${info}): ${new} new, ${changed} replaced, ${same} already the same"
