@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.9.8
+Current Version: 2.1.0
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -418,7 +418,7 @@ and `--install` with the rest of `files/`. It completes `ussuri.zsh` and `ussuri
 True or false unless a value is given. Defaults are for a login shell. `--get` prints the current value of every setting here, and where
 each comes from. It reads the file, so a `--set` or `--unset` in the same run is already in what it shows. A value that starts with `~` or
 `~/` is saved unquoted, so zsh expands the `~` when the config is read, and `--get` shows the expanded path. A `~user/...` value is kept as
-text. Under `--dryrun` nothing is written, so `--get` shows the file as it is.
+text. Under `--dryrun` nothing is written, but `--get` in the same run shows the value the run would save.
 
 **Behaviour**
 
@@ -458,6 +458,7 @@ text. Under `--dryrun` nothing is written, so `--get` shows the file as it is.
 | `INSTALL_OZSH`, `INSTALL_FNM`, `INSTALL_RUSTUP`, `INSTALL_UV`, `INSTALL_MISE`, `INSTALL_ATUIN` | false |
 | `ATUIN_BIND_UP` | false (history substring search keeps the up arrow) |
 | `ATUIN_IMPORT` | true (import existing history once, when building) |
+| `VI_MODE` | false (the Emacs key bindings; `true` loads jeffreytse/zsh-vi-mode, which is loaded before the other key binding plugins) |
 
 **What a login checks** (`DO_..._CHECK`; the switches turn these on for a manual run)
 
