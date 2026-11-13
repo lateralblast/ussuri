@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 1.9.4
+Current Version: 1.9.8
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -188,11 +188,17 @@ from run to run.)
 - **"Everything else"** is what is left: the glue between the steps.
 - **Inside the zinit step**, each line of the plugin lists is one plugin. Powerlevel10k is loaded before the prompt whatever turbo does; in turbo mode
   the others only schedule their load, so they cost about a millisecond each. "zinit starting" is what is left of the step: sourcing zinit and reading
-  the lists. Plugins that zinit loads after the prompt (turbo mode) are not counted.
+  the lists. Plugins that zinit loads after the prompt (turbo mode) are not counted above: they are listed in a **Deferred plugins** block
+  that is printed at the first prompt after they have loaded, slowest first, with each plugin's load time.
+- **Cache rebuilds** are listed under the report as `Cache rebuilt: ...`, with the reason. A steady login has none. If the `brew` step is slow on
+  a login that has them, the cost is the tool running again, not the cache being read. A `brew` update is the expected cause, not yet seen on a Mac.
 - **What it costs when you are not timing:** the marks are one array append each and the per line timing is only done under `--timing`, so a normal
   login pays nothing measurable for them.
-- **No processes** is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of the ordinary utilities (`date`,
-  `dirname`, `grep`, `sed`, `awk`, `find`, `cat`...), runs a steady state login on macOS and on Linux, and fails if any of them was started.
+- **No processes** is a test, not a promise: `zsh tests/smoke.zsh login_starts` puts logging wrappers in front of every executable in
+  `/usr/bin`, `/bin`, `/usr/sbin` and `/sbin`, runs a steady state login on macOS and on Linux, and fails if any of them was started.
+  `zsh tests/smoke.zsh login_starts_no_subshells` checks the shell's own forks too (a `$(...)`, a pipeline or a subshell): a DEBUG trap
+  records the process each command runs in, and a steady login must run in one. `zsh tests/smoke.zsh timing_budget` fails if the
+  least of five timed logins is a second or more, which catches a step that waits on the network, not a small slowdown.
 
 ## Usage
 
@@ -410,7 +416,9 @@ and `--install` with the rest of `files/`. It completes `ussuri.zsh` and `ussuri
 ### Settings
 
 True or false unless a value is given. Defaults are for a login shell. `--get` prints the current value of every setting here, and where
-each comes from.
+each comes from. It reads the file, so a `--set` or `--unset` in the same run is already in what it shows. A value that starts with `~` or
+`~/` is saved unquoted, so zsh expands the `~` when the config is read, and `--get` shows the expanded path. A `~user/...` value is kept as
+text. Under `--dryrun` nothing is written, so `--get` shows the file as it is.
 
 **Behaviour**
 

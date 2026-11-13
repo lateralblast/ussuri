@@ -934,6 +934,43 @@ test_config_set_safety () {
   rmdir "${H}/.ussuri.lock" 2> /dev/null
 }
 
+test_config_get_after_set () {
+  # --get in the same run as --set shows the new value (the file is what counts, not the copy read at start)
+  new_home
+  local cfg="${H}/.ussuri/config" out
+  rm -f "${cfg}"
+  run --set PROMPT_TOP_ELEMENTS first > /dev/null 2>&1
+  out=$( run --set PROMPT_TOP_ELEMENTS second --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "--get after --set in one run shows the value just saved" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=second  (config: ${cfg})\$" )" "1"
+  out=$( run --get PROMPT_TOP_ELEMENTS --set PROMPT_TOP_ELEMENTS third 2>&1 )
+  check "and the order on the command line does not matter" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=third  (config: ${cfg})\$" )" "1"
+  out=$( run --set PROMPT_TOP_ELEMENTS 'a b' --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "a value with a space is shown as it is saved, quoted the shell way" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=a\\\\ b  (config" )" "1"
+  out=$( run --unset PROMPT_TOP_ELEMENTS --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "after --unset in the same run, --get says the line is gone and new shells use the default" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=a\\\\ b  (removed from the config by this run: new shells use the default)\$" )" "1"
+}
+
+test_config_tilde_value () {
+  # A ~ path is saved bare so zsh expands it when the config is read; the value --get shows is the expanded one
+  new_home
+  local cfg="${H}/.ussuri/config" out
+  rm -f "${cfg}"
+  run --set PROMPT_TOP_ELEMENTS '~/bin' > /dev/null 2>&1
+  check "a ~ path is saved without quotes" "$( grep -c '^PROMPT_TOP_ELEMENTS=~/bin$' "${cfg}" )" "1"
+  check "sourcing the config gives the home directory" "$( env -i HOME="${H}" zsh -f -c "source ${(q)cfg}; print -r -- \"\$PROMPT_TOP_ELEMENTS\"" )" "${H}/bin"
+  out=$( run --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "--get shows the expanded path" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=${H}/bin  (config: ${cfg})\$" )" "1"
+  run --set PROMPT_TOP_ELEMENTS '~' > /dev/null 2>&1
+  check "a bare ~ is the home directory" "$( env -i HOME="${H}" zsh -f -c "source ${(q)cfg}; print -r -- \"\$PROMPT_TOP_ELEMENTS\"" )" "${H}"
+  run --set PROMPT_TOP_ELEMENTS '~/my dir' > /dev/null 2>&1
+  check "a ~ path with a space stays quoted, so it is literal text after the ~" "$( env -i HOME="${H}" zsh -f -c "source ${(q)cfg}; print -r -- \"\$PROMPT_TOP_ELEMENTS\"" )" "~/my dir"
+  run --set PROMPT_TOP_ELEMENTS 'x~/bin' > /dev/null 2>&1
+  check "a ~ that is not at the start is not expanded" "$( env -i HOME="${H}" zsh -f -c "source ${(q)cfg}; print -r -- \"\$PROMPT_TOP_ELEMENTS\"" )" "x~/bin"
+  run --set PROMPT_TOP_ELEMENTS '~user/x' > /dev/null 2>&1
+  check "~user is kept as text (only ~ and ~/ are expanded)" "$( env -i HOME="${H}" zsh -f -c "source ${(q)cfg}; print -r -- \"\$PROMPT_TOP_ELEMENTS\"" )" "~user/x"
+  check "and the file is still valid zsh" "$( zsh -n "${cfg}" && echo valid || echo invalid )" "valid"
+}
+
 test_config_get () {
   new_home
   local cfg="${H}/.ussuri/config" out
@@ -1291,16 +1328,23 @@ make_spies () {
   SPY="${TMP}/spy"
   SPYLOG="${TMP}/spy.log"
   rm -rf "${SPY}"; mkdir -p "${SPY}"; : > "${SPYLOG}"
-  local name real
-  for name in awk basename cat chmod cp cut date dirname env expr find getconf grep head hostname id ln ls mkdir \
-              mktemp mv readlink rm sed sleep sort stat tail tar tee touch tr uname uniq wc whoami xargs; do
-    real=$( path=( /usr/bin /bin ); whence -p "${name}" 2> /dev/null )
-    [[ -n "${real}" ]] || continue
+  local f name
+  local -A seen
+  local -a made
+  # Every executable in the standard directories, not a list of the usual ones (a utility missing from a list would
+  # run unseen). The first of a name wins, as it does on PATH
+  for f in /usr/bin/*(N-*) /bin/*(N-*) /usr/sbin/*(N-*) /sbin/*(N-*); do
+    name="${f:t}"
+    # zsh is the shell that runs the login itself, so it is not a utility the login starts
+    (( ${+seen[${name}]} )) && continue
+    [[ "${name}" == zsh ]] && continue
+    seen[${name}]=1
     print -r -- "#!/bin/sh" > "${SPY}/${name}"
     print -r -- "echo \"${name} \$*\" >> ${SPYLOG}" >> "${SPY}/${name}"
-    print -r -- "exec ${real} \"\$@\"" >> "${SPY}/${name}"
-    chmod +x "${SPY}/${name}"
+    print -r -- "exec ${f} \"\$@\"" >> "${SPY}/${name}"
+    made+=( "${SPY}/${name}" )
   done
+  chmod +x "${made[@]}"
 }
 
 test_login_starts_no_processes () {
@@ -1330,6 +1374,7 @@ test_linux_login_starts_no_processes () {
   make_spies
   print -r -- 'ID=ubuntu' > "${TMP}/os-release"; print -r -- 'ID_LIKE=debian' >> "${TMP}/os-release"
   EXTRA_ENV=( USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" )
+  mkdir -p "${H}/.ussuri/nerd-fonts"
   run > /dev/null 2>&1
   run > /dev/null 2>&1
   : > "${SPYLOG}"
@@ -1364,6 +1409,25 @@ test_timing () {
 rc=3 timed=0"
   result=$( zmodload zsh/datetime; DO_TIMING=true; TIMING_NAMES=(); TIMING_SECONDS=(); f () { return 4 }; phase step f; print -r -- "rc=$? timed=${#TIMING_NAMES} name=${TIMING_NAMES[1]} seconds=$(( TIMING_SECONDS[1] >= 0 ))" )
   check "and records the step and keeps the status when timing" "${result}" "rc=4 timed=1 name=step seconds=1"
+}
+
+test_timing_cache_rebuilds () {
+  # A steady login rebuilds no cache, so --timing has no rebuild lines. Once the tool is newer than its
+  # cache (an update), the next --timing says so, and the login after that is quiet again.
+  healthy_home
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  local out
+  out=$( run --timing 2>&1 )
+  check "a steady login rebuilds no cache, so --timing reports none" "$( print -r -- "${out}" | grep -c '^Cache rebuilt' )" "0"
+  local cache=( "${H}"/.ussuri/cache/*shellenv*(N) )
+  check "the brew shellenv cache is there to check" "${#cache}" "1"
+  touch -t 200001010000 "${cache[1]}"
+  out=$( run --timing 2>&1 )
+  check "brew newer than its cache: --timing says the cache was rebuilt, and why" "$( print -r -- "${out}" | grep -c -E '^Cache rebuilt: .*brew is newer than its cache, so .*shellenv ran again$' )" "1"
+  out=$( run --timing 2>&1 )
+  check "and the login after the rebuild is quiet again" "$( print -r -- "${out}" | grep -c '^Cache rebuilt' )" "0"
+  check "the rebuild line is not counted as a step (the steps still add up to the total)" "$( print -r -- "${out}" | awk '/^Slowest/ {exit} /^  total/ {t=$2} /^  [a-z]/ && !/total/ {s+=$NF} END {d=s-t; if (d<0) d=-d; print (d < 0.6) ? "yes" : "no"}' )" "yes"
 }
 
 test_help_layout () {
@@ -4031,6 +4095,92 @@ test_confirm () {
   : > "${LOG}"
   run_limited --defaults --confirm < /dev/null > /dev/null 2>&1
   check "with no terminal it neither hangs nor runs anything" "$( calls 'defaults write' )" "0"
+}
+
+
+test_login_starts_no_subshells () {
+  # The shell's own forks: a $(...), a pipeline or a subshell is a process the shell starts, and it is not an
+  # external command, so the spies above do not see it. A DEBUG trap records the process each command runs in
+  # ($sysparams[pid]), and the trap is not affected by a command's stderr being sent to /dev/null (which hides xtrace
+  # inside execute_command). A steady login runs in one process. The check is only worth something if it sees a
+  # subshell, so a login with nothing cached must show more
+  healthy_home
+  local zdot="${TMP}/zdot" trace="${TMP}/trace.txt"
+  mkdir -p "${zdot}"
+  print -r -- 'zmodload zsh/system' > "${zdot}/.zshenv"
+  print -r -- "TRAPDEBUG () { print -r -- \"\$sysparams[pid]\" >> ${trace} }" >> "${zdot}/.zshenv"
+  EXTRA_ENV=( ZDOTDIR="${zdot}" )
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  rm -f "${trace}"
+  run > /dev/null 2>&1
+  local pids=$( sort -u "${trace}" | wc -l | tr -d ' ' )
+  check "the trace has the commands in it" "$( [[ $( wc -l < "${trace}" ) -gt 1000 ]] && echo yes || echo no )" "yes"
+  check "a steady login runs in one process, so starts no subshell" "${pids}" "1"
+  rm -rf "${H}/.ussuri/cache"; rm -f "${trace}"
+  run > /dev/null 2>&1
+  check "(and a login with nothing cached starts some, so the check can see them)" "$( [[ $( sort -u "${trace}" | wc -l ) -gt 1 ]] && echo yes || echo no )" "yes"
+  EXTRA_ENV=()
+  # Linux: a real install leaves the nerd fonts checkout behind, so the fonts step does not clone on a steady login
+  print -r -- 'ID=ubuntu' > "${TMP}/os-release"; print -r -- 'ID_LIKE=debian' >> "${TMP}/os-release"
+  EXTRA_ENV=( ZDOTDIR="${zdot}" USSURI_OS=linux OS_RELEASE_FILE="${TMP}/os-release" )
+  mkdir -p "${H}/.ussuri/nerd-fonts"
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  rm -f "${trace}"
+  run > /dev/null 2>&1
+  check "a steady Linux login runs in one process too" "$( sort -u "${trace}" | wc -l | tr -d ' ' )" "1"
+  EXTRA_ENV=()
+}
+
+test_timing_budget () {
+  # The least total of five timed logins (the least is the run the machine disturbed least) stays under a second.
+  # A steady login is about 30 ms here, so this catches a step that waits on the network or does a big job, not a
+  # small slowdown, and a noisy runner does not fail it
+  healthy_home
+  run > /dev/null 2>&1
+  run > /dev/null 2>&1
+  local i ms least=""
+  for (( i = 1; i <= 5; i++ )); do
+    ms=$( run --timing 2>&1 | awk '/^  total/ {print $2}' )
+    if [[ -z "${least}" ]] || (( ms < least )); then
+      least=${ms}
+    fi
+  done
+  check "the total of a timed login was read" "$( [[ "${least}" == <-> || "${least}" == <->.<-> ]] && echo yes || echo no )" "yes"
+  check "the least of five timed logins is under a second" "$( (( least < 1000 )) && echo yes || echo no )" "yes"
+}
+
+test_timing_deferred () {
+  # --timing with turbo mode: zinit's .zinit-run-task loads each deferred plugin, and the wrapper records each load by
+  # name. The report is printed at the first prompt after the queue has run, slowest first, and only then
+  local out
+  out=$( zmodload zsh/datetime; DO_TIMING=true; ZINIT_RUN=(); TIMING_DEFERRED_NAMES=(); TIMING_DEFERRED_SECONDS=()
+    load_function timing_deferred_report
+    TIMING_DEFERRED_NAMES=( a/b c/d a/b ); TIMING_DEFERRED_SECONDS=( 0.010 0.002 0.005 )
+    ZINIT_RUN=( queued ); timing_deferred_report; print -r -- "queued: nothing printed above this line"
+    ZINIT_RUN=(); timing_deferred_report )
+  check "nothing is printed while zinit still has tasks queued" "$( print -r -- "${out}" | grep -c 'Deferred' )" "1"
+  check "the report lists each plugin's loads together, slowest first" "$( print -r -- "${out}" | grep -E '^  [a-z]/' | awk '{print $1}' | tr '\n' ' ' )" "a/b c/d "
+  check "with the time in milliseconds" "$( print -r -- "${out}" | grep -E '^  a/b ' | awk '{print $2}' )" "15.0"
+  check "and the total" "$( print -r -- "${out}" | grep -E '^  all the deferred plugins' | awk '{print $NF}' )" "17.0"
+  out=$( zmodload zsh/datetime; DO_TIMING=true; ZINIT_RUN=(); TIMING_DEFERRED_NAMES=( x/y ); TIMING_DEFERRED_SECONDS=( 0.001 )
+    load_function timing_deferred_report; autoload -Uz add-zsh-hook; add-zsh-hook precmd timing_deferred_report
+    timing_deferred_report; print -r -- "still a hook: ${precmd_functions[(Ie)timing_deferred_report]:-0}" )
+  check "the hook removes itself once it has printed" "$( print -r -- "${out}" | grep -c 'still a hook: 0' )" "1"
+  out=$( zmodload zsh/datetime; DO_TIMING=true; ZINIT_RUN=(); TIMING_DEFERRED_NAMES=(); TIMING_DEFERRED_SECONDS=()
+    load_function timing_deferred_report; timing_deferred_report )
+  check "nothing is printed before any plugin has loaded" "$( [[ -z "${out}" ]] && echo none || echo printed )" "none"
+  out=$( zmodload zsh/datetime; DO_TIMING=true; TIMING_DEFERRED_NAMES=(); TIMING_DEFERRED_SECONDS=()
+    .zinit-run-task () { return 5 }
+    load_function timing_wrap_zinit_tasks
+    timing_wrap_zinit_tasks
+    .zinit-run-task 2 p 0 0 _ "zsh-users/unload" ""; print -r -- "unload rc=$? names=${#TIMING_DEFERRED_NAMES}"
+    .zinit-run-task 1 p 0 0 _ "zsh-users/load-a" ""; print -r -- "wait rc=$? names=${#TIMING_DEFERRED_NAMES} name=${TIMING_DEFERRED_NAMES[1]}"
+    add-zsh-hook -d precmd timing_deferred_report )
+  check "the wrapper keeps the status of the untimed call" "$( print -r -- "${out}" | grep -c 'rc=5' )" "2"
+  check "it records the wait and load passes by plugin, and not the unloads" "$( print -r -- "${out}" | grep -c 'names=0' )" "1"
+  check "and the name is the plugin's (unquoted)" "$( print -r -- "${out}" | grep -c 'name=zsh-users/load-a' )" "1"
 }
 
 # Run

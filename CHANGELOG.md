@@ -4,6 +4,44 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.5] - 2026-11-13
+
+### Added
+
+- `--timing` now says when a cache was rebuilt during the login and why (`Cache rebuilt: ... is newer than its cache, so ... ran again`, or `no cache ... yet`). A rebuild runs the tool, which is the likely cause of a slow `brew` step; the lines are notes, not steps, so the total is unchanged
+
+### Changed
+
+- The `--timing` section of the README shows the rebuild lines and what they mean
+
+## [1.9.8] - 2026-11-13
+
+### Changed
+
+- Every `[ ... ]` test in the script is now `[[ ... ]]` (517 tests, no behaviour change: the right-hand side of `=` is never unquoted, so no pattern matching changes, and `-a`/`-o` were not used). `[[ ]]` does not word-split or glob its operands, so an unquoted path with a space is now safe. The full suite passes
+
+## [1.9.7] - 2026-11-13
+
+### Added
+
+- `--timing` times the deferred plugins of turbo mode, which zinit loads after the first prompt. Each load is timed by plugin, and a **Deferred plugins** block is printed at the first prompt after the loads have run, slowest first. Nothing is wrapped when you are not timing
+- Tests for the no-process claim that cover the shell's own forks (`login_starts_no_subshells`: a DEBUG trap records the process each command runs in, so a `$(...)` or a subshell is seen, even where a command's stderr goes to /dev/null) and a time budget (`timing_budget`: the least of five timed logins under a second)
+
+### Changed
+
+- `login_starts` spies on every executable in `/usr/bin`, `/bin`, `/usr/sbin` and `/sbin`, not a list of the usual ones
+
+### Fixed
+
+- The Linux fonts step cloned nerd-fonts on every login in the tests, because the fixture had no checkout (a real install leaves one); the Linux fixtures now have it, as a steady login does
+
+## [1.9.6] - 2026-11-13
+
+### Fixed
+
+- `--get` in the same run as `--set` or `--unset` shows what the file says now, not the value the shell read when the run started. `--get` after an `--unset` says the line was removed by this run
+- A value that starts with `~` or `~/` is saved unquoted, so zsh expands the `~` when the config is read (it was saved as literal `\~`). `--get` shows the expanded path. Other values are quoted as before
+
 ## [1.9.4] - 2026-11-02
 
 ### Added
