@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.9] - 2026-11-13
+
+### Removed
+
+- `warp` is no longer in `files/packages/macos.cask`, so it is no longer installed by `-P` or reported as missing by `--drift`. An installed `warp` is not uninstalled
+
 ## [2.1.8] - 2026-11-13
 
 ### Changed
