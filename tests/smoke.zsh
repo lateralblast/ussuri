@@ -2264,6 +2264,8 @@ test_selftest () {
   local out rc before after
   before=$( find "${H}" | sort | cksum )
   out=$( run --selftest 2>&1 ); rc=$?
+  # On a runner that fails this check, the lines that failed are shown here (the check itself only counts them)
+  print -r -- "${out}" | grep -E '^fail' | sed 's/^/selftest: /'
   check "a plugin that is not installed is skipped, not cloned" "$( print -r -- "${out}" | grep -c '^skip  ' | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
   check "and nothing fails" "$( print -r -- "${out}" | grep -c '^fail' )" "0"
   check "and the check passes" "${rc}" "0"
