@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.1.0
+# Version: 2.1.1
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1152,9 +1152,9 @@ cached_eval () {
     # --timing says why the command runs, since a rebuild costs a process every time it happens
     if [[ "${DO_TIMING}" == "true" ]]; then
       if [[ -s "${CACHE_FILE}" ]]; then
-        TIMING_NOTES+=( "${CACHE_BIN} is newer than its cache, so ${CACHE_CMD[1,60]} ran again" )
+        TIMING_NOTES+=( "${CACHE_BIN:t} is newer than its cache, so its init ran again" )
       else
-        TIMING_NOTES+=( "no cache for ${CACHE_CMD[1,60]} yet, so it ran" )
+        TIMING_NOTES+=( "no cache for ${CACHE_BIN:t} yet, so its init ran" )
       fi
     fi
     CACHE_OUT=$( eval "${CACHE_CMD}" )

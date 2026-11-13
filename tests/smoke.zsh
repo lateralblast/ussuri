@@ -1446,7 +1446,7 @@ test_timing_cache_rebuilds () {
   check "the brew shellenv cache is there to check" "${#cache}" "1"
   touch -t 200001010000 "${cache[1]}"
   out=$( run --timing 2>&1 )
-  check "brew newer than its cache: --timing says the cache was rebuilt, and why" "$( print -r -- "${out}" | grep -c -E '^Cache rebuilt: .*brew is newer than its cache, so .*shellenv ran again$' )" "1"
+  check "brew newer than its cache: --timing says the cache was rebuilt, and why" "$( print -r -- "${out}" | grep -c -E '^Cache rebuilt: brew is newer than its cache, so its init ran again$' )" "1"
   out=$( run --timing 2>&1 )
   check "and the login after the rebuild is quiet again" "$( print -r -- "${out}" | grep -c '^Cache rebuilt' )" "0"
   check "the rebuild line is not counted as a step (the steps still add up to the total)" "$( print -r -- "${out}" | awk '/^Slowest/ {exit} /^  total/ {t=$2} /^  [a-z]/ && !/total/ {s+=$NF} END {d=s-t; if (d<0) d=-d; print (d < 0.6) ? "yes" : "no"}' )" "yes"
@@ -2145,7 +2145,7 @@ test_compinit_insecure () {
   local bad="${TMP}/compbad" good="${TMP}/compgood" out
   mkdir -p "${bad}" "${good}"; chmod 777 "${bad}"; chmod 755 "${good}"
   print -r -- '#compdef foo' > "${bad}/_foo"; print -r -- '#compdef bar' > "${good}/_bar"
-  out=$( zmodload zsh/datetime; load_function ussuri_compinit
+  out=$( zmodload zsh/datetime; autoload -Uz compinit; load_function ussuri_compinit
     fpath=( "${bad}" "${good}" $fpath )
     ussuri_compinit < /dev/null
     print -r -- "left in fpath: $(( ${fpath[(Ie)${bad}]} )) $(( ${fpath[(Ie)${good}]} ))"
@@ -2153,8 +2153,9 @@ test_compinit_insecure () {
   check "the insecure directory is left out of fpath, the secure one is kept" "$( print -r -- "${out}" | grep 'left in fpath' )" "left in fpath: 0 1"
   check "and its completions are not loaded" "$( print -r -- "${out}" | grep -c 'foo: 0' )" "1"
   check "and the secure one's are" "$( print -r -- "${out}" | grep -c 'bar: 1' )" "1"
-  check "and it is named on stderr" "$( zmodload zsh/datetime; load_function ussuri_compinit; fpath=( "${bad}" $fpath ); ussuri_compinit < /dev/null 2>&1 | grep -c "compinit left out insecure completion directories: ${bad}" )" "1"
-  check "a plain run with no insecure directory says nothing" "$( zmodload zsh/datetime; load_function ussuri_compinit; fpath=( "${good}" $fpath ); ussuri_compinit < /dev/null 2>&1 | wc -c | tr -d ' ' )" "0"
+  check "and it is named on stderr" "$( zmodload zsh/datetime; autoload -Uz compinit; load_function ussuri_compinit; fpath=( "${bad}" $fpath ); ussuri_compinit < /dev/null 2>&1 | grep -c "compinit left out insecure completion directories: ${bad}" )" "1"
+  # The system's own directories can be reported on a runner, so only the secure one is checked for: it is never named
+  check "a secure directory is never named" "$( zmodload zsh/datetime; autoload -Uz compinit; load_function ussuri_compinit; fpath=( "${good}" $fpath ); ussuri_compinit < /dev/null 2>&1 | grep -c "${good}" )" "0"
   chmod 755 "${bad}"
 }
 
