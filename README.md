@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 2.1.5
+Current Version: 2.1.8
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -580,13 +580,13 @@ Any powerlevel10k segment name works. Some that suit the top line:
 | `macos_version`, `linux_version` | the same, for one OS only | shows nothing on the other; colours: `POWERLEVEL9K_MACOS_VERSION_FOREGROUND`, `POWERLEVEL9K_LINUX_VERSION_FOREGROUND` |
 | `time` | the current time | format: `POWERLEVEL9K_TIME_FORMAT` |
 | `battery` | charge and charging state | low threshold: `POWERLEVEL9K_BATTERY_LOW_THRESHOLD` |
-| `wifi` | SSID and link speed | recent macOS versions restrict where the SSID can be read from |
-| `ip` | address and bandwidth of one interface | set `POWERLEVEL9K_IP_INTERFACE`: the default pattern (`[ew].*`) matches Linux names, on macOS use `en0` or `en[0-9]+` |
+| `wifi` | SSID and link speed | not on macOS: powerlevel10k reads Apple's `airport` tool, which is missing on macOS 27.3, so the segment is hidden there (checked 2026-11-13). On Linux it reads `iw` |
+| `ip` | address and bandwidth of one interface | set `POWERLEVEL9K_IP_INTERFACE` to choose the interface. The default pattern (`[ew].*`) also matches `en0` on macOS, which is the one with an address on the machine checked (macOS 27.3, 2026-11-13) |
 | `public_ip` | external address | makes a network request, so it is slow |
 | `vpn_ip` | VPN address, when a VPN interface is up | interfaces: `POWERLEVEL9K_VPN_IP_INTERFACE` |
 | `proxy` | system wide http/https/ftp proxy | |
 | `load`, `ram`, `swap`, `disk_usage` | system resources | warning levels, for example `POWERLEVEL9K_DISK_USAGE_WARNING_LEVEL` |
-| `cpu_arch` | `arm64` or `x86_64` | useful on Apple Silicon with Rosetta |
+| `cpu_arch` | `arm64e` on Apple Silicon (`arm64` from `arch`), `x86_64` on Linux | useful on Apple Silicon with Rosetta; checked live on macOS 27.3 (2026-11-13) |
 | `node_version`, `go_version`, `rust_version`, `java_version`, `php_version`, `dotnet_version`, `terraform_version` | tool version | by default only inside a project (`POWERLEVEL9K_*_VERSION_PROJECT_ONLY`) |
 | `status`, `command_execution_time`, `kubecontext`, `aws`, `gcloud`, `azure` | as on the bottom line | |
 

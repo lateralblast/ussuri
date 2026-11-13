@@ -4,7 +4,6 @@ autoconf
 automake
 bat
 bash
-blackhole-2ch
 bpytop
 btop
 bzip2
@@ -55,7 +54,6 @@ lua
 lz4
 lzo
 mpg123
-multipass
 netpbm
 openssh
 openssl@3
@@ -79,14 +77,11 @@ tcl-tk
 tesseract
 tmux
 tree
-utm
 virt-manager
-warp
 wget
 xorriso
 x264
 x265
-xquartz
 xz
 yamllint
 zoxide

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.1.5
+# Version: 2.1.8
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -487,6 +487,25 @@ color_escape () {
   print -rn -- "${out}"
 }
 
+# The architecture as powerlevel10k's cpu_arch segment reads it (/proc/sys/kernel/arch, else `machine`, else `arch`).
+# $CPUTYPE is not used: on Apple Silicon it says arm64 where `machine` says arm64e, which is what the prompt shows.
+
+cpu_arch_text () {
+  setopt localoptions extendedglob
+  local cmd
+  typeset -g CPU_ARCH_TEXT=""
+  if [[ -r /proc/sys/kernel/arch ]]; then
+    CPU_ARCH_TEXT="$(</proc/sys/kernel/arch)"
+  else
+    for cmd in machine arch; do
+      (( $+commands[$cmd] )) || continue
+      CPU_ARCH_TEXT="$(command -- ${cmd} 2>/dev/null)"
+      [[ "${CPU_ARCH_TEXT}" == [a-zA-Z][a-zA-Z0-9_]# ]] && break
+      CPU_ARCH_TEXT=""
+    done
+  fi
+}
+
 # The text a segment shows, where it can be known without a prompt, in PSEG_TEXT
 
 prompt_segment_text () {
@@ -496,7 +515,7 @@ prompt_segment_text () {
     os_version)    PSEG_TEXT="${OS_VERSION_TEXT}" ;;
     macos_version) PSEG_TEXT="${MACOS_VERSION_TEXT}" ;;
     linux_version) PSEG_TEXT="${LINUX_VERSION_TEXT}" ;;
-    cpu_arch)      PSEG_TEXT="${CPUTYPE}" ;;
+    cpu_arch)      cpu_arch_text; PSEG_TEXT="${CPU_ARCH_TEXT}" ;;
     date)          f="${POWERLEVEL9K_DATE_FORMAT}"; [[ -n "${f}" ]] || f='%D{%d.%m.}'; PSEG_TEXT="${(%)f}" ;;
     time)          f="${POWERLEVEL9K_TIME_FORMAT}"; [[ -n "${f}" ]] || f='%D{%H:%M:%S}'; PSEG_TEXT="${(%)f}" ;;
     os_icon)       PSEG_TEXT="(icon)" ;;
@@ -3355,7 +3374,9 @@ setup_brew_env () {
     execute_command "export PATH=${(q)BREW_BASE}/bin:${(q)BREW_BASE}/sbin:${(q)PATH}"
     if [[ "${DO_ENV_SETUP}" = "true" ]]; then
       verbose_message "Configuring brew environment"
-      execute_command "cached_eval ${(q)BREW_BIN} \"${(q)BREW_BIN} shellenv\""
+      # brew shellenv prints nothing when its bin is already first in PATH (it thinks it is set up), and the export above does that,
+      # so the cache would stay empty. Its output expands $PATH itself, so a PATH without brew first gives the same text
+      execute_command "cached_eval ${(q)BREW_BIN} \"env -u HOMEBREW_PATH PATH=/usr/bin:/bin:/usr/sbin:/sbin ${(q)BREW_BIN} shellenv\""
     fi
   fi
 }
@@ -3381,7 +3402,7 @@ check_osx_packages () {
     else
       if [[ "${DO_ENV_SETUP}" = "true" ]]; then
         verbose_message "Configuring brew environment"
-        execute_command "cached_eval ${(q)BREW_TEST} \"${(q)BREW_TEST} shellenv\""
+        execute_command "cached_eval ${(q)BREW_TEST} \"env -u HOMEBREW_PATH PATH=/usr/bin:/bin:/usr/sbin:/sbin ${(q)BREW_TEST} shellenv\""
       fi
     fi
     # Taps first, then formulae, then casks. Each list has its own stamp, and the lists are
