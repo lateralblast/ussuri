@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 1.9.8
+# Version: 2.1.0
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1785,6 +1785,7 @@ set_all_defaults () {
   set_env "INSTALL_MISE"        "false"
   set_env "INSTALL_ATUIN"       "false"
   set_env "ATUIN_BIND_UP"       "false"
+  set_env "VI_MODE"             "false"
   set_env "ATUIN_IMPORT"        "true"
   set_env "FNM_HOME"            "${HOME_DIR}/.local/share/fnm"
   set_env "UV_BIN_DIR"          "${HOME_DIR}/.local/bin"
@@ -1967,6 +1968,22 @@ timed_plugin_line () {
   execute_command "$1"
   TIMING_LINES+=( "${name}" )
   TIMING_LINE_SECONDS+=( $(( EPOCHREALTIME - started )) )
+}
+
+# compinit for the deferred completion load (zinit-turbo.zsh). compinit asks a y/n question when a completion directory
+# can be written by others, and a deferred load runs while you are at the prompt, so the question would stop the shell.
+# With -i it asks nothing and leaves those directories out (their completions are not loaded, as before). The ones it
+# leaves out are named on stderr, found by comparing fpath before and after, which needs no process
+
+ussuri_compinit () {
+  local -a before left_out
+  before=( "${fpath[@]}" )
+  autoload -Uz compinit
+  compinit -i
+  left_out=( ${before:|fpath} )
+  if (( ${#left_out} )); then
+    print -u2 -r -- "Note:           compinit left out insecure completion directories: ${(j:, :)left_out} (compaudit lists them)"
+  fi
 }
 
 # --timing, turbo mode: zinit loads each deferred plugin in .zinit-run-task, after the first prompt. This wraps it so each
@@ -3995,6 +4012,7 @@ print_config_template () {
 # atuin: searchable shell history. Off by default as it records every command. Never synced by ussuri
 #INSTALL_ATUIN=true
 #ATUIN_BIND_UP=true         # let atuin have the up arrow (default: history substring search keeps it)
+#VI_MODE=true              # vi key bindings, with jeffreytse/zsh-vi-mode (default: off, the Emacs bindings)
 #ATUIN_IMPORT=false         # do not import existing history when building
 
 # Versions built by --rbenv and --pyenv (default is the latest stable)
@@ -4048,7 +4066,8 @@ init_config () {
 # a value is written quoted and is never evaluated here, and the file is replaced with one rename so a shell
 # starting at that moment reads the old file or the new one, never half of one
 
-typeset -ga CONFIG_NEW_LINES CONFIG_PRESET CONFIG_REMOVED
+typeset -ga CONFIG_NEW_LINES CONFIG_PRESET CONFIG_REMOVED CONFIG_DRY_LINES
+typeset -g CONFIG_DRY_FILE=""
 typeset -gA CONFIG_EXAMPLE
 
 # The settings the template lists, with the example value it shows for each
@@ -4184,9 +4203,19 @@ config_get () {
   value="${(P)name}"
   # The last of the config and its layers to set it is the one that counts, and its last active line is the value
   # it will have when the file is read. The shell's own copy is from before any --set, so the file is the source.
-  for layer in "${file}" "${CONFIG_LAYER_FILES[@]}"; do
-    lines=()
-    [[ -r "${layer}" ]] && lines=( "${(@f)$(<${layer})}" )
+  local -a layers=( "${file}" "${CONFIG_LAYER_FILES[@]}" )
+  # A dry run may be changing a layer file that does not exist yet: it goes where it would be read, before the host layers
+  if [[ -n "${CONFIG_DRY_FILE}" ]] && (( ! ${layers[(Ie)${CONFIG_DRY_FILE}]} )); then
+    i=${layers[(i)*/hosts/*]}
+    layers=( "${(@)layers[1,i-1]}" "${CONFIG_DRY_FILE}" "${(@)layers[i,-1]}" )
+  fi
+  for layer in "${layers[@]}"; do
+    if [[ -n "${CONFIG_DRY_FILE}" && "${layer}" == "${CONFIG_DRY_FILE}" ]]; then
+      lines=( "${CONFIG_DRY_LINES[@]}" )
+    else
+      lines=()
+      [[ -r "${layer}" ]] && lines=( "${(@f)$(<${layer})}" )
+    fi
     i=${lines[(I)${name}=*]}
     if (( i )); then
       where="${layer}"
@@ -4202,7 +4231,11 @@ config_get () {
     print -r -- "${name}=${(q)value}  (config: ${where})"
   elif (( ${CONFIG_REMOVED[(Ie)${name}]} )); then
     # The shell still holds the value the config gave it when this run started (the default applies in new shells)
-    print -r -- "${name}=${(q)value}  (removed from the config by this run: new shells use the default)"
+    if [[ "${DO_DRYRUN}" == true ]]; then
+      print -r -- "${name}=${(q)value}  (would be removed from the config by this run: new shells would use the default)"
+    else
+      print -r -- "${name}=${(q)value}  (removed from the config by this run: new shells use the default)"
+    fi
   elif (( ${CONFIG_PRESET[(Ie)${name}]} )); then
     print -r -- "${name}=${(q)value}  (environment)"
   elif [[ -n "${value}" ]]; then
@@ -4313,6 +4346,11 @@ config_edit () {
   check_dir_exists "${file:h}"
   [[ -e "${file}" ]] && backup_config
   CONFIG_NEW_LINES=( "${lines[@]}" )
+  # A dry run writes nothing, but --get in the same run reads what the file would say (config_get)
+  if [[ "${DO_DRYRUN}" == true ]]; then
+    CONFIG_DRY_FILE="${file}"
+    CONFIG_DRY_LINES=( "${lines[@]}" )
+  fi
   local tmp="${file}.tmp.$$"
   [[ -e "${file}" ]] && execute_command "cp -p ${(q)file} ${(q)tmp}"
   execute_command "write_config_lines ${(q)tmp}"

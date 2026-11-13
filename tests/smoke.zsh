@@ -971,6 +971,28 @@ test_config_tilde_value () {
   check "and the file is still valid zsh" "$( zsh -n "${cfg}" && echo valid || echo invalid )" "valid"
 }
 
+test_config_get_dryrun () {
+  # --dryrun writes nothing, but --get in the same run shows the value the run would save, not the file as it is
+  new_home
+  local cfg="${H}/.ussuri/config" out before
+  rm -f "${cfg}"
+  run --set PROMPT_TOP_ELEMENTS first > /dev/null 2>&1
+  before=$( cat "${cfg}" )
+  out=$( run --dryrun --set PROMPT_TOP_ELEMENTS second --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "a dry run --set then --get shows the value it would save" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=second  (config: ${cfg})\$" )" "1"
+  check "and the config is not changed" "$( cat "${cfg}" )" "${before}"
+  out=$( run --dryrun --unset PROMPT_TOP_ELEMENTS --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "a dry run --unset says the line would be removed" "$( print -r -- "${out}" | grep -c 'would be removed from the config by this run' )" "1"
+  check "and it is still there" "$( cat "${cfg}" )" "${before}"
+  rm -f "${H}/.ussuri/config"
+  out=$( run --dryrun --set PROMPT_TOP_ELEMENTS third --get PROMPT_TOP_ELEMENTS 2>&1 )
+  check "with no config file, a dry run shows the value it would save in the new one" "$( print -r -- "${out}" | grep -c "^PROMPT_TOP_ELEMENTS=third  (config: ${cfg})\$" )" "1"
+  check "and creates no file" "$( [[ -e "${cfg}" ]] && echo created || echo none )" "none"
+  out=$( run --dryrun -M work --set ZSH_THEME x --get ZSH_THEME 2>&1 )
+  check "a dry run into a profile that has no file yet shows that file's value" "$( print -r -- "${out}" | grep -c "^ZSH_THEME=x  (config: ${H}/.ussuri/profiles/work/local.config)\$" )" "1"
+  check "and writes no profile file" "$( [[ -e "${H}/.ussuri/profiles/work/local.config" ]] && echo created || echo none )" "none"
+}
+
 test_config_get () {
   new_home
   local cfg="${H}/.ussuri/config" out
@@ -2115,6 +2137,46 @@ test_forgit () {
   done
   check "both lists rename them the same way" "$( grep -E '^export forgit_' "${ROOT}/files/zinit/zinit.zsh" )" "$( grep -E '^export forgit_' "${ROOT}/files/zinit/zinit-turbo.zsh" )"
   check "turbo: the last line is still the one that runs compinit after everything else" "$( tail -1 "${ROOT}/files/zinit/zinit-turbo.zsh" | grep -c 'compinit' )" "1"
+}
+
+test_compinit_insecure () {
+  # The deferred compinit must not stop on compinit's question about insecure directories. An insecure one is left
+  # out of fpath (its completions are not loaded), the others load, and the one left out is named on stderr
+  local bad="${TMP}/compbad" good="${TMP}/compgood" out
+  mkdir -p "${bad}" "${good}"; chmod 777 "${bad}"; chmod 755 "${good}"
+  print -r -- '#compdef foo' > "${bad}/_foo"; print -r -- '#compdef bar' > "${good}/_bar"
+  out=$( zmodload zsh/datetime; load_function ussuri_compinit
+    fpath=( "${bad}" "${good}" $fpath )
+    ussuri_compinit < /dev/null
+    print -r -- "left in fpath: $(( ${fpath[(Ie)${bad}]} )) $(( ${fpath[(Ie)${good}]} ))"
+    print -r -- "bar: ${+functions[_bar]} foo: ${+functions[_foo]}" ) 2> /dev/null
+  check "the insecure directory is left out of fpath, the secure one is kept" "$( print -r -- "${out}" | grep 'left in fpath' )" "left in fpath: 0 1"
+  check "and its completions are not loaded" "$( print -r -- "${out}" | grep -c 'foo: 0' )" "1"
+  check "and the secure one's are" "$( print -r -- "${out}" | grep -c 'bar: 1' )" "1"
+  check "and it is named on stderr" "$( zmodload zsh/datetime; load_function ussuri_compinit; fpath=( "${bad}" $fpath ); ussuri_compinit < /dev/null 2>&1 | grep -c "compinit left out insecure completion directories: ${bad}" )" "1"
+  check "a plain run with no insecure directory says nothing" "$( zmodload zsh/datetime; load_function ussuri_compinit; fpath=( "${good}" $fpath ); ussuri_compinit < /dev/null 2>&1 | wc -c | tr -d ' ' )" "0"
+  chmod 755 "${bad}"
+}
+
+test_vi_mode () {
+  # VI_MODE is off by default: no vi plugin is loaded, and the Emacs bindings stay. On, the plugin is loaded by both
+  # lists, before the other key binding plugins
+  healthy_home
+  local cfg="${H}/.ussuri/config" log="${TMP}/zinit.log"
+  check "off by default" "$( run --get VI_MODE 2>&1 )" "VI_MODE=false  (default)"
+  check "the template lists it" "$( grep -c '^#VI_MODE=true' "${ROOT}/ussuri.zsh" )" "1"
+  run --set VI_MODE true > /dev/null 2>&1
+  check "it can be set" "$( grep -c '^VI_MODE=true$' "${cfg}" )" "1"
+  run --set VI_MODE maybe > /dev/null 2>&1; check "and only true or false" "$( grep -c '^VI_MODE=maybe' "${cfg}" )" "0"
+  rm -f "${cfg}"
+  print -r -- 'zinit () { print -r -- "zinit $*" >> '"${log}"' }' > "${H}/.zinit/zinit.zsh"
+  rm -f "${log}"; run > /dev/null 2>&1
+  check "a login with it off loads no vi plugin" "$( grep -c 'zsh-vi-mode' "${log}" 2> /dev/null || true )" "0"
+  rm -f "${log}"; EXTRA_ENV=( VI_MODE=true ); run > /dev/null 2>&1; EXTRA_ENV=()
+  check "a login with VI_MODE=true loads it" "$( grep -c 'light jeffreytse/zsh-vi-mode' "${log}" )" "1"
+  check "turbo (the default) defers it, like the other plugins" "$( grep -B1 'light jeffreytse/zsh-vi-mode' "${log}" | head -1 )" "zinit ice wait lucid"
+  check "it is loaded before syntax highlighting" "$( awk '/light jeffreytse\/zsh-vi-mode/ {v=NR} /light zsh-users\/zsh-syntax-highlighting/ {h=NR} END {print (v && h && v < h) ? "yes" : "no"}' "${log}" )" "yes"
+  check "both lists guard it" "$( grep -c 'if \[\[ "${VI_MODE}" == true \]\]; then zinit' "${ROOT}/files/zinit/zinit.zsh" "${ROOT}/files/zinit/zinit-turbo.zsh" | awk -F: '{s+=$2} END {print s}' )" "2"
 }
 
 test_you_should_use () {

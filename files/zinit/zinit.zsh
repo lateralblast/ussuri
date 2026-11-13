@@ -1,4 +1,6 @@
 # Add in zsh plugins
+# vi key bindings, only when VI_MODE=true (off by default). Loaded first, as it resets the key bindings
+if [[ "${VI_MODE}" == true ]]; then zinit light jeffreytse/zsh-vi-mode; fi
 zinit light zsh-users/zsh-syntax-highlighting
 zinit light zsh-users/zsh-completions
 zinit light zsh-users/zsh-autosuggestions

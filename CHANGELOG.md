@@ -14,6 +14,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The `--timing` section of the README shows the rebuild lines and what they mean
 
+## [2.1.0] - 2026-11-13
+
+### Added
+
+- `VI_MODE=true` loads jeffreytse/zsh-vi-mode for vi key bindings, in both plugin lists, before the other key binding plugins. Off by default, so nothing changes unless you set it (`--set VI_MODE true`). It needs `--update` or `--install` to take effect in an existing install, as the lists are copied from the release
+
+## [2.0.0] - 2026-11-13
+
+### Fixed
+
+- The deferred completion load (turbo mode) no longer stops at compinit's y/n question when a completion directory can be written by others. It runs `compinit -i`, which leaves those directories out of fpath (their completions are not loaded, as before) and asks nothing. The ones left out are named on stderr. The turbo list now calls `ussuri_compinit`, so an install needs `--update` or `--install` to pick it up with the script. The non-turbo list still runs compinit before the prompt, where the question is visible
+
+## [1.9.9] - 2026-11-13
+
+### Changed
+
+- `--get` under `--dryrun`, after a `--set` or `--unset` in the same run, shows the value the run would save (or that the setting would be removed), read from the lines the dry run builds. Nothing is written, as before
+
 ## [1.9.8] - 2026-11-13
 
 ### Changed
