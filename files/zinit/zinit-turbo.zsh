@@ -50,4 +50,4 @@ zinit ice wait lucid; zinit snippet OMZP::kubectx
 export forgit_add=fga forgit_branch_delete=fgbd forgit_blame=fgbl forgit_checkout_branch=fgcb forgit_checkout_file=fgcf forgit_clean=fgclean forgit_checkout_commit=fgco forgit_cherry_pick=fgcp forgit_diff=fgd forgit_log=fglo forgit_rebase=fgrb forgit_reset_head=fgrh forgit_restore=fgrs forgit_stash_show=fgss forgit_switch_branch=fgsw forgit_worktree=fgwt
 zinit ice wait lucid; zinit light wfxr/forgit
 # Load completions once everything above has been loaded (and zoxide's, which is set up before compinit has run here)
-zinit ice wait lucid atload"ussuri_compinit; zinit cdreplay -q; register_zoxide_completion"; zinit snippet OMZP::command-not-found
+zinit ice wait lucid atload"ussuri_compinit; zinit cdreplay -q; register_zoxide_completion; ussuri_command_not_found"; zinit snippet OMZP::command-not-found

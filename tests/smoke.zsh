@@ -3692,16 +3692,18 @@ test_package_names_brew () {
   printf '%s\n' a-formula a-cask-in-the-formula-list nowhere-at-all > "${TMP}/formula-names.txt"
   stub brew "case \"\$2\" in --formula) grep -q -x -F \"\$4\" ${TMP}/known-formulae.txt;; --cask) grep -q -x -F \"\$4\" ${TMP}/known-casks.txt;; esac"
   grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.brew" > "${TMP}/known-formulae.txt"
-  : > "${TMP}/known-casks.txt"
+  grep -v -E '^[[:space:]]*(#|$)' "${ROOT}/files/packages/macos.cask" > "${TMP}/known-casks.txt"
   local out rc
   out=$( run_names USSURI_OS=darwin ); rc=$?
   check "the Homebrew lists are checked too (formulae, then casks)" "${rc}:$( print -r -- "${out}" | grep -c -E '^macos\.(brew|cask) \(brew' )" "0:2"
-  grep -v -x 'xquartz' "${TMP}/known-formulae.txt" > "${TMP}/kf2.txt"; mv "${TMP}/kf2.txt" "${TMP}/known-formulae.txt"
+  grep -v -x 'xquartz' "${TMP}/known-casks.txt" > "${TMP}/kc2.txt"; mv "${TMP}/kc2.txt" "${TMP}/known-casks.txt"
   out=$( run_names USSURI_OS=darwin ); rc=$?
-  check "a name that is not a formula is reported" "${rc}:$( print -r -- "${out}" | grep -c 'NOT FOUND xquartz$' )" "1:1"
-  print -r -- "xquartz" > "${TMP}/known-casks.txt"
+  check "a cask that is not known is reported" "${rc}:$( print -r -- "${out}" | grep -c 'NOT FOUND xquartz$' )" "1:1"
+  # The shipped lists have no cask named in the formula list any more, so the fallback brew install makes from a formula
+  # name to a cask is not exercised here: checking a cask name is only done against the cask list
+  print -r -- "xquartz" >> "${TMP}/known-casks.txt"
   out=$( run_names USSURI_OS=darwin ); rc=$?
-  check "unless it is a cask, which brew install falls back to (as in the shipped list)" "${rc}:$( print -r -- "${out}" | grep -c 'all found' )" "0:1"
+  check "and with it known, the lists are all found" "${rc}:$( print -r -- "${out}" | grep -c 'all found' )" "0:1"
   make_stubs
 }
 
@@ -3854,6 +3856,18 @@ test_color_contrast () {
   color_contrast banana 238;  check "nor is a word" "${COLOR_CONTRAST:-none}" "none"
   color_rgb 196;              check "the colour cube" "${COLOR_RGB[*]}" "255 0 0"
   color_rgb 244;              check "the grey ramp" "${COLOR_RGB[*]}" "128 128 128"
+}
+
+test_command_not_found_args () {
+  # Homebrew's handler is stood in for here, so this does not depend on Homebrew being on the host. It is called with "$*",
+  # so `ncdu --version` must reach it as "ncdu", not as the whole line
+  local out
+  out=$( load_function ussuri_command_not_found; homebrew_command_not_found_handle () { print -r -- "hint for $1" }; ussuri_command_not_found; command_not_found_handler ncdu --version )
+  check "the handler gets the command name when there are arguments" "${out}" "hint for ncdu"
+  out=$( load_function ussuri_command_not_found; homebrew_command_not_found_handle () { print -r -- "hint for $1" }; ussuri_command_not_found; command_not_found_handler ncdu )
+  check "and the same without them" "${out}" "hint for ncdu"
+  out=$( load_function ussuri_command_not_found; ussuri_command_not_found; print -r -- "defined:${+functions[command_not_found_handler]}" )
+  check "without Homebrew's handler, nothing is defined (other platforms keep theirs)" "${out}" "defined:0"
 }
 
 test_prompt_preview_cpu_arch () {

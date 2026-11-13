@@ -47,6 +47,7 @@ zinit snippet OMZP::kubectx
 export forgit_add=fga forgit_branch_delete=fgbd forgit_blame=fgbl forgit_checkout_branch=fgcb forgit_checkout_file=fgcf forgit_clean=fgclean forgit_checkout_commit=fgco forgit_cherry_pick=fgcp forgit_diff=fgd forgit_log=fglo forgit_rebase=fgrb forgit_reset_head=fgrh forgit_restore=fgrs forgit_stash_show=fgss forgit_switch_branch=fgsw forgit_worktree=fgwt
 zinit light wfxr/forgit
 zinit snippet OMZP::command-not-found
+ussuri_command_not_found
 # Load completions
 autoload -Uz compinit && compinit
 zinit cdreplay -q
