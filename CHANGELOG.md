@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The `--timing` section of the README shows the rebuild lines and what they mean
 
+## [2.1.1] - 2026-11-13
+
+### Fixed
+
+- The `--timing` cache note names the tool rather than its command (`brew is newer than its cache, so its init ran again`). The command was cut at 60 characters, so on a macOS runner, with its longer temp path, the word that identifies it was lost
+- The compinit tests load compinit before they change fpath, and a plain run is checked for the secure directory only, since the runner's own directories can be reported
+
 ## [2.1.0] - 2026-11-13
 
 ### Added
