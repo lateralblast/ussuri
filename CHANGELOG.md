@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.2] - 2026-11-14
+
+### Fixed
+
+- `--import` printed a blank version and machine in its summary (`Would import ... (version  from )`): the MANIFEST lines were read with a pattern that joined them into one string. It now takes the first matching line. The import itself was not affected
+
+### Added
+
+- `tests/fixtures/export-macos.tgz`, a bundle made by `--export` on macOS (BSD tar), and `test_import_bundle_from_macos`, which imports it on any host. The Ubuntu CI runner (GNU tar) imports it too. `tests/make-bundle.zsh` makes a bundle in a scratch home: the Ubuntu CI job makes one with GNU tar, uploads it, and a new `cross-os` job imports it on macOS (`test_import_linux_bundle`). Run locally without `LINUX_BUNDLE` the test skips
+
 ## [2.2.1] - 2026-11-13
 
 ### Fixed
