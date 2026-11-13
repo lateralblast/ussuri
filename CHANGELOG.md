@@ -4,26 +4,26 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [2.4.1] - 2026-11-13
+## [2.1.5] - 2026-11-13
 
 ### Fixed
 
 - `--changelog` (`-e`) read the wrong place from an installed copy: it looked next to `~/.zshrc`, then fetched GitHub, which prints nothing offline. It now reads the changelog next to the script, then the copy in the work directory, then GitHub. An install or update copies `CHANGELOG.md` into the work directory (not on a dry run)
-- The 1.9.5 section was out of order, so `--changelog` printed it above 2.4.0
+- The 1.9.5 section was out of order, so `--changelog` printed it above 2.1.4
 
-## [2.4.0] - 2026-11-13
+## [2.1.4] - 2026-11-13
 
 ### Added
 
 - `PLUGIN_EXCLUDE` (default empty) leaves out plugins and snippets from the plugin lists, the shipped ones and your own, by the name each line gives them (`user/repo` or `OMZP::name`), matched exactly. It is set with `--set PLUGIN_EXCLUDE "OMZP::sudo wfxr/forgit"` and applies at the next login. Costs nothing when empty
 
-## [2.3.0] - 2026-11-13
+## [2.1.3] - 2026-11-13
 
 ### Added
 
 - `--runs N` (1 to 50) runs N timed logins (each is `--timing`, a real login) and prints each step's median, least and most, and how many logins gave the step a value. A step that is missing from some logins is shown with the count it has. Exit status 1 if a login did not finish cleanly, with the figures from the rest
 
-## [2.2.0] - 2026-11-13
+## [2.1.2] - 2026-11-13
 
 ### Added
 
