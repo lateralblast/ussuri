@@ -1163,7 +1163,8 @@ print(" ".join([l for l in txt.replace("\r", "\n").splitlines() if l.strip()][:3
 os.write(fd, b"exit\n")
 PY
     }
-    check "tab completes a switch: --se becomes --set" "$( complete_line 'ussuri.zsh --se' | grep -c 'ussuri.zsh --set' )" "1"
+    check "tab completes a switch: --set becomes --set (--se is shared with --selftest now)" "$( complete_line 'ussuri.zsh --set' | grep -c 'ussuri.zsh --set' )" "1"
+    check "and --sel completes to --selftest" "$( complete_line 'ussuri.zsh --sel' | grep -c 'ussuri.zsh --selftest' )" "1"
     check "tab offers the settings after --set" "$( complete_line 'ussuri.zsh --set PROMPT_T' | grep -c 'PROMPT_TWO_LINE' )" "1"
     check "tab offers true and false for a true/false setting" "$( complete_line 'ussuri.zsh --set PROMPT_TWO_LINE ' | grep -c 'false  *true\|true  *false' )" "1"
     check "and the engines for PROMPT_ENGINE" "$( complete_line 'ussuri.zsh --set PROMPT_ENGINE ' | grep -c 'posh' )" "1"
@@ -2178,6 +2179,35 @@ test_vi_mode () {
   check "turbo (the default) defers it, like the other plugins" "$( grep -B1 'light jeffreytse/zsh-vi-mode' "${log}" | head -1 )" "zinit ice wait lucid"
   check "it is loaded before syntax highlighting" "$( awk '/light jeffreytse\/zsh-vi-mode/ {v=NR} /light zsh-users\/zsh-syntax-highlighting/ {h=NR} END {print (v && h && v < h) ? "yes" : "no"}' "${log}" )" "yes"
   check "both lists guard it" "$( grep -c 'if \[\[ "${VI_MODE}" == true \]\]; then zinit' "${ROOT}/files/zinit/zinit.zsh" "${ROOT}/files/zinit/zinit-turbo.zsh" | awk -F: '{s+=$2} END {print s}' )" "2"
+}
+
+test_selftest () {
+  # --selftest loads the eager plugin list in a throwaway home: plugins that are not in the copy are skipped (never
+  # cloned), a plugin that fails is reported with its error and fails the check, and the real home is not touched
+  healthy_home
+  local out rc before after
+  before=$( find "${H}" | sort | cksum )
+  out=$( run --selftest 2>&1 ); rc=$?
+  check "a plugin that is not installed is skipped, not cloned" "$( print -r -- "${out}" | grep -c '^skip  ' | awk '{print ($1 > 0) ? "yes" : "no"}' )" "yes"
+  check "and nothing fails" "$( print -r -- "${out}" | grep -c '^fail' )" "0"
+  check "and the check passes" "${rc}" "0"
+  check "it says the throwaway home was removed" "$( print -r -- "${out}" | grep -c 'nothing in your home was changed' )" "1"
+  check "no clone is attempted" "$( grep -c 'git clone' "${LOG}" )" "0"
+  after=$( find "${H}" | sort | cksum )
+  check "the real home is unchanged" "${after}" "${before}"
+  mkdir -p "${H}/.zinit/plugins/zsh-users---zsh-syntax-highlighting"
+  print -r -- 'zinit () { [[ "$*" == *syntax-highlighting* ]] && { print -u2 -r -- "boom"; return 3 }; return 0 }' > "${H}/.zinit/zinit.zsh"
+  out=$( run --selftest 2>&1 ); rc=$?
+  check "a plugin that fails is reported with its error" "$( print -r -- "${out}" | grep -c '^fail  zsh-users/zsh-syntax-highlighting  exit 3: boom$' )" "1"
+  check "and the check fails" "${rc}" "1"
+  print -r -- 'zinit () { [[ "$*" == *syntax-highlighting* ]] && print -u2 -r -- "careful"; return 0 }' > "${H}/.zinit/zinit.zsh"
+  out=$( run --selftest 2>&1 ); rc=$?
+  check "a plugin that loads with a message is a warning, and passes" "$( print -r -- "${out}" | grep -c '^warn  zsh-users/zsh-syntax-highlighting  loaded, with a message: careful$' )" "1"
+  check "(and the check passes)" "${rc}" "0"
+  rm -rf "${H}/.ussuri/files"
+  out=$( run --selftest 2>&1 ); rc=$?
+  check "without the plugin lists it says so, and fails" "$( print -r -- "${out}" | grep -c 'no plugin lists' )" "1"
+  check "(and the check fails)" "${rc}" "1"
 }
 
 test_you_should_use () {

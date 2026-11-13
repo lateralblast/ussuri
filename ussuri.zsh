@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.1.1
+# Version: 2.2.0
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1986,6 +1986,85 @@ ussuri_compinit () {
   fi
 }
 
+# --selftest: load the eager plugin list (zinit.zsh, so every plugin loads here) in a throwaway home, and report each line.
+# The parent copies your support files and the zinit tree into a temporary home and runs this script again in a child
+# with HOME there, so nothing in your home is written. A plugin that is not in the copy is skipped, never cloned
+
+selftest_main () {
+  if [[ -n "${USSURI_SELFTEST_CHILD}" ]]; then
+    selftest_child
+    return $?
+  fi
+  local home result=0 zinit_home="${ZINIT_HOME:-${HOME_DIR}/.zinit}"
+  local -a childenv
+  if [[ ! -d "${WORK_DIR}/files/zinit" ]]; then
+    print -u2 -r -- "Error:          no plugin lists in ${WORK_DIR}/files: run --install first"
+    return 1
+  fi
+  home="$( mktemp -d )" || return 1
+  mkdir -p "${home}/.ussuri" "${home}/.zinit"
+  cp -R "${WORK_DIR}/files" "${home}/.ussuri/"
+  [[ -d "${zinit_home}" ]] && cp -R "${zinit_home}/." "${home}/.zinit/"
+  childenv=( HOME="${home}" PATH="${PATH}" TERM=dumb USSURI_SELFTEST_CHILD=1 )
+  [[ -n "${USSURI_OS}" ]] && childenv+=( USSURI_OS="${USSURI_OS}" )
+  [[ -n "${USSURI_OS_REL}" ]] && childenv+=( USSURI_OS_REL="${USSURI_OS_REL}" )
+  [[ -n "${OS_RELEASE_FILE}" ]] && childenv+=( OS_RELEASE_FILE="${OS_RELEASE_FILE}" )
+  env -i "${childenv[@]}" zsh "${CALLER:A}" --selftest
+  result=$?
+  rm -rf -- "${home}"
+  return ${result}
+}
+
+selftest_child () {
+  local line id dir name errfile="${HOME}/selftest.err" started rc ms
+  local -i ok=0 warned=0 failed=0 skipped=0
+  local zinit_home="${ZINIT_HOME:-${HOME}/.zinit}"
+  if [[ ! -r "${zinit_home}/zinit.zsh" ]]; then
+    print -r -- "fail  zinit is not in the copy of ${zinit_home}: run --install first"
+    return 1
+  fi
+  source "${zinit_home}/zinit.zsh" > /dev/null 2>&1 || {
+    print -r -- "fail  zinit.zsh did not load"
+    return 1
+  }
+  for line in "${(@f)$(<${WORK_DIR}/files/zinit/zinit.zsh)}"; do
+    [[ -z "${line}" || "${line}" == \#* ]] && continue
+    name="${line[1,60]}"
+    if [[ "${line}" =~ 'zinit (light|snippet) ([^ ;]+)' ]]; then
+      id="${match[2]}"
+      name="${id}"
+      if [[ "${match[1]}" == light ]]; then
+        dir="${zinit_home}/plugins/${id//\//---}"
+      else
+        dir="${zinit_home}/snippets/${id}"
+      fi
+      if [[ ! -e "${dir}" ]]; then
+        print -r -- "skip  ${name}  not installed here (--selftest does not clone)"
+        skipped+=1
+        continue
+      fi
+    fi
+    started="${EPOCHREALTIME}"
+    eval "${line}" > /dev/null 2> "${errfile}"
+    rc=$?
+    ms=$(( (EPOCHREALTIME - started) * 1000 ))
+    if (( rc != 0 )); then
+      print -r -- "fail  ${name}  exit ${rc}: $(head -1 "${errfile}")"
+      failed+=1
+    elif [[ -s "${errfile}" ]]; then
+      print -r -- "warn  ${name}  loaded, with a message: $(head -1 "${errfile}")"
+      warned+=1
+    else
+      printf 'ok    %s  %.1f ms\n' "${name}" "${ms}"
+      ok+=1
+    fi
+  done
+  print
+  print -r -- "${ok} loaded, ${warned} with a message, ${failed} failed, ${skipped} skipped (zinit.zsh, every plugin loads here; your own plugins in files/zinit/local.zsh are not checked)"
+  print -r -- "The throwaway home is removed when this finishes; nothing in your home was changed"
+  (( failed == 0 ))
+}
+
 # --timing, turbo mode: zinit loads each deferred plugin in .zinit-run-task, after the first prompt. This wraps it so each
 # load is timed by plugin. The loads run while the shell waits for input, so timing_deferred_report prints at the first
 # prompt after they ran (the first prompt has none yet). Nothing is wrapped when not timing
@@ -2096,6 +2175,7 @@ print_help () {
   help_heading "Settings (${CONFIG_FILE})"
   help_row "-k" "--config"         "Create the config file"
   help_row ""   "--title TEXT"     "Set this window's title, and nothing else"
+  help_row ""   "--selftest"       "Check the plugin lists in a throwaway home and report"
   help_row ""   "--set NAME VALUE" "Save a setting, for every new shell"
   help_row ""   "--unset NAME"     "Remove a setting"
   help_row ""   "--get [NAME]"     "Show a setting (or all) and where it is from"
@@ -5247,6 +5327,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
   DO_ADOPT="false"
   DO_FIX="false"
   DO_TITLE="false"
+  DO_SELFTEST="false"
   TITLE_TEXT=""
   PROFILE_SWITCH="false"
   MACHINE_SWITCH="false"
@@ -5283,6 +5364,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       --prompt-preview -4
       --title -5
       --export -2       --import -3
+      --selftest -6
     )
     SWITCHES=()
     SWITCH_VALUE="false"
@@ -5346,7 +5428,7 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
       esac
     done
     set -- "${SWITCHES[@]}"
-    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 5: || (( $# )); then
+    if ! zparseopts -D -F -a OPTS -- a A b B c C d D e E: f F g: G: h H: i I j J: k K l: L M: n m: N o O P p q+: Q+: r R: s S: t T u U v V w+: W: x X y Y z Z: 2: 3: 4 5: 6 || (( $# )); then
       print_help
       release_lock
       exit 1
@@ -5617,6 +5699,10 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
           TITLE_TEXT="${OPTS[2]}"
           shift 2 OPTS
           ;;
+        -6)
+          DO_SELFTEST="true"
+          shift OPTS
+          ;;
         -z)
           DO_ZINIT_CHECK="true"
           shift OPTS
@@ -5724,6 +5810,15 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
     set_terminal_title "${TITLE_TEXT}" || TITLE_STATUS=1
     release_lock
     exit ${TITLE_STATUS}
+  fi
+
+  # Check the plugin lists in a throwaway home (no login steps, no lock, nothing in your home is changed)
+
+  if [[ "${DO_SELFTEST}" = "true" ]]; then
+    SELFTEST_STATUS=0
+    selftest_main || SELFTEST_STATUS=$?
+    release_lock
+    exit ${SELFTEST_STATUS}
   fi
 
   # Write or read a bundle of your setup

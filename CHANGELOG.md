@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The `--timing` section of the README shows the rebuild lines and what they mean
 
+## [2.2.0] - 2026-11-13
+
+### Added
+
+- `--selftest` loads the eager plugin list (`zinit.zsh`, so every plugin loads) in a throwaway home and reports each line: ok with its time, warn if it printed a message, fail with its exit status and error, or skip when the plugin is not installed (it is never cloned). Your support files and the zinit tree are copied into the temporary home, which is removed afterwards. It takes no lock and changes nothing in your home. Exit status 1 if a line fails. It does not check your own `files/zinit/local.zsh` plugins
+
 ## [2.1.1] - 2026-11-13
 
 ### Fixed
