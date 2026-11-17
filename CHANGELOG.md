@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.3] - 2026-11-17
+
+### Added
+
+- `PLAIN_COMPLETION` (in `~/.ussuri/config`): commands that get file name completion only, in place of their own completion function, applied after `compinit` in both plugin lists. It is a way round a completion function that crashes zsh: on Ubuntu 26.04 (zsh 5.9-8ubuntu3) `ffmpeg -<Tab>` could segfault zsh inside the stock `_ffmpeg` (the pattern matcher, while it parses `ffmpeg -h`). The default is `ffmpeg ffprobe`, which avoids it (file name completion only for those two); `PLAIN_COMPLETION=""` brings the real completion back.
+
 ## [2.2.2] - 2026-11-14
 
 ### Fixed

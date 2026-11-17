@@ -2165,6 +2165,21 @@ test_compinit_insecure () {
   chmod 755 "${bad}"
 }
 
+test_plain_completion () {
+  # PLAIN_COMPLETION gives the commands it names file name completion only, once compinit has run (each check has its own HOME, so a cached .zcompdump from another one is not read); unset it is ffmpeg and ffprobe
+  local d="${TMP}/comppl"; mkdir -p "${d}"
+  print -r -- '#compdef foo' > "${d}/_foo"
+  check "named commands get _files" "$( HOME="${TMP}/pc1"; mkdir -p "${HOME}"; zmodload zsh/datetime; autoload -Uz compinit; load_function ussuri_compinit
+    fpath=( "${d}" $fpath ); PLAIN_COMPLETION="foo bar"; ussuri_compinit < /dev/null 2> /dev/null
+    print -r -- "${_comps[foo]} ${_comps[bar]}" )" "_files _files"
+  check "empty leaves the command's own completion" "$( HOME="${TMP}/pc2"; mkdir -p "${HOME}"; zmodload zsh/datetime; autoload -Uz compinit; load_function ussuri_compinit
+    fpath=( "${d}" $fpath ); PLAIN_COMPLETION=""; ussuri_compinit < /dev/null 2> /dev/null
+    print -r -- "${_comps[foo]}" )" "_foo"
+  check "unset means ffmpeg and ffprobe" "$( HOME="${TMP}/pc3"; mkdir -p "${HOME}"; zmodload zsh/datetime; autoload -Uz compinit; load_function ussuri_compinit
+    unset PLAIN_COMPLETION; ussuri_compinit < /dev/null 2> /dev/null
+    print -r -- "${_comps[ffmpeg]} ${_comps[ffprobe]}" )" "_files _files"
+}
+
 test_plugin_exclude () {
   # PLUGIN_EXCLUDE leaves out the plugins it names, matched exactly, in the shipped lists and every login
   healthy_home
