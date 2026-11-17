@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 2.2.2
+Current Version: 2.2.3
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -446,6 +446,7 @@ text. Under `--dryrun` nothing is written, but `--get` in the same run shows the
 |---|---|---|
 | `PLUGIN_MANAGER` | zinit | `zinit` or `oh-my-zsh` (`-m`) |
 | `ZINIT_TURBO` | true | load plugins after the prompt, from `zinit-turbo.zsh`; false loads `zinit.zsh` before it |
+| `PLAIN_COMPLETION` | `ffmpeg ffprobe` | space separated commands that get file name completion only, in place of their own completion function. For one that crashes zsh: on Ubuntu 26.04 (zsh 5.9-8ubuntu3) the stock `_ffmpeg` can segfault, so those two are the default; set `PLAIN_COMPLETION=""` to get their own completion back |
 | `ZSH_THEME`, `DO_ZSH_THEME` | robbyrussell, true | the oh-my-zsh theme (`-Z`, `-n`) |
 | `SHARE_HISTORY`, `DO_HISTORY`, `HISTORY_SIZE` | true, true, 50000 | [history settings](#history) |
 | `PROMPT_ENGINE` | p10k | `p10k`, `posh` or `none` (`-E`) |

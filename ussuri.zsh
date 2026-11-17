@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 #
-# Version: 2.2.2
+# Version: 2.2.3
 #
 # License: CC BY-NC-SA 4.0
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -2019,6 +2019,13 @@ ussuri_compinit () {
   left_out=( ${before:|fpath} )
   if (( ${#left_out} )); then
     print -u2 -r -- "Note:           compinit left out insecure completion directories: ${(j:, :)left_out} (compaudit lists them)"
+  fi
+  # PLAIN_COMPLETION: commands that get file name completion only, in place of their own completion function. The
+  # default is ffmpeg and ffprobe, as the stock _ffmpeg can segfault zsh 5.9 (Ubuntu 26.04). Set it to "" to keep the
+  # real completion, which is why this is a ${-} default and not set_env (that treats empty as unset)
+  local plain="${PLAIN_COMPLETION-ffmpeg ffprobe}"
+  if [[ -n "${plain}" ]]; then
+    compdef _files ${=plain}
   fi
 }
 
@@ -4160,6 +4167,7 @@ print_config_template () {
 #DO_VERBOSE=true            # log what is being done
 #DO_CACHE_INIT=false        # run rbenv/pyenv/brew init every time instead of caching it
 #ZINIT_TURBO=false          # load every zinit plugin before the prompt
+#PLAIN_COMPLETION="ffmpeg ffprobe"  # commands that get file name completion only (their own completion crashes zsh); "" turns it off
 #DEFAULTS_MAX_AGE=7         # days before OS X defaults are applied again
 #START_DIR=~/code           # directory new shells start in
 #GO_HOME=~/go               # GOPATH
