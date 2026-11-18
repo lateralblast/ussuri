@@ -6216,6 +6216,13 @@ if [[ ! "${CALLER}" =~ "X11|Antigravity" ]]; then
 
   phase update-hint check_update_hint
 
+  # declaude: turns off mouse tracking left on by a program that exited without cleaning up, so mouse
+  # movement is not echoed into the prompt as text (1000/1002/1003 reporting, 1005/1006/1015 encodings)
+
+  if [[ -o interactive ]]; then
+    alias declaude='printf "\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l"'
+  fi
+
   # The default window title, before each prompt (once, and not at all when TERMINAL_TITLE is "none")
 
   if [[ "${TERMINAL_TITLE}" != "none" ]] && [[ -o interactive ]]; then

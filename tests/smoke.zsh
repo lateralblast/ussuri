@@ -1195,7 +1195,7 @@ adopt_home () {
   layered_home
   AF="${H}/.ussuri/files/packages"
   # zzz-extra is installed (a leaf) but in no list, other-app is an installed cask and example/tap an added tap that are not either
-  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
+  { sed 's#.*/##' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
   printf '%s\n' zzz-extra git > "${TMP}/leaves.txt"
   print -r -- "other-app" > "${TMP}/casks.txt"
   print -r -- "example/tap" > "${TMP}/taps.txt"
@@ -3055,7 +3055,7 @@ test_local_zinit () {
 
 test_local_packages () {
   new_home
-  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" | sed 's#.*/##' > "${TMP}/installed.txt"
   print -r -- "my-extra-tool" > "${H}/.ussuri/files/packages/local.brew"
   printf '%s\n' "# a comment" "ansible" >> "${H}/.ussuri/files/packages/local.brew"
   print -r -- "git" > "${H}/.ussuri/brew.list"; cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
@@ -3063,7 +3063,7 @@ test_local_packages () {
   out=$( run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew install' | sed 's/.*install //' | sort | tr '\n' ' ' )
   check "packages in packages/local.<ext> are added to the shipped list" "${out}" "ansible autoconf my-extra-tool "
   : > "${LOG}"
-  cat "${ROOT}/files/packages/macos.brew" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"; print -r -- "my-extra-tool" >> "${H}/.ussuri/brew.list"
+  sed 's#.*/##' "${ROOT}/files/packages/macos.brew" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"; print -r -- "my-extra-tool" >> "${H}/.ussuri/brew.list"
   run -P > /dev/null 2>&1
   check "once everything is installed a stamp is saved" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
   : > "${LOG}"
@@ -3220,6 +3220,15 @@ test_doctor_defaults_journal () {
   use_plain_defaults
 }
 
+test_declaude () {
+  local line out want
+  line="$( grep -E "^    alias declaude=" "${ROOT}/ussuri.zsh" )"
+  check "declaude is defined once, in the script" "$( grep -c -E "alias declaude=" "${ROOT}/ussuri.zsh" )" "1"
+  out="$( printf '%s\n%s\n' "${line## }" "declaude" | zsh -f 2>/dev/null | od -An -c | tr -s ' ' )"
+  want="$( printf '\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l' | od -An -c | tr -s ' ' )"
+  check "declaude turns off mouse reporting modes 1000 1002 1003 1005 1006 1015" "${out}" "${want}"
+}
+
 test_update_hint_off () {
   new_home; make_hint_remote 9.9.9
   : > "${LOG}"
@@ -3334,7 +3343,7 @@ test_casks_and_taps () {
   printf '%s\n' "# my apps" "some-app" "another-app" > "${files}/local.cask"
   printf '%s\n' "someone/tools" "Other/Repo" > "${files}/local.tap"
   # Everything in the formula list and the font is installed, one of the casks is, and one tap is (in lower case, as brew shows them)
-  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "another-app"; } > "${TMP}/installed.txt"
+  { sed 's#.*/##' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "another-app"; } > "${TMP}/installed.txt"
   print -r -- "other/repo" > "${TMP}/taps.txt"
   cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"; cp "${TMP}/taps.txt" "${H}/.ussuri/brew.taps"
   : > "${LOG}"
@@ -3374,7 +3383,7 @@ test_casks_and_taps_defaults () {
   new_home
   rm -f "${H}/.ussuri/files/packages/macos.cask" "${H}/.ussuri/files/packages/macos.tap"
   : > "${LOG}"
-  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" | sed 's#.*/##' > "${TMP}/installed.txt"
   cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   local out
   out=$( run -P 2>&1 )
@@ -3402,7 +3411,7 @@ dryrun_brew_installs () {
 layered_home () {
   new_home
   # the shipped formulae and the font (a login also checks the font), so only what a test adds is missing
-  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; } > "${TMP}/installed.txt"
+  { sed 's#.*/##' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; } > "${TMP}/installed.txt"
   cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   LF="${H}/.ussuri/files/packages"
   mkdir -p "${LF}/profiles/work" "${LF}/profiles/home" "${LF}/hosts/box" "${LF}/hosts/other"
@@ -3432,7 +3441,7 @@ test_profile_layers () {
 
 test_profile_exclusions () {
   layered_home
-  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" | sed 's#.*/##' > "${TMP}/installed.txt"
   cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   printf '%s\n' '!ansible' '!not-in-the-list' > "${LF}/profiles/work/local.brew"
   EXTRA_ENV=( MACHINE=box )
@@ -3578,7 +3587,7 @@ test_package_drift_macos () {
   check "it changes nothing in the home directory" "${after}" "${before}"
   check "and installs and adds nothing" "$( grep -c -E '^brew (install|tap [a-z])' "${LOG}" )" "0"
   # Only extras: information, not drift
-  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
+  { sed 's#.*/##' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "zzz-extra"; } > "${TMP}/installed.txt"
   print -r -- "wanted-app" >> "${TMP}/casks.txt"; print -r -- "someone/tools" >> "${TMP}/taps.txt"
   out=$( run --drift packages 2>&1 ); rc=$?
   check "with everything installed and only extras, there is no drift" "${rc}" "0"
@@ -3592,7 +3601,7 @@ test_package_drift_cask_in_formula_list () {
   # a missing formula nor an extra cask. The font is in the cask list and installed, so it is not an extra either
   print -r -- "some-cask-app" >> "${H}/.ussuri/files/packages/macos.brew"
   print -r -- "font-fira-code-nerd-font" > "${H}/.ussuri/files/packages/local.cask"
-  { cat "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "some-cask-app"; } > "${TMP}/installed.txt"
+  { sed 's#.*/##' "${ROOT}/files/packages/macos.brew"; print -r -- "font-fira-code-nerd-font"; print -r -- "some-cask-app"; } > "${TMP}/installed.txt"
   # as brew list --formula would not show it: only brew list (both) and brew list --cask do
   printf '%s\n' some-cask-app font-fira-code-nerd-font > "${TMP}/casks.txt"
   local out rc
@@ -3603,7 +3612,7 @@ test_package_drift_cask_in_formula_list () {
 
 test_package_drift_layers () {
   layered_home
-  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"; print -r -- "font-fira-code-nerd-font" >> "${TMP}/installed.txt"
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" | sed 's#.*/##' > "${TMP}/installed.txt"; print -r -- "font-fira-code-nerd-font" >> "${TMP}/installed.txt"
   printf '%s\n' '!ansible' "work-only" > "${LF}/profiles/work/local.brew"
   local out
   EXTRA_ENV=( MACHINE=box )
@@ -4246,14 +4255,14 @@ test_linux_id () {
 
 test_packages () {
   new_home
-  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
+  grep -v -E '^(ansible|autoconf)$' "${ROOT}/files/packages/macos.brew" | sed 's#.*/##' > "${TMP}/installed.txt"
   cat "${TMP}/installed.txt" "${TMP}/shipped-casks.txt" > "${H}/.ussuri/brew.list"
   check "dry run proposes exactly the missing packages" "$( run -P --dryrun --verbose 2>&1 | grep -E 'Executing: +brew install' | sed 's/.*install //' | tr '\n' ' ' )" "ansible autoconf "
   : > "${LOG}"
   run -P > /dev/null 2>&1
   check "installs the missing packages" "$( calls 'brew install' )" "2"
   check "no stamp while the installed list is still incomplete" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "none"
-  cp "${ROOT}/files/packages/macos.brew" "${TMP}/installed.txt"
+  sed 's#.*/##' "${ROOT}/files/packages/macos.brew" > "${TMP}/installed.txt"
   run -P > /dev/null 2>&1
   check "stamp once everything is installed" "$( [[ -f "${H}/.ussuri/macos.brew.sum" ]] && echo stamped || echo none )" "stamped"
   printf 'hashicorp/tap/terraform\n# comment\n\nfoo\n' > "${H}/.ussuri/files/packages/macos.brew"
