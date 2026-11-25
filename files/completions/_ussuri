@@ -65,6 +65,7 @@ _ussuri_settings () {
     UPDATE_SHA256
     UV_INSTALL_SHA256
     UV_PYTHON
+    PLAIN_COMPLETION
     PLUGIN_EXCLUDE
     VI_MODE
     ZINIT_REF

@@ -74,7 +74,7 @@ for pair in "${LISTS[@]}"; do
   print -r -- "${file:t} (${CHECK_MANAGER})"
   for name in ${(f)"$( read_names "${file}" )"}; do
     checked=$(( checked + 1 ))
-    if package_exists "${name:t}"; then
+    if package_exists "${name}"; then
       [[ "${VERBOSE}" == true ]] && print -r -- "  ok       ${name}"
     else
       print -r -- "  NOT FOUND ${name}"
