@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.4] - 2026-11-25
+
+### Added
+
+- `declaude` alias: turns off the mouse tracking modes (1000, 1002, 1003, 1005, 1006, 1015) that a program can leave on when it exits without cleaning up. While they stay on, mouse movement is echoed into the prompt as text such as `35;104;37M`. Run it in the affected window, or open a new one.
+- `kshitijl/tap/psychic` in the shipped macOS Homebrew list (`files/packages/macos.brew`): a terminal file browser that ranks results with a model trained on your own usage. It is a Homebrew formula only, so no other package manager lists it.
+- `tests/version.zsh`: checks that the version in the script header, `README.md` and the newest `CHANGELOG.md` entry follows the numbering standard (each part one digit 0-9, entries newest first, dates YYYY-MM-DD). The smoke suite runs it as `version_numbering`. The 1.0.10, 1.0.11 and 1.0.12 entries are exempt by name until they are renumbered.
+- `commit` script at the root of the repository: stages the new and changed files, then commits them with a subject that names the files and a description that summarises each file's change and its line counts. `--push` pushes afterwards, and `--dry-run` shows the message and changes nothing.
+
+### Changed
+
+- The smoke tests' installed-package fixtures strip tap prefixes, as `brew list` prints short names (tests only, no change to the script).
+
 ## [2.2.3] - 2026-11-17
 
 ### Added

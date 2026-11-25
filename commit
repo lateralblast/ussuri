@@ -1,0 +1,140 @@
+#!/bin/sh
+# commit: stage the new and changed files (git add -A, which respects .gitignore) and commit them. The subject
+# names the files and what was done to them; the description is a synopsis of the staged changes, one line per
+# file with its lines added and removed, and a total. With --push, push the branch. No assistant trailer is added.
+#
+#   ./commit                 stage and commit
+#   ./commit --push          stage, commit (if there is anything to commit), then push
+#   ./commit --dry-run       show the files and message that would be committed, and change nothing
+#                            (--dryrun also works)
+#   ./commit --help          show this help
+set -eu
+
+ROOT=$(cd "$(dirname "$0")" && pwd)
+cd "$ROOT"
+
+usage() {
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+fail() {
+    printf 'commit: %s\n' "$*" >&2
+    exit 1
+}
+
+dry=0
+push=0
+for arg in "$@"; do
+    case "$arg" in
+        --push) push=1 ;;
+        --dry-run|--dryrun) dry=1 ;;
+        --help|-h) usage; exit 0 ;;
+        *) fail "unknown option $arg (try --help)" ;;
+    esac
+done
+
+git rev-parse --git-dir > /dev/null 2>&1 || fail "not a git repository"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+message_file="$tmp/message"
+
+git add -A
+
+committed=0
+if git diff --cached --quiet; then
+    echo "nothing new to commit"
+else
+    committed=1
+
+    # --no-renames, so each file is either added, modified or deleted and its counts line up with its status
+    git diff --cached --no-renames --name-status > "$tmp/status"
+    git diff --cached --no-renames --numstat > "$tmp/stats"
+
+    count=$(awk 'END { print NR }' "$tmp/status")
+
+    # The verb follows what happened to the files: add, remove, or update when it is a mix
+    verb=$(awk -F'\t' '
+        { seen[$1] = 1 }
+        END {
+            if (seen["A"] && !seen["M"] && !seen["D"]) print "Add"
+            else if (seen["D"] && !seen["M"] && !seen["A"]) print "Remove"
+            else print "Update"
+        }' "$tmp/status")
+
+    # Up to three file names (without their directories), then how many more there are
+    listed=$(awk -F'\t' '
+        NR <= 3 {
+            n = split($2, parts, "/")
+            printf "%s%s", (NR > 1 ? ", " : ""), parts[n]
+        }
+        END { print "" }' "$tmp/status")
+    if [ "$count" -gt 3 ]; then
+        listed="$listed and $((count - 3)) more"
+    fi
+
+    # Cut to 72 characters, the usual limit for a subject line
+    subject=$(printf '%s %s' "$verb" "$listed" | awk '{ print substr($0, 1, 72) }')
+
+    {
+        printf '%s\n\n' "$subject"
+        echo "Changes:"
+        awk -F'\t' '
+            NR == FNR { added[$3] = $1; removed[$3] = $2; next }
+            {
+                word = ($1 == "A") ? "Added" : ($1 == "D") ? "Deleted" : "Modified"
+                if (added[$2] == "-") detail = "binary"
+                else detail = "+" added[$2] " -" removed[$2]
+                printf "- %s %s (%s)\n", word, $2, detail
+            }' "$tmp/stats" "$tmp/status"
+        echo
+        awk -F'\t' '
+            $1 != "-" { ins += $1 }
+            $2 != "-" { del += $2 }
+            { files++ }
+            END {
+                printf "%d file%s changed, %d insertion%s(+), %d deletion%s(-)\n",
+                    files, (files == 1 ? "" : "s"), ins, (ins == 1 ? "" : "s"), del, (del == 1 ? "" : "s")
+            }' "$tmp/stats"
+    } > "$message_file"
+
+    # No assistant attribution in the history: refuse a message that names Claude or carries a Co-Authored-By line
+    if grep -qi -e 'claude' -e 'co-authored-by' "$message_file"; then
+        fail "the message names Claude or carries a Co-Authored-By line: change the file names or the commit message"
+    fi
+
+    if [ "$dry" = 1 ]; then
+        echo "files that would be committed:"
+        sed 's/^/  /' "$tmp/status"
+        echo
+        echo "message:"
+        sed 's/^/  /' "$message_file"
+        echo
+    else
+        git commit -q -F "$message_file"
+        git log -1 --format='committed %h: %s'
+    fi
+fi
+
+# Leave the index as it was for a dry run
+[ "$dry" = 0 ] || git reset -q
+
+if [ "$push" = 1 ]; then
+    branch=$(git symbolic-ref --quiet --short HEAD) || fail "HEAD is not on a branch: check out a branch to push"
+    if git rev-parse --quiet --verify '@{u}' > /dev/null; then
+        ahead=$(git rev-list --count '@{u}..HEAD')
+        if [ "$ahead" -eq 0 ] && [ "$committed" = 0 ]; then
+            echo "nothing to push"
+        elif [ "$dry" = 1 ]; then
+            echo "would push $branch ($ahead commit(s) ahead)"
+        else
+            git push
+        fi
+    elif [ "$dry" = 1 ]; then
+        echo "would push $branch and set its upstream to origin/$branch"
+    else
+        git push -u origin "$branch"
+    fi
+elif [ "$committed" = 0 ]; then
+    fail "nothing to commit"
+fi
