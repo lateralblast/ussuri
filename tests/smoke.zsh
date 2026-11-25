@@ -576,6 +576,16 @@ test_syntax () {
   check "stub brew is what runs, not the real one" "$( env -i PATH="${TEST_PATH_PREFIX}${STUBS}:/usr/bin:/bin" sh -c 'command -v brew' )" "${STUBS}/brew"
 }
 
+test_version_numbering () {
+  # tests/version.zsh checks the header, README and CHANGELOG against the numbering standard (single digits, newest first)
+  local out rc
+  out=$( zsh "${ROOT}/tests/version.zsh" 2>&1 ); rc=$?
+  check "the version follows the numbering standard (tests/version.zsh)" "${rc}" "0"
+  if (( rc )); then
+    print -r -- "${out}" | grep FAIL | sed 's/^/        /'
+  fi
+}
+
 test_version () {
   new_home
   check "--version prints only the version" "$( run --version 2>&1 )" "$( grep -m1 '^# Version:' "${SRC}" | awk '{print $3}' )"
