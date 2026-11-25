@@ -105,6 +105,8 @@ esac
 [ "$1" = list ] && { cat __TMP__/installed.txt; cat __TMP__/casks.txt __TMP__/shipped-casks.txt; }
 [ "$1" = leaves ] && cat __TMP__/leaves.txt
 [ "$1" = tap ] && [ -z "$2" ] && cat __TMP__/taps.txt
+# A current brew has the trust command (listed by brew commands) unless the test makes an older one
+[ "$1" = commands ] && [ ! -f __TMP__/no-trust ] && echo trust
 # As the real one: no output when its bin is already first in PATH (the script puts it there), so a cache built that way is empty
 [ "$1" = shellenv ] && case "${PATH}" in __TMP__/brew/bin:__TMP__/brew/sbin:*) ;; *) echo 'export HOMEBREW_PREFIX=/stub' ;; esac
 exit 0
@@ -3345,6 +3347,24 @@ test_doctor_update_hint () {
   out=$( run --doctor 2>&1 )
   check "and warns when a newer version is known" "$( print -r -- "${out}" | grep -c 'warn.*9.9.9 is available' )" "1"
   EXTRA_ENV=()
+}
+
+test_brew_trust () {
+  new_home
+  # Everything in the formula list is installed except psychic, which is from a tap
+  sed 's#.*/##' "${ROOT}/files/packages/macos.brew" | grep -v -x 'psychic' > "${TMP}/installed.txt"
+  : > "${LOG}"
+  run -P > /dev/null 2>&1
+  check "a formula from a tap is installed by its full name" "$( grep -c -x 'brew install kshitijl/tap/psychic' "${LOG}" )" "1"
+  check "its tap is trusted first, so a brew that refuses untrusted taps will load it" "$( grep -E '^brew (trust|install kshitijl)' "${LOG}" | head -1 )" "brew trust kshitijl/tap"
+  check "the tap is trusted once" "$( grep -c -x 'brew trust kshitijl/tap' "${LOG}" )" "1"
+  # An older brew has no trust command, so nothing is trusted and the install is as before
+  touch "${TMP}/no-trust"
+  : > "${LOG}"
+  run -P > /dev/null 2>&1
+  check "a brew without trust is not asked to trust anything" "$( grep -c '^brew trust' "${LOG}" )" "0"
+  check "and still installs the formula" "$( grep -c -x 'brew install kshitijl/tap/psychic' "${LOG}" )" "1"
+  rm -f "${TMP}/no-trust"
 }
 
 test_casks_and_taps () {

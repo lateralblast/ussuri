@@ -36,8 +36,11 @@ package_exists () {
     dnf)    # By name, or by what it provides: wget is provided by wget1-wget or wget2-wget, and dnf install takes either
             [[ -n "$( dnf -q repoquery "$1" 2> /dev/null )" || -n "$( dnf -q repoquery --whatprovides "$1" 2> /dev/null )" ]] ;;
     apk)    [[ -n "$( apk search -e "$1" 2> /dev/null )" ]] ;;
-    brew)   # A name from a tap (user/repo/formula) needs its tap added first, as the install does
-            [[ "$1" == */*/* ]] && brew tap "${1%/*}" > /dev/null 2>&1
+    brew)   # A name from a tap (user/repo/formula) needs its tap added and trusted first, as the install does
+            if [[ "$1" == */*/* ]]; then
+              brew tap "${1%/*}" > /dev/null 2>&1
+              brew commands --quiet 2> /dev/null | grep -q -x trust && brew trust "${1%/*}" > /dev/null 2>&1
+            fi
             brew info --formula --json=v2 "$1" > /dev/null 2>&1 || brew info --cask --json=v2 "$1" > /dev/null 2>&1 ;;
     brew-cask) brew info --cask --json=v2 "$1" > /dev/null 2>&1 ;;
     *)      return 2 ;;

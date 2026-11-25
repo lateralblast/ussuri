@@ -3332,12 +3332,27 @@ check_osx_package () {
   fi
   package_installed "${PACKAGE}" && return
   notice_message "Installing package ${PACKAGE}"
+  # A name from a tap (user/repo/formula) is trusted first: newer Homebrew refuses one from a tap it does not trust
+  if [[ "${PACKAGE}" == */*/* ]]; then
+    brew_trust_tap "${PACKAGE%/*}"
+  fi
   if [[ "${PACKAGE_TYPE}" = "cask" ]]; then
     execute_command "brew install --cask ${(q)PACKAGE}" "show"
   else
     execute_command "brew install ${(q)PACKAGE}" "show"
   fi
   DO_UPDATE_LIST="true"
+}
+
+# Trust a tap so Homebrew will load its formulae (brew trust, in Homebrew versions that have it; older ones
+# have no trust and load every tap). Trusting a tap lets Homebrew run its formulae, so only the taps in
+# the lists are trusted, which are the ones you chose to add.
+
+brew_trust_tap () {
+  local tap="$1"
+  if brew commands --quiet 2> /dev/null | grep -q -x trust; then
+    execute_command "brew trust ${(q)tap}" "show"
+  fi
 }
 
 # Check OSX tap (a brew tap, added before the formulae and casks so a formula from one can be found)
