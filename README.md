@@ -1,4 +1,4 @@
-![alt tag](ussuri.jpg)
+<img src="ussuri.jpg" alt="ussuri" width="110" align="right">
 
 # ussuri
 
@@ -8,7 +8,7 @@ Also a breed of cat...
 
 https://www.catster.com/cat-breeds/ussuri-cat/
 
-Current Version: 2.2.4
+Current Version: 2.2.3
 
 License: CC BY-NC-SA, https://creativecommons.org/licenses/by-nc-sa/4.0/
 
