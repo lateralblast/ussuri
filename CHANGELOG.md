@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.5] - 2026-11-25
+
+### Added
+
+- Homebrew trusts a tap before installing a formula from it (`brew trust`, in Homebrew versions that have the command). Newer Homebrew refuses formulae from a tap it does not trust, so `kshitijl/tap/psychic` failed to load. Older versions skip the step.
+- `commit` prints the version it commits (the `# Version:` header of `ussuri.zsh`) and the files, both in a real commit and in `--dry-run`.
+- `tests/version.zsh` checks the version numbering in the script header, `README.md` and `CHANGELOG.md`, and runs as `version_numbering` in the smoke suite.
+
+### Fixed
+
+- The package-name check trusts and taps the tap of a tap-qualified name before it looks the name up, and prints Homebrew's own message for a name it cannot find. This was failing the macOS CI job.
+- `PLAIN_COMPLETION` is in the completion's list of settings and so in the config template check, which failed on every CI job since 2.2.3.
+- `README.md` said 2.2.3 after a commit reverted its version line. It says 2.2.5 now.
+
+### Changed
+
+- The CHANGELOG entries 1.0.10, 1.0.11 and 1.0.12 are folded into the 1.1.0 entry, with their original dates, so every entry follows the numbering standard. The version check no longer has any exemptions.
+
 ## [2.2.4] - 2026-11-25
 
 ### Added
@@ -861,24 +879,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - `set_env` no longer clobbers pre-set environment variables on every run; overrides declared before the script runs are now respected for all variables, not just `DO_VERBOSE`/`WORK_DIR`
-
-## [1.0.12] - 2026-09-21
-
-### Added
-
-- Missing help entries for -g/--gopath, -s/--sudoers and -S/--sudoersentry
-
-## [1.0.11] - 2026-09-21
-
-### Fixed
-
-- -F/--force help text and made stale lock file removal actually execute
-
-## [1.0.10] - 2026-09-21
+- -F/--force help text and made stale lock file removal actually execute (from 1.0.11, released 2026-09-21)
 
 ### Added
 
-- Wired up -C/--check and -U/--update flags to trigger check_for_update and update_script
+- Wired up -C/--check and -U/--update flags to trigger check_for_update and update_script (from 1.0.10, released 2026-09-21)
+- Missing help entries for -g/--gopath, -s/--sudoers and -S/--sudoersentry (from 1.0.12, released 2026-09-21)
 
 ## [1.0.9] - 2026-09-21
 

@@ -158,6 +158,16 @@ Open questions and checks, not features:
 - [x] **S8. Averaged startup timing (2.1.3, 2026-11-13).** zsh-bench runs several logins and reports the average and spread, so one slow login does not mislead. `--timing` reports one login. A `--timing --runs N` mode that reports the median of N would give steadier numbers for S1 and S2 to be judged by.
 - [x] **S9. `--selftest` (2.1.2, 2026-11-13).** Done as a plugin-list check, not a full login: it loads `zinit.zsh` in a temporary home and reports each line (ok, warn, fail or skip), so no login steps run. Originally: starts a throwaway login in a temporary home and reports what loaded, what failed and how long each step took, without touching the real home. It would catch a broken plugin before it reaches a real shell. `--doctor` is read-only and does not run a login, so it cannot do this.
 
+## Released in 2.2.5
+
+These were finished after 2.2.4 and are in the 2.2.5 CHANGELOG entry.
+
+- [x] **U1. Homebrew trusts a tap before installing from it.** `check_osx_package` runs `brew trust` on the tap of a name like `kshitijl/tap/psychic`, when the installed brew has the `trust` command (newer Homebrew refuses formulae from untrusted taps). Test: `brew_trust`.
+- [x] **U2. Package-name check trusts the tap too.** `tests/package-names.zsh` taps and trusts the tap of a tap-qualified name before looking it up, and prints brew's own message for a name it cannot find. This fixed the macOS CI job (`db5c881`).
+- [x] **U3. Completion and config template list `PLAIN_COMPLETION`.** `files/completions/_ussuri` was missing it, which failed the template check on every CI job. It had been failing since 2.2.3.
+- [x] **U4. `commit` shows the version and the files.** After a commit (or in `--dry-run`), it prints the version from the `ussuri.zsh` header and the files it committed.
+- [x] **U5. Smoke test for the version numbering.** `tests/version.zsh` checks the header, README and CHANGELOG (single digits, newest first, dates). Run by the smoke suite as `version_numbering`. The 1.0.10 to 1.0.12 entries were folded into the 1.1.0 entry (with their original dates), so the checker has no exemptions.
+
 ## Housekeeping when a fix ships
 
 Bump `# Version:` in `ussuri.zsh`, `Current Version` in `README.md`, and add a `CHANGELOG.md` entry (single digits per component, per CLAUDE.md).

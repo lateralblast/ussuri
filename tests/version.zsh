@@ -15,9 +15,6 @@ VERBOSE=0
 FAIL=0
 PASS=0
 
-# CHANGELOG entries that broke the rule before it was checked. Do not add to this list: fix the number of a new release instead
-LEGACY_VERSIONS=( 1.0.10 1.0.11 1.0.12 )
-
 fail () {
   print -r -- "FAIL  $*"
   FAIL=$(( FAIL + 1 ))
@@ -79,12 +76,6 @@ for h in "${heads[@]}"; do
   if [[ "${h}" =~ '^## \[([^]]+)\] - ([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])$' ]]; then
     v="${match[1]}"
     if [[ "${v}" == "Unreleased" ]]; then
-      continue
-    fi
-    # 1.0.10 to 1.0.12 were released with a two-digit part, which the rule now forbids. They are not renumbered,
-    # as that would change the release record. The checks below skip them (their dates are still checked).
-    if (( ${LEGACY_VERSIONS[(Ie)${v}]} )); then
-      pass "CHANGELOG.md entry [${v}] predates the rule and is exempt"
       continue
     fi
     if ! valid_version "${v}"; then
