@@ -80,6 +80,11 @@ for pair in "${LISTS[@]}"; do
       [[ "${VERBOSE}" == true ]] && print -r -- "  ok       ${name}"
     else
       print -r -- "  NOT FOUND ${name}"
+      # For a Homebrew name, show what brew said, so a CI log shows why (a tap it will not trust, for one)
+      if [[ "${CHECK_MANAGER}" == brew* && "${name}" == */*/* ]]; then
+        brew info --formula "${name}" 2>&1 | head -3 | sed 's/^/      brew: /'
+        brew tap-info "${name%/*}" 2>&1 | head -2 | sed 's/^/      brew: /'
+      fi
       unknown+=( "${file:t}: ${name}" )
     fi
   done
