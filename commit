@@ -47,6 +47,10 @@ if git diff --cached --quiet; then
 else
     committed=1
 
+    # The version this commit carries: the header of ussuri.zsh as it will be committed
+    version=$(awk '/^# Version: /{ print $3; exit }' "$ROOT/ussuri.zsh" 2> /dev/null || true)
+    version=${version:-none}
+
     # --no-renames, so each file is either added, modified or deleted and its counts line up with its status
     git diff --cached --no-renames --name-status > "$tmp/status"
     git diff --cached --no-renames --numstat > "$tmp/stats"
@@ -104,6 +108,7 @@ else
     fi
 
     if [ "$dry" = 1 ]; then
+        echo "version: $version"
         echo "files that would be committed:"
         sed 's/^/  /' "$tmp/status"
         echo
@@ -113,6 +118,9 @@ else
     else
         git commit -q -F "$message_file"
         git log -1 --format='committed %h: %s'
+        echo "version: $version"
+        echo "files committed:"
+        sed 's/^/  /' "$tmp/status"
     fi
 fi
 
